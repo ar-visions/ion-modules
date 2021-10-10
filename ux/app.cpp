@@ -190,10 +190,7 @@ Web::Message App::Server::query(Web::Message &m, Args &a, Data &p) {
         if (!n)
             return {404, "not found"};
     }
-    // how does one go from a node to the data associated?  these nodes are there for selection but they have to link to data
-    // one idea was to use the idea of 'state', call it 'model' instead.
-    // now query this node
-    
+
     return msg;
 }
 

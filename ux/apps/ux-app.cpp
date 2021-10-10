@@ -92,7 +92,6 @@ Args defaults = {
     {"window-height", int(1000)}
 };
 
-/// todo: A react-ive [norton] commander-style view.
 int main(int c, const char *v[]) {
     return Window(c, v, defaults)([&] (Args &args) {
         return Commander(args);

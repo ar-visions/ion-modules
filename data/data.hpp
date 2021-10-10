@@ -374,7 +374,6 @@ public:
     }
 };
 
-/// Standard Data.  You must have data as a special friend.
 #define serializer(C,E) \
     C(nullptr_t n) : C()       { }                      \
     C(const C &ref)            { copy(ref);            }\
