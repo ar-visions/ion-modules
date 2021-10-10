@@ -1,0 +1,18 @@
+dep(data matrix vk)
+
+if(NOT WIN32)
+    dep(pthread)
+endif()
+
+dep(skia-m95:skia==m95 data)
+
+if(APPLE)
+    dep(Cocoa OpenGL IOKit CoreFoundation CoreVideo)
+elseif(UNIX)
+    dep(X11 GL fontconfig freetype stdc++fs dl)
+elseif(WIN32)
+    dep(OpenGL32)
+endif()
+
+# silence the Skia GL verbose logging and system-specific GL implementation deprecation messages
+add_definitions(-DGL_SILENCE_DEPRECATION -DGR_GL_LOG_CALLS=0 -DGR_GL_CHECK_ERROR=0)

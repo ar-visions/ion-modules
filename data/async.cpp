@@ -1,0 +1,192 @@
+#include <data/data.hpp>
+
+bool            Process::init;
+std::thread     Process::th_manager;
+ConditionV      Process::cv_cleanup;
+std::mutex      Process::mx_global;
+vec<Process *>  Process::processes;
+int             Process::exit_code = 0;
+
+void Process::manager() {
+    std::unique_lock<std::mutex>  lock(mx_global);
+    for (bool quit = false; !quit;) {
+        cv_cleanup.wait(lock);
+        bool cycle = false;
+        do {
+            cycle = false;
+            int index = 0;
+            for (auto p: processes) {
+                p->mx_self.lock();
+                if (p->completed == p->threads.size()) {
+                    p->mx_self.unlock();
+                    for (auto &t: p->threads)
+                        t.join();
+                    if (p->deletable)
+                        delete p;
+                    else
+                        p->join = true;
+                    // Process is deleted when Async deletes,
+                    // for the reason that Data store exists on Process
+                    processes -= size_t(index);
+                    if (processes.size() == 0)
+                        quit = true;
+                    else
+                        cycle = true;
+                    break;
+                }
+                index++;
+                p->mx_self.unlock();
+            }
+        } while (cycle);
+        mx_global.unlock();
+    }
+}
+
+Process::Process() { // called from mutex
+    if (!init) {
+         init = true;
+         th_manager = std::thread(manager);
+    }
+}
+
+Process::~Process() { }
+
+void Async::thread(Process *p, int i) {
+    p->mx_self.lock();
+    size_t c = p->threads.size();
+    Data   r = p->fn(p, i);
+    if (r)
+        p->data = r;
+    p->failure |= !r;
+    Process::mx_global.lock();
+    bool all_complete = false;
+    if (++p->completed == c)
+        all_complete = true;
+    if (all_complete) {
+        Data &d = p->data;
+        if (p->on_complete)
+            p->failure ? p->on_failure(d) : p->on_complete(d);
+        Process::cv_cleanup.notify_all();
+    }
+    Process::mx_global.unlock();
+    p->mx_self.unlock();
+    for (;p->completed != c;)
+        usleep(1);
+}
+
+Data &Async::result() {
+    for (;;) {
+        mx.lock();
+        if (process->join)
+            break;
+        mx.unlock();
+        usleep(10);
+    }
+    data = process->data;
+    delete process;
+    process = null;
+    return data;
+}
+
+int Async::await() {
+    for (;;) {
+        Process::mx_global.lock();
+        if (Process::processes.size() == 0) {
+            Process::mx_global.unlock();
+            break;
+        }
+        Process::mx_global.unlock();
+        usleep(1000);
+    }
+    Process::th_manager.join();
+    return Process::exit_code;
+}
+
+Async::Async() { } // stick together, team...
+Async::Async(int count, std::function<Data(Process *p, int i)> fn) {
+    std::lock_guard<std::mutex> lock(Process::mx_global);
+    process = new Process;
+    process->fn = fn;
+    if (count <= 0) {
+        Process::processes += process;
+        fn(process, 0);
+        Process::processes -= Process::processes.size() - 1;
+        delete process;
+    } else {
+        process->threads = std::vector<std::thread>();
+        process->threads.reserve(count);
+        for (size_t i = 0; i < count; i++)
+            process->threads.emplace_back(std::thread(Async::thread, process, i));
+        Process::processes += process;
+    }
+}
+
+Async::operator Future() {
+    std::function<void(Data &)> s, f;
+    Completer c = { s, f };
+    assert( process);
+    assert(!process->on_complete);
+    process->on_complete = [&, s, f](Data &d) { s(d); };
+    process->on_failure  = [&, s, f](Data &d) { f(d); };
+    return Future(c);
+}
+
+Async::Async(const Async &r) {
+    assert(false);
+    process = r.process;
+}
+
+Async &Async::operator=(const Async &r) {
+    process = r.process;
+    data    = r.data;
+    return *this;
+}
+
+Async::~Async() {
+    if (process->deletable) {
+        int test = 0;
+        test++;
+        delete process; // data needs to stick around until this Async object is deleted
+    }
+}
+
+Future& Future::then(std::function<void(Data &d)> fn) {
+    cdata->mx.lock();
+    cdata->l_success += Customer { fn };
+    cdata->mx.unlock();
+    return *this;
+}
+
+Future& Future::except(std::function<void(Data &d)> fn) {
+    cdata->mx.lock();
+    cdata->l_failure += Customer { fn };
+    cdata->mx.unlock();
+    return *this;
+}
+
+Future:: Future(const Future &r) : cdata(r.cdata) { }
+Future:: Future(Completer &c)    : cdata(c.cdata) { }
+Future::~Future() { }
+
+Future& Future::operator=(const Future &r) {
+    cdata = r.cdata;
+    return *this;
+}
+
+Completer::operator Future() {
+    return Future(*this);
+}
+
+Completer::Completer(std::function<void(Data &)> &fn_success, std::function<void(Data &)> &fn_failure) {
+    cdata = new CompleterData(); // not free'd by this of course; success/error operation deletes
+    fn_success = [cdata=cdata](Data& d) {
+        cdata->completed = true;
+        for (auto s: cdata->l_success)
+            s.fn(d);
+    };
+    fn_failure = [cdata=cdata](Data& d) {
+        cdata->completed = true;
+        for (auto f: cdata->l_failure)
+            f.fn(d);
+    };
+}

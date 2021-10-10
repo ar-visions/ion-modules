@@ -1,4 +1,3 @@
 # ion-modules
-![alt text](ion-modules.png)
-A robust CMake modular build system for cross-platform app and service development
-current languages supported: C/C++
+![alt text](ion-modules.jpg)
+A robust, open source modular framework for advanced ux app and service development

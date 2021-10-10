@@ -1,0 +1,4 @@
+dep(data media)
+if(NOT WIN32)
+    dep(pthread)
+endif()

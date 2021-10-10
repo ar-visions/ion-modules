@@ -1,0 +1,6 @@
+dep(data glfw:glfw3==master AppKit Foundation IOKit)
+if(APPLE)
+    dep(vulkan.1)
+else()
+    dep(vulkan)
+endif()
