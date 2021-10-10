@@ -3,5 +3,5 @@
 cmake_minimum_required(VERSION 3.3)
 include(../ion-modules/cmake/main.cmake)
 read_package("package.json" name u v s)
-project(${package_name})
+project(${name})
 main()
