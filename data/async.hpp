@@ -19,10 +19,10 @@ public:
     static int            exit_code;
     bool                                deletable = false;
     std::mutex                          mx_self;
-    std::function<void(Data &)>         on_complete;
-    std::function<void(Data &)>         on_failure;
-    std::function<Data(Process *, int i)> fn;
-    Data                                data;
+    std::function<void(var &)>         on_complete;
+    std::function<void(var &)>         on_failure;
+    std::function<var(Process *, int i)> fn;
+    var                                data;
     std::vector<std::thread>            threads;
     int                                 completed = 0;
     bool                                failure   = false;
@@ -33,29 +33,29 @@ public:
 
 struct Async {
     Process*        process;
-    Data            data;
+    var            data;
     static void     thread(Process *, int i);
     static int      await();
-    Data&           result();
+    var&           result();
     Async          ();
-    Async          (int c, std::function<Data(Process *, int i)> f);
+    Async          (int c, std::function<var(Process *, int i)> f);
     Async          (const Async &r);
     Async&          operator=(const Async &r);
-    Future          then(std::function<void(Data &d)> fn);
+    Future          then(std::function<void(var &d)> fn);
    ~Async();
     operator Future();
     std::mutex      mx;
 };
 
-struct Customer {   std::function<void(Data &)> fn;   };
+struct Customer {   std::function<void(var &)> fn;   };
 struct CompleterData;
 struct Completer;
 struct Future   {
 protected:
     CompleterData*  cdata;
 public:
-    Future&         then  (std::function<void(Data &d)> fn);
-    Future&         except(std::function<void(Data &d)> fn);
+    Future&         then  (std::function<void(var &d)> fn);
+    Future&         except(std::function<void(var &d)> fn);
     Future         (const Future &ref);
     Future         (Completer &c);
    ~Future         ();
@@ -63,7 +63,7 @@ public:
 };
 
 struct CompleterData {
-    Data            data;
+    var            data;
     std::mutex      mx;
     bool            completed;
     vec<Customer>   l_success;
@@ -72,7 +72,7 @@ struct CompleterData {
 
 struct Completer {
     CompleterData*  cdata;
-    Completer(std::function<void(Data &)> &fn_success, std::function<void(Data &)> &fn_failure);
+    Completer(std::function<void(var &)> &fn_success, std::function<void(var &)> &fn_failure);
     virtual        ~Completer() { }
     operator        Future();
 };

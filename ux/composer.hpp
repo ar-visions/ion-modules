@@ -45,7 +45,7 @@ struct Composer {
         }
         
         /// update props, and elements
-        Data d_null = nullptr;
+        var d_null = nullptr;
         map<std::string, bool> dropped;
         for (auto &[prop_id, d_new]: n->args)
             dropped[prop_id] = true;
@@ -59,7 +59,7 @@ struct Composer {
         auto props_changed = vec<PChange>(e.args.size());
         for (auto &[prop_id, d_new]: e.args) {
             bool exists = n->args.count(prop_id);
-            Data &d_cur = exists ? n->args[prop_id] : d_null; // let it grow in iteration-1
+            var &d_cur = exists ? n->args[prop_id] : d_null; // let it grow in iteration-1
             if (d_cur != d_new) {
                 /// prop data update on nodes
                 n->args[prop_id] = e.args[prop_id]; // this pointer is changed because its reallocated.

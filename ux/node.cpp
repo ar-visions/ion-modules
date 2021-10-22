@@ -1,6 +1,5 @@
 #include <ux/ux.hpp>
 
-// just throw this in the header if there are linker issues
 bool Element::operator==(Element &b) {
     return factory == b.factory && args == b.args && elements == b.elements;
 }
@@ -9,23 +8,22 @@ bool Element::operator!=(Element &b) {
     return !operator==(b);
 }
 
-Element::Element(Data &ref, FnFilterArray f) : fn_filter_arr(f) { }
-Element::Element(Data &ref, FnFilterMap f)   : fn_filter_map(f) { }
-Element::Element(Data &ref, FnFilter f)      : fn_filter(f)     { }
+Element::Element(var &ref, FnFilterArray f) : fn_filter_arr(f) { }
+Element::Element(var &ref, FnFilterMap f)   : fn_filter_map(f) { }
+Element::Element(var &ref, FnFilter f)      : fn_filter(f)     { }
 
-Element Element::each(Data &d, FnFilter f) {
+Element Element::each(var &d, FnFilter f) {
     return Element(d, f);
 }
 
-Element Element::each(Data &d, FnFilterArray f) {
+Element Element::each(var &d, FnFilterArray f) {
     return Element(d, f);
 }
 
-Element Element::each(Data &d, FnFilterMap f) {
+Element Element::each(var &d, FnFilterMap f) {
     return Element(d, f);
 }
 
-/// a component reads through its elements to render content.
 node *node::query_first(std::function<node *(node *)> fn) {
     std::function<node *(node *)> recur;
     recur = [&](node* n) -> node* {
@@ -65,14 +63,13 @@ Element node::render() {
     return Element(this); // default render behaviour, so something like a Group, or a Button
 }
 
-// i like this, its basic use is style transitioning but it can embroadened to more.
 bool node::processing() {
     return !!query_first([&](node *n) { return n->queue.size() ? n : null; });
 }
 
 bool node::process() {
     bool active = false;
-    Data zero;
+    var zero;
     assert(!parent);
     for (auto &[id, n]:mounts) {
         if (!n)
@@ -96,12 +93,12 @@ void node::define_standard() {
     Define <str>     { this, "id",           &props.id,           ""};
     Define <str>     { this, "bind",         &props.bind,         ""};
     Define <int>     { this, "tab-index",    &props.tab_index,    -1};
-    /// -------------------------------------------------------------------------------
+    /// -------------------------------------------------------------------------
     Define <str>     { this, "text-label",   &props.text.label,   ""            };
     Define <Align>   { this, "text-align-x", &props.text.align.x, Align::Middle };
     Define <Align>   { this, "text-align-y", &props.text.align.y, Align::Middle };
     Define <rgba>    { this, "text-color",   &props.text.color,   rgba("#fff")  };
-    /// -------------------------------------------------------------------------------
+    /// -------------------------------------------------------------------------
     Define <rgba>    { this, "fill-color",   &props.fill.color,   null          };
     Define <double>  { this, "border-size",  &props.border.size,  double(0)     };
     Define <rgba>    { this, "border-color", &props.border.color, rgba("#000f") };
@@ -134,14 +131,14 @@ void node::input(str v) {
     }
 }
 
-Data node::get_state(std::string n) {
+var node::get_state(std::string n) {
     node *h = ((n == "focus" || n == "capture") ? root : this);
     return h->smap.count(n) ? h->smap[n] : null;
 }
 
-Data node::set_state(std::string n, Data v) {
+var node::set_state(std::string n, var v) {
     node *h = ((n == "focus" || n == "capture") ? root : this);
-    Data prev = h->smap[n];
+    var prev = h->smap[n];
     h->smap[n] = v;
     return prev;
 }

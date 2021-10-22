@@ -20,7 +20,7 @@ struct Obj {
     map<str, Part> parts;
     
     Obj(nullptr_t n = nullptr) { }
-    Obj(std::filesystem::path p,
+    Obj(path_t p,
            std::function<T(Part&, vec3&, vec2&, vec3&)> fn)
     {
         str g;

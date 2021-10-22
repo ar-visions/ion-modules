@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <cstring>
 #include <unistd.h>
+#include <random>
 
 // nullptr verbose, incorrect (nullptr_t is not constrained to pointers at all)
 static const nullptr_t null = nullptr;
@@ -56,14 +57,16 @@ static inline void memcopy(T *dst, T *src, size_t count = 1) {
 
 #include <data/map.hpp>
 
+typedef std::filesystem::path                       path_t;
+
 struct node;
-struct Data;
-typedef std::function<void(Data &)>                 Fn;
-typedef std::function<Data(Data &)>                 FnFilter;
-typedef std::function<Data(Data &, std::string &)>  FnFilterMap;
-typedef std::function<Data(Data &, size_t)>         FnFilterArray;
-typedef std::function<void(Data &, std::string &)>  FnEach;
-typedef std::function<void(Data &, size_t)>         FnArrayEach;
+struct var;
+typedef std::function<void(var &)>                 Fn;
+typedef std::function<var(var &)>                 FnFilter;
+typedef std::function<var(var &, std::string &)>  FnFilterMap;
+typedef std::function<var(var &, size_t)>         FnFilterArray;
+typedef std::function<void(var &, std::string &)>  FnEach;
+typedef std::function<void(var &, size_t)>         FnArrayEach;
 
 struct VoidRef {
     void *v;
@@ -72,7 +75,7 @@ struct VoidRef {
 
 struct str;
 
-struct Data {
+struct var {
     enum Type {
         Undefined,
         i8,  ui8,
@@ -90,11 +93,16 @@ struct Data {
     };
     
     struct TypeFlags {
-        Data::Type t;
+        var::Type t;
         int flags;
     };
     
-    static size_t type_size(Data::Type t);
+    enum Format {
+        Binary,
+        Json
+    };
+    
+    static size_t type_size(var::Type t);
     
     union u {
         bool    vb;
@@ -109,45 +117,75 @@ struct Data {
     Fn                       fn;
     FnFilter                 ff;
     std::shared_ptr<uint8_t>                  d = nullptr;
-    std::shared_ptr<::map<std::string, Data>> m = nullptr;
-    std::shared_ptr<std::vector<Data>>        a = nullptr;
+    std::shared_ptr<::map<std::string, var>> m = nullptr;
+    std::shared_ptr<std::vector<var>>        a = nullptr;
     std::shared_ptr<std::string>              s = nullptr;
     u                                        *n = nullptr; // we CAN utilize n.
     
-    size_t               d_size = 0;
     int                   flags = 0;
-    std::vector<int>     *shape = NULL;
+    std::vector<int>         sh;
     
-    Data(nullptr_t p);
-    Data(Type t = Undefined, Type c = Undefined, size_t count = 0);
-    Data(Type t, int64_t *n) : t(t), n((u *)n) { }
-    Data(std::filesystem::path p);
-    operator std::filesystem::path();
-    Data(void*    v);
-    Data(Data  *ref);
-    Data(VoidRef  r);
-    Data(size_t  sz);
-    Data(float    v);
-    Data(double   v);
-    Data(int8_t   v);
-    Data(uint8_t  v);
-    Data(int16_t  v);
-    Data(uint16_t v);
-    Data(int32_t  v);
-    Data(uint32_t v);
-    Data(int64_t  v);
-    //Data(uint64_t v);
-    Data(FnFilter v);
-    Data(Fn       v);
-    //Data(::map<std::string, Data> data_map);
-    Data(std::vector<Data> data_array);
-    Data(std::string str);
-    Data(const char *str);
-    Data(std::filesystem::path p, ::map<std::string, TypeFlags> types = {});
-    static ::map<std::string, Data> args(int argc, const char **argv);
+    void write(std::ofstream &f, enum Format format = Binary);
+    void write(path_t p, enum Format format = Binary);
+    var(nullptr_t p);
+    var(Type t = Undefined, Type c = Undefined, size_t count = 0);
+    var(Type t, u *n) : t(t), n((u *)n) { } // todo: change this to union type.
+    var(path_t p, enum var::Format format);
     
-    Data operator()(Data &d) {
-        Data r;
+    std::vector<int> shape();
+    void set_shape(std::vector<int> v_shape);
+    
+    var tag(map<str, var> m);
+    var(std::ifstream &f, enum var::Format format);
+    
+    template <typename T>
+    var(std::shared_ptr<T> d, std::vector<int> sh) : sh(sh) {
+        T *ptr = d.get();
+        this->t = Array;
+        this->c = data_type(ptr);
+        this->d = std::static_pointer_cast<uint8_t>(d);
+        assert(c >= i8 && c <= f64);
+    }
+    
+    template <typename T>
+    var(std::shared_ptr<T> d, size_t sz) {
+        T *ptr = d.get();
+        this->t = Array;
+        this->c = data_type(ptr);
+        this->d = std::static_pointer_cast<uint8_t>(d);
+        this->sh = std::vector<int> { int(sz) };
+        assert(c >= i8 && c <= f64);
+    }
+    var(path_t p);
+    operator path_t();
+    static bool type_check(var &a, var &b);
+    var(void*    v);
+    var(var  *ref);
+    var(VoidRef  r);
+    var(size_t  sz);
+    var(float    v);
+    var(double   v);
+    var(int8_t   v);
+    var(uint8_t  v);
+    var(int16_t  v);
+    var(uint16_t v);
+    var(int32_t  v);
+    var(uint32_t v);
+    var(int64_t  v);
+    //var(uint64_t v);
+    var(FnFilter v);
+    var(Fn       v);
+    //var(::map<std::string, var> data_map);
+    var(std::vector<var> data_array);
+    var(std::string str);
+    var(const char *str);
+    var(path_t p, ::map<std::string, TypeFlags> types = {});
+    static ::map<std::string, var> args(int argc, const char* argv[], ::map<std::string, var> def = {});
+    
+    static int shape_volume(std::vector<int> &sh);
+    
+    var operator()(var &d) {
+        var r;
         if (t == Filter)
             r = ff(d);
         else if (t == Lambda)
@@ -163,18 +201,18 @@ struct Data {
     }
     
     template <typename K, typename T>
-    Data(::map<K, T> mm) : t(Map) {
-        m = std::shared_ptr<::map<std::string, Data>>(new ::map<std::string, Data>);
+    var(::map<K, T> mm) : t(Map) {
+        m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>);
         for (auto &[k, v]: mm)
-            (*m)[k] = Data(v);
+            (*m)[k] = var(v);
     }
     
     template <typename T>
-    Data(std::vector<T> aa) : t(Array) {
+    var(std::vector<T> aa) : t(Array) {
         T     *va = aa.data();
         size_t sz = aa.size();
         c = data_type(va);
-        a = std::shared_ptr<std::vector<Data>>(new std::vector<Data>);
+        a = std::shared_ptr<std::vector<var>>(new std::vector<var>);
         a->reserve(sz);
         if constexpr ((std::is_same_v<T,     bool>)
                    || (std::is_same_v<T,   int8_t>) || (std::is_same_v<T,  uint8_t>)
@@ -183,14 +221,16 @@ struct Data {
                    || (std::is_same_v<T,  int64_t>) || (std::is_same_v<T, uint64_t>)
                    || (std::is_same_v<T,    float>) || (std::is_same_v<T,   double>)) {
             size_t ts = type_size(c);
-            d_size = sz;
-            d = std::shared_ptr<uint8_t>((uint8_t *)malloc(ts * sz));
+            sh = { int(sz) };
+            d = std::shared_ptr<uint8_t>((uint8_t *)calloc(ts, sz));
             flags = Flags::Compact;
             T *vdata = (T *)d.get();
             memcopy(vdata, va, sz);
             assert(data_type(vdata) == c);
+            // can we treat data as a window anymore, with strict use of smart pointers?
+            // if data is a reference it should set; and thats what we're doing here...
             for (size_t i = 0; i < sz; i++)
-                a->push_back(Data {c, (int64_t *)(&vdata[i])});
+                a->push_back(var {c, (var::u *)&vdata[i]});
           } else {
               for (size_t i = 0; i < sz; i++)
                   a->push_back(aa[i]);
@@ -202,40 +242,62 @@ struct Data {
             if constexpr (std::is_same_v<T,       Fn>) return Lambda;
        else if constexpr (std::is_same_v<T, FnFilter>) return Filter;
        else if constexpr (std::is_same_v<T,     bool>) return Bool;
-       else if constexpr (std::is_same_v<T,   int8_t>) return i8;
-       else if constexpr (std::is_same_v<T,  uint8_t>) return ui8;
-       else if constexpr (std::is_same_v<T,  int16_t>) return i16;
+       else if constexpr (std::is_same_v<T,   int8_t>) return   i8;
+       else if constexpr (std::is_same_v<T,  uint8_t>) return  ui8;
+       else if constexpr (std::is_same_v<T,  int16_t>) return  i16;
        else if constexpr (std::is_same_v<T, uint16_t>) return ui16;
-       else if constexpr (std::is_same_v<T,  int32_t>) return i32;
+       else if constexpr (std::is_same_v<T,  int32_t>) return  i32;
        else if constexpr (std::is_same_v<T, uint32_t>) return ui32;
-       else if constexpr (std::is_same_v<T,  int64_t>) return i64;
+       else if constexpr (std::is_same_v<T,  int64_t>) return  i64;
        else if constexpr (std::is_same_v<T, uint64_t>) return ui64;
-       else if constexpr (std::is_same_v<T,    float>) return f32;
-       else if constexpr (std::is_same_v<T,   double>) return f64;
+       else if constexpr (std::is_same_v<T,    float>) return  f32;
+       else if constexpr (std::is_same_v<T,   double>) return  f64;
        else return Map;
         assert(false);
     }
     
     template <typename T>
-    Data(T *v, size_t sz) : t(Array), c(data_type(v)), d_size(sz) {
-        d = std::shared_ptr<T>(new T[sz]);
-        memcopy(d.get(), v, sz);
+    var(T *v, std::vector<int> sh) : t(Array), c(data_type(v)), sh(sh) {
+        int sz = 1;
+        for (auto d: sh)
+            sz *= d;
+        d = std::shared_ptr<uint8_t>((uint8_t *)new T[sz]);
+        memcopy(d.get(), (uint8_t *)v, sz * sizeof(T));
         flags = Compact;
     }
     
-    // todo: convert Args to a typedef of shared_ptr<map<string, Data>>
-    inline operator::map<std::string, Data> *() {
+    template <typename T>
+    var(T *v, size_t sz) : t(Array), c(data_type(v)), sh({ int(sz) }) {
+        d = std::shared_ptr<uint8_t>((uint8_t *)new T[sz]);
+        memcopy(d.get(), (uint8_t *)v, sz * sizeof(T));
+        flags = Compact;
+    }
+    
+    // todo: convert Args to a typedef of shared_ptr<map<string, var>>
+    inline operator::map<std::string, var> *() {
         return m.get();
     }
     
-    inline Data &operator[] (const char *s) { // one Data per dimension, perfecto.
+    inline var &operator[] (const char *s) {
+        if (!m)
+             m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>);
         return (*m)[std::string(s)];
     }
     
-    Data &operator[] (str s);
+    var &operator[] (str s);
     
-    inline Data &operator[] (const size_t i) {
-        compact();
+    // probably best to switch to value
+    inline var &operator[] (const size_t i) {
+        int sz = int(shape_volume(sh));
+        bool needs_refs = (sz > 0 && !a);
+        if (needs_refs) {
+            a          = std::shared_ptr<std::vector<var>>(new std::vector<var>());
+            uint8_t *v = (uint8_t *)d.get();
+            size_t  ts = type_size(c);
+            a->reserve(sz);
+            for (int i = 0; i < sz; i++, v += ts)
+                a->push_back(var {c, (u *)v});
+        }
         return (*a)[i];
     }
     
@@ -243,6 +305,9 @@ struct Data {
         return m ? m->count(v) : 0;
     }
     
+    template <typename T>
+    inline operator    std::shared_ptr<T> () { return std::static_pointer_cast<T>(d); }
+
     inline operator         Fn&() { return fn;               }
     inline operator   FnFilter&() { return ff;               }
     inline operator      int8_t() { return *((  int8_t *)n); }
@@ -264,27 +329,27 @@ struct Data {
     
     template <typename T>
     T *data() {
-        compact();
+        //compact();
         return (T *)d.get();
     }
     
-    Data(str s);
+    var(str s);
     
     void reserve(size_t sz);
     size_t size() const;
-    void copy(Data &ref);
+    void copy(var &ref);
     
-   ~Data();
-    Data(const Data &ref);
+   ~var();
+    var(const var &ref);
     
-    bool operator!=(const Data &ref);
-    bool operator==(const Data &ref);
-    bool operator==(Data &ref);
+    bool operator!=(const var &ref);
+    bool operator==(const var &ref);
+    bool operator==(var &ref);
     bool operator==(enum Type t) { return this->t == t; }
     
-    Data& operator=(const Data &ref);
-    bool operator==(::map<std::string, Data> &m) const;
-    bool operator!=(::map<std::string, Data> &m) const;
+    var& operator=(const var &ref);
+    bool operator==(::map<std::string, var> &m) const;
+    bool operator!=(::map<std::string, var> &m) const;
 
     bool operator==(uint16_t v);
     bool operator==( int16_t v);
@@ -300,25 +365,30 @@ struct Data {
         return *a;
     }*/
     
-    operator map<std::string, Data> &() {
+    operator map<std::string, var> &() {
         return *m;
     }
 
-    void operator += (Data d);
+    void operator += (var d);
     
-    void read_json(str &js, ::map<std::string, TypeFlags> flags = {});
+    static var read_json(str &js, ::map<std::string, TypeFlags> flags = {});
 
     template <typename T>
-    Data& operator=(std::vector<T> aa) {
+    operator T *() {
+        return data<T>();
+    }
+    
+    template <typename T>
+    var& operator=(std::vector<T> aa) {
         m = null;
         t = Array;
         c = Any;
         int types = 0;
         int last_type = -1;
-        a = std::shared_ptr<std::vector<Data>>(new std::vector<Data>);
+        a = std::shared_ptr<std::vector<var>>(new std::vector<var>);
         a->reserve(aa.size());
         for (auto &v: aa) {
-            Data d = Data(v);
+            var d = var(v);
             if (last_type != d.t) {
                 last_type  = d.t;
                 types++;
@@ -331,22 +401,22 @@ struct Data {
     }
     
     template <typename T>
-    Data& operator=(::map<std::string, T> mm) {
+    var& operator=(::map<std::string, T> mm) {
         a = null;
-        m = std::shared_ptr<::map<std::string, Data>>(new ::map<std::string, Data>);
+        m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>);
         for (auto &[k, v]: mm)
             (*m)[k] = v;
         return *this;
     }
     
     /// rename lambda to Fn
-    Data &operator=(Fn _fn) {
+    var &operator=(Fn _fn) {
          t = Lambda;
         fn = _fn;
         return *this;
     }
     
-    Data &operator=(FnFilter _ff) {
+    var &operator=(FnFilter _ff) {
          t = Filter;
         ff = _ff;
         return *this;
@@ -368,7 +438,7 @@ public:
     Ref(nullptr_t n = nullptr) : v(n) { }
     Ref(node *n) : v(n) { }
     Ref(void *v) : v(v) { }
-    Ref(Data &d) : v((void *)d) { }
+    Ref(var &d) : v((void *)d) { }
     operator void *() {
         return v;
     }
@@ -377,8 +447,8 @@ public:
 #define serializer(C,E) \
     C(nullptr_t n) : C()       { }                      \
     C(const C &ref)            { copy(ref);            }\
-    C(Data &d)                 { import_data(d);       }\
-    operator Data()            { return export_data(); }\
+    C(var &d)                 { import_data(d);       }\
+    operator var()            { return export_data(); }\
     operator bool()  const     { return   E;           }\
     bool operator!() const     { return !(E);          }\
     C &operator=(const C &ref) {\
@@ -391,25 +461,26 @@ public:
 #include <data/array.hpp>
 #include <data/string.hpp>
 #include <data/async.hpp>
+#include <data/rand.hpp>
 
-typedef map<std::string, Data> Args;
-void _log(str t, std::vector<Data> a, bool error);
+typedef map<std::string, var> Args;
+void _log(str t, std::vector<var> a, bool error);
 
 struct Logging {
-    static void log(str t, std::vector<Data> a = {}) { // add this operation to Array
+    static void log(str t, std::vector<var> a = {}) { // add this operation to Array
         _log(t, a, false);
     }
     
-    static void error(str t, std::vector<Data> a = {}) {
+    static void error(str t, std::vector<var> a = {}) {
         _log(t, a, true);
     }
 };
 
-typedef std::function<void(map<std::string, Data> &)> FnArgs;
+typedef std::function<void(map<std::string, var> &)> FnArgs;
 
 extern Logging console;
 
-typedef std::function<Data(Data &)> FnProcess;
+typedef std::function<var(var &)> FnProcess;
 
 #if !defined(WIN32) && !defined(WIN64)
 #define UNIX
@@ -428,18 +499,29 @@ struct Element {
     FnFilterArray   fn_filter_arr;
     Element(node *ref) : ref(ref) { }
     Element(nullptr_t n) { }
-    Element(Data &ref, FnFilterArray f);
-    Element(Data &ref, FnFilterMap f);
-    Element(Data &ref, FnFilter f);
+    Element(var &ref, FnFilterArray f);
+    Element(var &ref, FnFilterMap f);
+    Element(var &ref, FnFilter f);
     Element(FnFactory factory, Args &args, vec<Element> &elements):
         factory(factory), args(args), elements(elements) { }
     bool operator==(Element &b);
     bool operator!=(Element &b);
     operator bool()  { return ref || factory;     }
     bool operator!() { return !(operator bool()); }
-    static Element each(Data &d, FnFilter f);
-    static Element each(Data &d, FnFilterArray f); // a ref can always just be a data pointer, and that data can contain the void ptr or just be a data value
-    static Element each(Data &d, FnFilterMap f); // Data(&data) ? Data::ref(data) is clearer.
+    static Element each(var &d, FnFilter f);
+    static Element each(var &d, FnFilterArray f); // a ref can always just be a data pointer, and that data can contain the void ptr or just be a data value
+    static Element each(var &d, FnFilterMap f); // var(&data) ? var::ref(data) is clearer.
 };
 
 typedef std::function<Element(Args &)> FnRender;
+
+
+template <typename T>
+bool equals(T v, vec<T> values) {
+    return values.index_of(v) >= 0;
+}
+
+template <typename T>
+bool isnt(T v, vec<T> values) {
+    return !equals(v, values);
+}

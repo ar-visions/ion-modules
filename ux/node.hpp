@@ -9,12 +9,12 @@ struct node;
 struct Model;
 
 struct IProps {
-    //void enumerate(std::function<void(String &, Data::Type)> fn) {
+    //void enumerate(std::function<void(String &, var::Type)> fn) {
     //}
 };
 
 struct Composer;
-typedef std::function<void *(Composer *, Data &)> FnComposerData;
+typedef std::function<void *(Composer *, var &)> FnComposerData;
 typedef std::function<void *(Composer *, Args &)> FnComposerArgs;
 typedef map<std::string, node *>     NodeMap;
 struct Construct;
@@ -22,7 +22,7 @@ struct Construct;
 struct Definition {
     str id;
     void *ptr;
-    Data data; //default value
+    var data; //default value
     Fn fn;
     FnComposerData setter;
     Definition() { }
@@ -46,12 +46,12 @@ struct Border {
         color = b.color;
         dash = b.dash;
     }
-    void import_data(Data &d) {
+    void import_data(var &d) {
         size  = double(d["size"]);
         color =   rgba(d["color"]);
         dash  =   bool(d["dash"]);
     }
-    Data export_data() {
+    var export_data() {
         return Args {
             {"size",  size},
             {"color", color},
@@ -74,15 +74,15 @@ struct Text {
         align = b.align;
     }
     
-    void import_data(Data &d) {
+    void import_data(var &d) {
         label  =  str(d["label"]);
         color  = rgba(d["color"]);
         align  = Vec2<Align>(d["align"]);
     }
     
-    Data export_data() {
+    var export_data() {
         return Args {
-            {"label", Data(label)},
+            {"label", var(label)},
             {"color", color},
             {"align", align}
         };
@@ -100,10 +100,10 @@ struct Fill {
     void copy(const Fill &b) {
         color = b.color;
     }
-    void import_data(Data &d) {
+    void import_data(var &d) {
         color = rgba(d["color"]);
     }
-    Data export_data() {
+    var export_data() {
         return Args {{"color", color}};
     }
     serializer(Fill, color.a > 0);
@@ -132,7 +132,7 @@ struct node {
     node          *parent = null;
     map<std::string, node *> mounts;
     Args           args;
-    Data           data;
+    var           data;
     vec<Element>   elements;
     DefMap         defs;
     State          smap;
@@ -161,8 +161,8 @@ struct node {
     virtual void    changed(PropList props);
     virtual void    input(str k);
     virtual Element render();
-    Data            get_state(std::string n);
-    Data            set_state(std::string n, Data v);
+    var            get_state(std::string n);
+    var            set_state(std::string n, var v);
     virtual void    draw(Canvas &canvas);
     virtual str     format_text();
     bool            processing();
@@ -180,8 +180,8 @@ struct node {
         return 0;
     }
     
-    Data &context(str field) {
-        static Data d_null;
+    var &context(str field) {
+        static var d_null;
         node *n = this;
         while (n)
             if (n->data.count(field))
@@ -201,8 +201,8 @@ struct node {
 template <typename T>
 struct Define:Definition {
     Define(node *node, const char *id, T *p, T def, Fn fn = null) : Definition(id, (void *)p, fn) {
-        data = Data(def); // the operator= should not be a template function
-        setter = FnComposerData([&, p, fn](Composer *composer, Data &new_value) {
+        data = var(def); // the operator= should not be a template function
+        setter = FnComposerData([&, p, fn](Composer *composer, var &new_value) {
             *(T *)p = T(new_value);
             if (fn)
                 fn(new_value);
@@ -217,8 +217,8 @@ struct Define:Definition {
 template <typename T>
 struct ArrayOf:Definition {
     ArrayOf(node *node, const char *id, vec<T> *p, vec<T> def, Fn fn = null) : Definition(id, (void *)p, fn) {
-        data = Data(def); // the operator= should not be a template function
-        setter = FnComposerData([&, p, fn](Composer *composer, Data &new_value) {
+        data = var(def); // the operator= should not be a template function
+        setter = FnComposerData([&, p, fn](Composer *composer, var &new_value) {
             *(vec<T> *)p = vec<T>(size_t(new_value.size()));
             if (new_value.size())
                 for (auto &d: *(new_value.a))

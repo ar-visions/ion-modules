@@ -2,4 +2,7 @@
 build
 build*
 xcode
+ai/gen/*
+ai/data/*
+extern/*
 

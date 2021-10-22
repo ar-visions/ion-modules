@@ -14,7 +14,7 @@ struct URI {
     Args   args;
     str    version;
     
-    operator Data() {
+    operator var() {
         return Args {{
             {"type",     int(type)},
             {"proto",    proto},
@@ -26,7 +26,7 @@ struct URI {
             {"version",  version},
         }};
     }
-    URI(Data &d) {
+    URI(var &d) {
         type     = Method(int(d["type"]));
         proto    = d["proto"];
         host     = d["host"];
@@ -111,9 +111,9 @@ struct Socket {
     static Async   listen(str uri, std::function<void(Socket)> fn);
     static void   logging(void *ctx, int level, const char *file, int line, const char *str);
     bool            write(const char *v, size_t sz, int flags);
-    bool            write(str s, std::vector<Data> a = {});
+    bool            write(str s, std::vector<var> a = {});
     bool            write(vec<char> &v);
-    bool            write(Data &d);
+    bool            write(var &d);
     bool             read(const char *v, size_t sz);
     int          read_raw(const char *v, size_t sz);
     vec<char>  read_until(str s, int max_len);
@@ -128,22 +128,22 @@ protected:
 
 struct Web {
 protected:
-    static Data    read_content(Socket sc, Args &headers);
+    static var    read_content(Socket sc, Args &headers);
     static Args    read_headers(Socket sc);
     static bool   write_headers(Socket sc, Args &headers);
-    static Data    content_data(Socket sc, Data &c, Args &headers);
+    static var    content_data(Socket sc, var &c, Args &headers);
     
 public:
     
     struct Message {
         URI    uri;
         int    code = 0;
-        Data   content;
+        var   content;
         Args   headers;
         operator bool()  { return uri.type != URI::Undefined;  }
         bool operator!() { return !(operator bool()); }
         
-        Message(int code, Data content = null, Args headers = null):
+        Message(int code, var content = null, Args headers = null):
                 code(code), content(content), headers(headers) {
             uri.type = URI::Response;
         }
@@ -165,13 +165,13 @@ public:
             }
             return *this;
         }
-        Message(Data &d) {
+        Message(var &d) {
             uri     = d["uri"];
             code    = d["code"];
             content = d["content"];
             headers = d["headers"];
         }
-        operator Data() {
+        operator var() {
             return Args {
                 {"uri",     uri},
                 {"code",    int(code)},

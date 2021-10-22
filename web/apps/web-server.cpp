@@ -4,15 +4,15 @@
 struct Animals:node {
     declare(Animals);
     Element render() {
-        Data &animals = context(node::props.bind);
-        return Element::each(animals, [&](str s) -> Data { return s; });
+        var &animals = context(node::props.bind);
+        return Element::each(animals, [&](str s) -> var { return s; });
     }
 };
 
 struct ExampleServer:node {
     declare(ExampleServer);
     void mount() {
-        data = Data(Data::Map);
+        data = var(var::Map);
         vec<str> s = {"chicken", "frog", "bird"};
         data["animals"] = s;
     }

@@ -2,7 +2,15 @@
 
 Logging console;
 
-void _log(str t, std::vector<Data> a, bool error) {
+
+int var::shape_volume(std::vector<int> &sh) {
+    int sz = 1;
+    for (auto d: sh)
+        sz *= d;
+    return sz;
+}
+
+void _log(str t, std::vector<var> a, bool error) {
 #ifndef NDEBUG
     t = str::format(t, a);
     auto &out = error ? std::cout : std::cerr;
@@ -89,37 +97,41 @@ static char ws(char **cursor) {
     return *s;
 }
 
-Data::Data(nullptr_t p): Data(Undefined) { }
+bool var::type_check(var &a, var &b) {
+    return a.t == b.t && a.c == b.c;
+}
 
-Data::Data(std::vector<Data> data_array) : t(Array) {
+var::var(nullptr_t p): var(Undefined) { }
+
+var::var(std::vector<var> data_array) : t(Array) {
     size_t sz = data_array.size();
     if (sz)
         c = data_array[0].t;
-    a = std::shared_ptr<std::vector<Data>>(new std::vector<Data>());
+    a = std::shared_ptr<std::vector<var>>(new std::vector<var>());
     a->reserve(sz);
     for (auto &d: data_array)
         a->push_back(d);
 }
 
-bool Data::operator==(uint16_t v) { return n && *((uint16_t *)n) == v; }
-bool Data::operator==( int16_t v) { return n && *(( int16_t *)n) == v; }
-bool Data::operator==(uint32_t v) { return n && *((uint32_t *)n) == v; }
-bool Data::operator==( int32_t v) { return n && *(( int32_t *)n) == v; }
-bool Data::operator==(uint64_t v) { return n && *((uint64_t *)n) == v; }
-bool Data::operator==( int64_t v) { return n && *(( int64_t *)n) == v; }
-bool Data::operator==(float    v) { return n && *((   float *)n) == v; }
-bool Data::operator==(double   v) { return n && *((  double *)n) == v; }
+bool var::operator==(uint16_t v) { return n && *((uint16_t *)n) == v; }
+bool var::operator==( int16_t v) { return n && *(( int16_t *)n) == v; }
+bool var::operator==(uint32_t v) { return n && *((uint32_t *)n) == v; }
+bool var::operator==( int32_t v) { return n && *(( int32_t *)n) == v; }
+bool var::operator==(uint64_t v) { return n && *((uint64_t *)n) == v; }
+bool var::operator==( int64_t v) { return n && *(( int64_t *)n) == v; }
+bool var::operator==(float    v) { return n && *((   float *)n) == v; }
+bool var::operator==(double   v) { return n && *((  double *)n) == v; }
 
-Data::Data(FnFilter ff_) : t(Filter) {
+var::var(FnFilter ff_) : t(Filter) {
     ff = ff_;
 }
 
-Data::Data(Fn fn_) : t(Lambda) {
+var::var(Fn fn_) : t(Lambda) {
     fn = fn_;
 }
 
-Args Data::args(int argc, const char **argv) {
-    Args m = ::map<std::string, Data>();
+Args var::args(int argc, const char* argv[], Args def) {
+    Args m = def;
     std::string key = "";
     for (int i = 1; i < argc; i++) {
         auto a = argv[i];
@@ -128,7 +140,7 @@ Args Data::args(int argc, const char **argv) {
         else if (key != "") {
             bool is_n = is_numeric(a);
             if (is_n)
-                m[key] = stod(std::string(a)); // todo: additional conversions in Data (double <-> int)
+                m[key] = stod(std::string(a)); // todo: additional conversions in var (double <-> int)
             else
                 m[key] = std::string(a);
         }
@@ -149,7 +161,7 @@ map<int, int> b64_encoder() {
     return m;
 }
 
-std::shared_ptr<uint8_t> Data::encode(const char *data, size_t len) {
+std::shared_ptr<uint8_t> var::encode(const char *data, size_t len) {
     auto m = b64_encoder();
     size_t p_len = ((len + 2) / 3) * 4;
     auto encoded = std::shared_ptr<uint8_t>(new uint8_t[p_len + 1]);
@@ -181,7 +193,7 @@ map<int, int> b64_decoder() {
     return m;
 }
 
-std::shared_ptr<uint8_t> Data::decode(const char *b64, size_t b64_len, size_t *alloc) {
+std::shared_ptr<uint8_t> var::decode(const char *b64, size_t b64_len, size_t *alloc) {
     auto m = b64_decoder();
     *alloc = b64_len / 4 * 3;
     auto out = std::shared_ptr<uint8_t>(new uint8_t[*alloc + 1]);
@@ -211,17 +223,183 @@ std::shared_ptr<uint8_t> Data::decode(const char *b64, size_t b64_len, size_t *a
     return out;
 }
 
-void Data::reserve(size_t sz) {
+void var::reserve(size_t sz) {
     if (a)
         a->reserve(sz);
 }
 
-Data::operator std::filesystem::path() {
+var::operator path_t() {
     assert(s);
-    return std::filesystem::path(*s);
+    return path_t(*s);
 }
 
-Data::operator std::string() {
+var::var(path_t p, enum var::Format format) {
+    std::ifstream f { p, std::ios::binary };
+    *this = var { f, format };
+    f.close();
+}
+
+void var::write(path_t p, enum var::Format format) {
+    std::ofstream f(p, std::ios::out | std::ios::binary);
+    write(f, var::Binary);
+    f.close();
+}
+
+// construct data from file ref
+var::var(std::ifstream &f, enum var::Format format) {
+    auto st = [&]() -> std::string {
+        int len;
+        f.read((char *)&len, sizeof(int));
+        char *v = (char *)malloc(len + 1);
+        f.read(v, len);
+        v[len] = 0;
+        return std::string(v, len);
+    };
+    
+    auto rd = std::function<void(var &)>();
+    rd = [&](var &d) {
+        int dt;
+        f.read((char *)&dt, sizeof(int));
+        d.t = Type(dt);
+        
+        int meta_sz = 0;
+        f.read((char *)&meta_sz, sizeof(int));
+        if (meta_sz)
+            d.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
+        for (int i = 0; i < meta_sz; i++) {
+            std::string key = st();
+            rd(d[key]);
+        }
+        if (d.t == Array) {
+            int sz;
+            f.read((char *)&d.c, sizeof(int));
+            f.read((char *)&sz,  sizeof(int));
+            if (sz) {
+                std::vector<int> sh;
+                int s_sz;
+                f.read((char *)&s_sz, sizeof(int));
+                for (int i = 0; i < s_sz; i++) {
+                    sh.push_back(0);
+                    f.read((char *)&sh[sh.size() - 1], sizeof(int));
+                }
+                d.sh = sh;
+                if (d.c >= i8 && d.c <= Bool) {
+                    int ts = type_size(d.c);
+                    d.d = std::shared_ptr<uint8_t>(new uint8_t[ts * sz]);
+                    f.read((char *)d.data<uint8_t>(), ts * sz);
+                } else {
+                    d.a = std::shared_ptr<std::vector<var>>(new std::vector<var>());
+                    d.a->reserve(sz);
+                    for (int i = 0; i < sz; i++) {
+                        d += null;
+                        rd(d[i]);
+                    }
+                }
+            }
+        } else if (d.t == Map) {
+            int sz;
+            f.read((char *)&sz, sizeof(int));
+            for (int i = 0; i < sz; i++) {
+                std::string key = st();
+                rd(d[key]);
+            }
+        } else if (d.t == Str) {
+            int len;
+            f.read((char *)&len, sizeof(int));
+            d.s = std::shared_ptr<std::string>(new std::string(st()));
+        } else {
+            size_t ts = type_size(d.t);
+            assert(d.t >= i8 && d.t <= Bool);
+            d.n = &d.n_value;
+            f.read((char *)d.n, ts);
+        }
+        return d;
+    };
+    rd(*this);
+}
+
+void var::write(std::ofstream &f, enum var::Format format) {
+    auto wri_str = std::function<void(std::string &)>();
+    
+    wri_str = [&](std::string &str) {
+        int len = int(str.length());
+        f.write((char *)&len, sizeof(int));
+        f.write(str.c_str(), size_t(len));
+    };
+    
+    auto wri = std::function<void(var &)>();
+    
+    wri = [&](var &d) {
+        int dt = d.t;
+        f.write((const char *)&dt, sizeof(int));
+        size_t ts = type_size(d.t);
+        
+        // meta != map in abstract; we just dont support it at runtime
+        size_t meta_sz = ((d.t != Map) && d.m) ? d.m->size() : 0;
+        f.write((const char *)&meta_sz, sizeof(int));
+        if (meta_sz)
+            for (auto &[k,v]: *(d.m)) {
+                std::string kname = k;
+                wri_str(k);
+                wri(v);
+            }
+        
+        if (d.t == Array) {
+            int     idc = d.c;
+            int      sz = d.a ? int(d.a->size()) : int(shape_volume(d.sh));
+            int    s_sz = int(d.sh.size());
+            f.write((const char *)&idc, sizeof(int));
+            f.write((const char *)&sz, sizeof(int));
+            if (sz) {
+                if (d.a) {
+                    int i1 = 1;
+                    int sz = d.size();
+                    f.write((const char *)&i1, sizeof(int));
+                    f.write((const char *)&sz, sizeof(int));
+                } else {
+                    f.write((const char *)&s_sz, sizeof(int));
+                    for (int i: d.sh)
+                        f.write((const char *)&i, sizeof(int));
+                }
+                if (d.c >= i8 && d.c <= Bool) {
+                    assert(d.d);
+                    size_t ts = type_size(d.c);
+                    f.write((const char *)d.data<uint8_t>(), ts * size_t(sz));
+                } else if (d.c == var::Map) {
+                    assert(d.a);
+                    for (auto &i: *d.a)
+                        wri(i);
+                }
+            }
+        } else if (d.t == Map) {
+            assert(d.m);
+            int sz = int(d.m->size());
+            f.write((const char *)&sz, sizeof(int));
+            for (auto &[k,v]: *(d.m)) {
+                wri_str(k);
+                wri(v);
+            }
+        } else if (d.t == Str) {
+            int len = d.s ? int(d.s->length()) : int(0);
+            for (size_t i = 0; i < len; i++) {
+                uint8_t v = d[i];
+                f.write((const char *)&v, 1);
+            }
+        } else {
+            assert(d.t >= i8 && d.t <= Bool);
+            f.write((const char *)d.n, ts);
+        }
+    };
+    
+    if (format == var::Binary)
+        wri(*this);
+    else {
+        auto json = str(*this);
+        f.write(json.cstr(), json.length());
+    }
+}
+
+var::operator std::string() {
     switch (t) {
         case i8:   [[fallthrough]];
         case ui8:  return std::to_string(*((int8_t  *)n));
@@ -236,10 +414,30 @@ Data::operator std::string() {
         case Str:  return s ? *s : "";
         case Array: {
             std::string s = "[";
-            for (auto &d: *a) {
-                if (s.length() != 1)
-                    s += ",";
-                s += std::string(d);
+            if (c >= var::i8 && c <= var::Bool) {
+                size_t sz = shape_volume(sh);
+                size_t ts = type_size(c);
+                uint8_t *v = d.get();
+                for (size_t i = 0; i < sz; i++) {
+                    if (i > 0)
+                        s += ",";
+                    if      (c == var::f32)                    s += std::to_string(*(float *)  &v[ts * i]);
+                    else if (c == var::f64)                    s += std::to_string(*(double *) &v[ts * i]);
+                    else if (c == var::i8  || c == var::ui8)   s += std::to_string(*(int8_t *) &v[ts * i]);
+                    else if (c == var::i16 || c == var::ui16)  s += std::to_string(*(int16_t *)&v[ts * i]);
+                    else if (c == var::i32 || c == var::ui32)  s += std::to_string(*(int32_t *)&v[ts * i]);
+                    else if (c == var::i64 || c == var::ui64)  s += std::to_string(*(int64_t *)&v[ts * i]);
+                    else if (c == var::Bool)                   s += std::to_string(*(bool *)   &v[ts * i]);
+                    else
+                        assert(false);
+                }
+            } else {
+                assert(a); // this is fine
+                for (auto &d: *a) {
+                    if (s.length() != 1)
+                        s += ",";
+                    s += std::string(d);
+                }
             }
             s += "]";
             return s;
@@ -267,7 +465,7 @@ Data::operator std::string() {
     return "";
 }
 
-Data::operator bool() {
+var::operator bool() {
     switch (t) {
         case i8:    return *((  int8_t *)n) > 0;
         case ui8:   return *(( uint8_t *)n) > 0;
@@ -288,112 +486,103 @@ Data::operator bool() {
     return false;
 }
 
-bool Data::operator!() {
-    return !(Data::operator bool());
+bool var::operator!() {
+    return !(var::operator bool());
 }
 
-Data::Data(Data::Type t, Data::Type c, size_t sz)  : t(t == Data::Undefined ? Data::Map : t), c(
-        ((t == Data::Array || t == Data::Map) && c == Data::Undefined) ? Data::Any : c) {
+var::var(var::Type t, var::Type c, size_t sz)  : t(t == var::Undefined ? var::Map : t), c(
+        ((t == var::Array || t == var::Map) && c == var::Undefined) ? var::Any : c) {
     if (this->t == Array) {
-        a = std::shared_ptr<std::vector<Data>>(new std::vector<Data>());
+        a = std::shared_ptr<std::vector<var>>(new std::vector<var>());
         a->reserve(sz);
     } else if (this->t == Map)
-        m = std::shared_ptr<::map<std::string, Data>>(new ::map<std::string, Data>());
+        m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
     else
         n = &n_value;
 }
 
-Data::Data(float    v)         : t(f32)  {
+var::var(float    v)         : t(f32)  {
     n = &n_value;
     *((float *)n) = v;
 }
 
-Data::Data(double   v)         : t(f64)  {
+var::var(double   v)         : t(f64)  {
     n = &n_value;
     *((double *)n) = v;
 }
 
-Data::Data(int8_t   v)         : t(i8)   {
+var::var(int8_t   v)         : t(i8)   {
     n = &n_value;
     *((int8_t *)n) = v;
 }
 
-Data::Data(uint8_t  v)         : t(ui8)  {
+var::var(uint8_t  v)         : t(ui8)  {
     n = &n_value;
     *((uint8_t *)n) = v;
 }
 
-Data::Data(int16_t  v)         : t(i16)  {
+var::var(int16_t  v)         : t(i16)  {
     n = &n_value;
     *((int16_t *)n) = v;
 }
 
-Data::Data(uint16_t v)         : t(ui16) {
+var::var(uint16_t v)         : t(ui16) {
     n = &n_value;
     *((uint16_t *)n) = v;
 }
 
-Data::Data(int32_t  v)         : t(i32)  {
+var::var(int32_t  v)         : t(i32)  {
     n = &n_value;
     *((int32_t *)n) = v;
 }
 
-Data::Data(uint32_t v)         : t(ui32) {
+var::var(uint32_t v)         : t(ui32) {
     n = &n_value;
     *((uint32_t *)n) = v;
 }
 
-Data::Data(int64_t  v)         : t(i64)  {
+var::var(int64_t  v)         : t(i64)  {
     n = &n_value;
     *((int64_t *)n) = v;
 }
 
-/*Data::Data(uint64_t v)       : t(ui64) {
+/*var::var(uint64_t v)       : t(ui64) {
     n = &n_value;
     *((uint64_t *)n) = v;
 }*/
 
-Data::Data(size_t v)           : t(ui64) {
+var::var(size_t v)           : t(ui64) {
     n = &n_value;
     *((uint64_t *)n) = uint64_t(v);
 }
 
-Data::Data(void* v)            : t(Ref) {
-    n = (u *)v;
+var::var(void* v)            : t(Ref) { n = (u *)v; }
+var::var(VoidRef vr)         : t(Ref) { n = (u *)vr.v; }
+var::var(var *ref)          : t(Ref) { n = (u *)ref; }
+var::var(std::string str)    : t(Str), s(new std::string(str)) { }
+var::var(const char *str)    : t(Str), s(new std::string(str)) { }
+var::var(path_t p) : t(Type::Str), s(new std::string(p.string())) { }
+var::var(const var &ref) {
+    copy((var &)ref);
 }
 
-Data::Data(VoidRef vr)         : t(Ref) {
-    n = (u *)vr.v; // todo: do this some other way.
-}
-
-Data::Data(Data *ref)          : t(Ref) {
-    n = (u *)ref; // all operations will need to check for Ref, and use recursion
-}
-
-Data::Data(std::string str)    : t(Str), s(new std::string(str)) { }
-Data::Data(const char *str)    : t(Str), s(new std::string(str)) { }
-Data::Data(std::filesystem::path p) : t(Type::Str), s(new std::string(p.string())) { }
-Data::Data(const Data &ref) {
-    copy((Data &)ref);
-}
-
-void Data::read_json(str &js, ::map<std::string, TypeFlags> flags) {
-    std::function<char *(Data &, char *, std::string)> parse_obj, parse_arr, parse_value;
+var var::read_json(str &js, ::map<std::string, TypeFlags> flags) {
+    std::function<char *(var &, char *, std::string)> parse_obj, parse_arr, parse_value;
     
-    parse_obj = [&](Data &scope, char *start, std::string field) {
+    parse_obj = [&](var &scope, char *start, std::string field) {
         char *cur = start;
         assert(*cur == '{');
         ws(&(++cur));
         scope.t = Map;
         scope.c = Any;
-        scope.m = std::shared_ptr<::map<std::string, Data>>(new ::map<std::string, Data>());
+        scope.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
         while (*cur != '}') {
             auto field = parse_quoted(&cur);
             ws(&cur);
             assert(field != "");
             assert(*cur == ':');
             ws(&(++cur));
-            scope[field] = Data(Undefined);
+            scope[field] = var(Undefined);
             cur = parse_value(scope[field], cur, field);
             if (ws(&cur) == ',')
                 ws(&(++cur));
@@ -403,15 +592,15 @@ void Data::read_json(str &js, ::map<std::string, TypeFlags> flags) {
         return cur;
     };
     
-    parse_arr = [&](Data &scope, char *start, std::string field) {
+    parse_arr = [&](var &scope, char *start, std::string field) {
         char *cur = start;
         assert(*cur == '[');
         scope.t = Array;
         scope.c = Any;
-        scope.a = std::shared_ptr<std::vector<Data>>(new std::vector<Data>());
+        scope.a = std::shared_ptr<std::vector<var>>(new std::vector<var>());
         ws(&(++cur));
         for (;;) {
-            scope.a->push_back(Data(Undefined));
+            scope.a->push_back(var(Undefined));
             cur = parse_value(scope.a->back(), cur, field);
             ws(&cur);
             if (*cur == ',') {
@@ -429,7 +618,7 @@ void Data::read_json(str &js, ::map<std::string, TypeFlags> flags) {
         return cur;
     };
     
-    parse_value = [&](Data &scope, char *start, std::string field) {
+    parse_value = [&](var &scope, char *start, std::string field) {
         char *cur = start;
         if (*cur == '{') {
             return parse_obj(scope, start, field);
@@ -443,10 +632,10 @@ void Data::read_json(str &js, ::map<std::string, TypeFlags> flags) {
             std::string s = parse_quoted(&cur);
             if (flags.count(field) > 0 && (flags[field].flags & Flags::Encode)) {
                 size_t alloc = 0;
-                scope.t = Array;
-                scope.c = flags[field].t;
-                scope.d = decode(s.c_str(), s.length(), &alloc);
-                scope.d_size = (alloc - 1) / type_size(scope.c);
+                scope.t  = Array;
+                scope.c  = flags[field].t;
+                scope.d  = decode(s.c_str(), s.length(), &alloc);
+                scope.sh = { int((alloc - 1) / type_size(scope.c)) };
                 assert(alloc > 0);
             } else {
                 scope.t = Str;
@@ -483,27 +672,25 @@ void Data::read_json(str &js, ::map<std::string, TypeFlags> flags) {
             assert(false);
         return cur;
     };
-    parse_value(*this, (char *)js.cstr(), "");
+    var r;
+    parse_value(r, (char *)js.cstr(), "");
+    return r;
 }
-/*
-bool Data::write_json(std::filesystem::path json) {
-}*/
 
-Data::Data(std::filesystem::path json, ::map<std::string, TypeFlags> flags) : Data(Undefined) {
+var::var(path_t json, ::map<std::string, TypeFlags> flags) : var(Undefined) {
     if (!std::filesystem::is_regular_file(json))
         return;
     str js = str(json);
     read_json(js, flags);
 }
 
-Data &Data::operator[](str s) {
+var &var::operator[](str s) {
     return (*m)[s];
 }
 
-void Data::compact() {
-    if (t != Array || (flags & Flags::Compact))
+void var::compact() {
+    if (!a || t != Array || (flags & Flags::Compact))
         return;
-    assert(false);
     flags    |= Flags::Compact;
     int type  = -1;
     int types =  0;
@@ -513,15 +700,17 @@ void Data::compact() {
             types++;
         }
     if (types == 1) {
-        size_t sz = a->size();
-        Data *r = a->data();
         size_t ts = type_size(Type(type));
+        if (ts == 0)
+            return;
+        size_t sz = a->size();
+        var   *r = a->data();
         assert(type >= i8 && type <= Bool);
-        d_size = sz;
-        d = std::shared_ptr<uint8_t>((uint8_t *)malloc(ts * sz));
+        sh = { int(sz) };
+        d  = std::shared_ptr<uint8_t>((uint8_t *)malloc(ts * sz));
         
         switch (t) {
-            case Data::Bool: {
+            case var::Bool: {
                 bool *v = (bool *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((bool *)r[i].n);
@@ -529,8 +718,8 @@ void Data::compact() {
                 }
                 break;
             }
-            case Data::i8:
-            case Data::ui8: {
+            case var::i8:
+            case var::ui8: {
                 int8_t *v = (int8_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int8_t *)r[i].n);
@@ -538,8 +727,8 @@ void Data::compact() {
                 }
                 break;
             }
-            case Data::i16:
-            case Data::ui16: {
+            case var::i16:
+            case var::ui16: {
                 int16_t *v = (int16_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int16_t *)r[i].n);
@@ -547,8 +736,8 @@ void Data::compact() {
                 }
                 break;
             }
-            case Data::i32:
-            case Data::ui32: {
+            case var::i32:
+            case var::ui32: {
                 int32_t *v = (int32_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int32_t *)r[i].n);
@@ -556,8 +745,8 @@ void Data::compact() {
                 }
                 break;
             }
-            case Data::i64:
-            case Data::ui64: {
+            case var::i64:
+            case var::ui64: {
                 int64_t *v = (int64_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int64_t *)r[i].n);
@@ -565,7 +754,7 @@ void Data::compact() {
                 }
                 break;
             }
-            case Data::f32: {
+            case var::f32: {
                 float *v = (float *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((float *)r[i].n);
@@ -573,7 +762,7 @@ void Data::compact() {
                 }
                 break;
             }
-            case Data::f64: {
+            case var::f64: {
                 double *v = (double *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((double *)r[i].n);
@@ -590,12 +779,34 @@ void Data::compact() {
         assert(false);
 }
 
-Data::~Data() { }
-Data:: Data(str s) : t(Data::Str), s(new std::string(s.s)) { }
+var::~var() { }
+var:: var(str s) : t(var::Str), s(new std::string(s.s)) { }
 
-size_t Data::size() const {
+std::vector<int> var::shape() {
+    if (sh.size())
+        return sh;
+    return std::vector<int> { size() ? int(size()) : int(type_size(t)) };
+}
+
+void var::set_shape(std::vector<int> s) {
+    sh = s;
+}
+
+var var::tag(map<str, var> m) {
+    var d = *this;
+    assert(d.t != var::Map);
+    d.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
+    for (auto &[k,v]: m)
+        d[k] = v;
+    return d;
+}
+
+size_t var::size() const {
+    int sz = 1;
+    for (auto d: sh)
+        sz *= d;
     if (t == Array)
-        return d ? d_size : a->size();
+        return d ? sz : (a ? a->size() : 0);
     else if (t == Map)
         return m->size();
     else if (t == Str)
@@ -603,16 +814,16 @@ size_t Data::size() const {
     return t == Undefined ? 0 : 1;
 }
 
-void Data::each(FnEach each) {
+void var::each(FnEach each) {
     if (m)
         for(auto &[k,v]: *m) {
-            Data &d = v;
+            var &d = v;
             std::string s = k; // useful to set const on the Key of the pair structure.
             each(d, s);
         }
 }
 
-void Data::each(FnArrayEach each) {
+void var::each(FnArrayEach each) {
     // never do a null check here, never.  do not cater to missing data
     size_t i = 0;
     if (a)
@@ -620,14 +831,14 @@ void Data::each(FnArrayEach each) {
             each(d, i++);
 }
 
-void Data::copy(Data &ref) {
+void var::copy(var &ref) {
     t      = ref.t;
     c      = ref.c;
     d      = ref.d;
     a      = ref.a;
     s      = ref.s;
     m      = ref.m;
-    d_size = ref.d_size;
+    sh     = ref.sh;
     flags  = ref.flags;
 
     if (ref.ff)
@@ -638,32 +849,31 @@ void Data::copy(Data &ref) {
     if (ref.n == &ref.n_value) {
         n_value = ref.n_value;
         n = &n_value;
-    } else if (ref.t == Data::Ref)
+    } else if (ref.t == var::Ref)
         n = ref.n;
-    else {
+    else
         n = ref.n;
-    }
 }
 
-void Data::operator += (Data ref) {
+void var::operator += (var ref) {
     if (a)
       (*a).push_back(ref);
 }
 
-Data& Data::operator=(const Data &ref) {
+var& var::operator=(const var &ref) {
     if (this != &ref)
-        copy((Data &)ref);
+        copy((var &)ref);
     return *this;
 }
 
-bool Data::operator!=(const Data &ref) {
+bool var::operator!=(const var &ref) {
     if (t != ref.t)
         return true;
-    else if (t == Data::Undefined || t == Data::Lambda || t == Data::Filter || t == Data::Any)
+    else if (t == var::Undefined || t == var::Lambda || t == var::Filter || t == var::Any)
         return false;
-    else if (t == Data::Str)
+    else if (t == var::Str)
         return *s != *(ref.s);
-    else if (t == Data::Map) {
+    else if (t == var::Map) {
         if (m ? m->size() : 0 != ref.m ? ref.m->size() : 0)
             return true;
         if (m)
@@ -675,7 +885,7 @@ bool Data::operator!=(const Data &ref) {
                     return true;
             }
         return true;
-    } else if (t == Data::Array) {
+    } else if (t == var::Array) {
         if (a->size() != ref.a->size())
             return true;
         size_t k = 0;
@@ -684,10 +894,10 @@ bool Data::operator!=(const Data &ref) {
             if (d != rd)
                 return true;
         }
-    } else if (t == Data::Ref) {
+    } else if (t == var::Ref) {
         assert(false); // todo
     } else {
-        assert(t >= Data::i8 && t <= Data::Bool);
+        assert(t >= var::i8 && t <= var::Bool);
         size_t  ts = type_size(t);
         bool match = memcmp(n, ref.n, ts) == 0;
         return !match;
@@ -695,38 +905,37 @@ bool Data::operator!=(const Data &ref) {
     return true;
 }
 
-bool Data::operator==(::map<std::string, Data> &map) const {
+bool var::operator==(::map<std::string, var> &map) const {
     if (!m)
         return map.size() == 0;
     return map == *m;
 }
 
-bool Data::operator!=(::map<std::string, Data> &map) const {
+bool var::operator!=(::map<std::string, var> &map) const {
     return !operator==(map);
 }
 
-bool Data::operator==(const Data &ref) {
+bool var::operator==(const var &ref) {
     return !(operator!=(ref));
 }
 
-bool Data::operator==(Data &ref) {
-    return !(operator!=((const Data &)ref));
+bool var::operator==(var &ref) {
+    return !(operator!=((const var &)ref));
 }
 
-/// todo: do map and array logic here
-size_t Data::type_size(Data::Type t) {
+size_t var::type_size(var::Type t) {
     switch (t) {
-        case Data::Bool:  return 1;
-        case Data::i8:    return 1;
-        case Data::ui8:   return 1;
-        case Data::i16:   return 2;
-        case Data::ui16:  return 2;
-        case Data::i32:   return 4;
-        case Data::ui32:  return 4;
-        case Data::i64:   return 8;
-        case Data::ui64:  return 8;
-        case Data::f32:   return 4;
-        case Data::f64:   return 8;
+        case var::Bool:  return 1;
+        case var::i8:    return 1;
+        case var::ui8:   return 1;
+        case var::i16:   return 2;
+        case var::ui16:  return 2;
+        case var::i32:   return 4;
+        case var::ui32:  return 4;
+        case var::i64:   return 8;
+        case var::ui64:  return 8;
+        case var::f32:   return 4;
+        case var::f64:   return 8;
         default:
             break;
     }

@@ -7,10 +7,10 @@ struct FontData;
 struct Font {
     std::string           alias;
     double                sz;
-    std::filesystem::path path;
+    path_t path;
     FontData             *data;
 
     Font();
-    Font(std::string alias, double sz = 0, std::filesystem::path = "");
-    Font(std::string alias, double sz, std::filesystem::path path, FontData *data);
+    Font(std::string alias, double sz = 0, path_t = "");
+    Font(std::string alias, double sz, path_t path, FontData *data);
 };

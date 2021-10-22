@@ -7,7 +7,7 @@ struct Commander:node {
         str path;
     } props;
     
-    std::filesystem::path path;
+    path_t path;
     
     void define() {
         Define <str> {this, "path", &props.path, "."};
@@ -19,12 +19,12 @@ struct Commander:node {
     
     void update_resources() {
         /// populate resources
-        path = std::filesystem::path(props.path);
+        path = path_t(props.path);
         size_t iter = 0;
         while (!std::filesystem::is_directory(path) || iter++ == 100)
             path = path.parent_path();
-        data = Data(Data::Map);
-        data["resources"] = {Data::Array};
+        data = var(var::Map);
+        data["resources"] = {var::Array};
         auto dir = std::filesystem::directory_iterator(path);
         for (auto &e: dir) {
             auto   ep = e.path();
@@ -37,7 +37,7 @@ struct Commander:node {
             }};
             data["resources"] += res;
         }
-        data["resolve"] = (FnFilter) [&](Data &d) {
+        data["resolve"] = (FnFilter) [&](var &d) {
             return str(d);
         };
         data["edit-data"] = str("this is some data");

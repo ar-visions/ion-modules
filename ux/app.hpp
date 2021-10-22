@@ -5,7 +5,7 @@
 #include <mutex>
 
 struct AppInternal;
-int run(AppInternal **, Data &);
+int run(AppInternal **, var &);
 
 enum KeyState {
     KeyUp,
@@ -60,7 +60,7 @@ enum KeyCode {
 
 struct Composer;
 struct GLFWwindow;
-struct Data;
+struct var;
 struct WindowInternal;
 
 struct App {
@@ -106,7 +106,7 @@ struct App {
         struct ServerInternal* intern;
         Server(int c, const char *v[], Args &defaults);
         int operator()(FnRender fn);
-        Web::Message query(Web::Message &m, Args &a, Data &p);
+        Web::Message query(Web::Message &m, Args &a, var &p);
     };
 
     /// todo: fix up scroll-related issues in terminal rendering
@@ -165,5 +165,5 @@ struct App {
 };
 
 #include <ux/composer.hpp>
-typedef std::function<bool (node *, node **, Data &)> FnUpdate;
+typedef std::function<bool (node *, node **, var &)> FnUpdate;
 

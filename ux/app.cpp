@@ -44,7 +44,7 @@ protected:
     
 public:
     GLFWwindow  *glfw;
-    Data         mouse     = Args {};
+    var         mouse     = Args {};
     std::string  title     = "";
     vec2         dpi_scale = { 1, 1 };
     Vec2<size_t> size      = { 0, 0 };
@@ -136,7 +136,7 @@ int App::Window::operator()(FnRender fn) {
 
 App::Window::Window(int c, const char *v[], Args &defaults) {
     type = Interface::Window;
-    args = Data::args(c, v);
+    args = var::args(c, v);
     for (auto &[k,v]: defaults) {
         if (args.count(k) == 0)
             args[k] = v;
@@ -152,7 +152,7 @@ App::Window::Window(int c, const char *v[], Args &defaults) {
 
 App::Server::Server(int c, const char *v[], Args &defaults) {
     type = Interface::Server;
-    args = Data::args(c, v);
+    args = var::args(c, v);
     for (auto &[k,v]: defaults) {
         if (args.count(k) == 0)
             args[k] = v;
@@ -163,12 +163,12 @@ App::Server::Server(int c, const char *v[], Args &defaults) {
     async = Web::server(uri, [&](Web::Message &m) -> Web::Message {
         /// figure out the args here
         Args a;
-        Data p = null;
+        var p = null;
         return query(m, a, p);
     });
 }
 
-Web::Message App::Server::query(Web::Message &m, Args &a, Data &p) {
+Web::Message App::Server::query(Web::Message &m, Args &a, var &p) {
     Web::Message msg;
     auto r = m.uri.resource;
     auto sp = m.uri.resource.split("/");
@@ -207,7 +207,7 @@ App::Console::Console() {
 }
 
 App::Console::Console(int c, const char *v[]) {
-    args   = Data::args(c, v);
+    args   = var::args(c, v);
     g_this = this;
 }
 

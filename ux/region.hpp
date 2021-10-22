@@ -28,12 +28,12 @@ struct Coord {
     bool operator==(Type t) {
         return this->t == t;
     }
-    void import_data(Data &d) {
+    void import_data(var &d) {
         t = Type(double(d[size_t(0)]));
         v =      double(d[size_t(1)]);
         p =        bool(d[size_t(2)]);
     }
-    inline Data export_data() {
+    inline var export_data() {
         return std::vector<double> { double(t), double(v), double(p) };
     }
     void copy(const Coord &ref) {
@@ -85,8 +85,8 @@ struct Region {
         return Rect<double>(vec2 { vx0, vy0 }, vec2 { vx1, vy1 });
     }
     
-    inline Data export_data() {
-        Data dd = std::vector<double> {
+    inline var export_data() {
+        var dd = std::vector<double> {
             double(left.t),   double(left.v),   double(left.p),
             double(top.t),    double(top.v),    double(top.p),
             double(right.t),  double(right.v),  double(right.p),
@@ -95,9 +95,9 @@ struct Region {
         return dd;
     }
     
-    void import_data(Data& d) {
+    void import_data(var& d) {
         if (d.size() >= 12) {
-            std::vector<Data> &a = *(d.a);
+            std::vector<var> &a = *(d.a);
             left    = Coord { Coord::Type(double(a[size_t(0)])), double(a[size_t(1)]),  bool(double(a[size_t(2)]))  };
             top     = Coord { Coord::Type(double(a[size_t(3)])), double(a[size_t(4)]),  bool(double(a[size_t(5)]))  };
             right   = Coord { Coord::Type(double(a[size_t(6)])), double(a[size_t(7)]),  bool(double(a[size_t(8)]))  };

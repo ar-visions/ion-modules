@@ -2,7 +2,7 @@
 #include <ux/ux.hpp>
 
 int main(int c, const char *v[]) {
-    Web::json("https://localhost/wonderful-resource").then([&](Data &res) {
+    Web::json("https://localhost/wonderful-resource").then([&](var &res) {
         console.log("message from server: {0}", {res["content"]["message"]});
     });
     return Async::await();

@@ -1,12 +1,12 @@
 #pragma once
 #include <data/data.hpp>
 
-void rgba_get_data(uint8_t *, Data &);
-void rgba_get_data(float   *, Data &);
-void rgba_get_data(double  *, Data &);
-void rgba_set_data(uint8_t *, Data &);
-void rgba_set_data(float   *, Data &);
-void rgba_set_data(double  *, Data &);
+void rgba_get_data(uint8_t *, var &);
+void rgba_get_data(float   *, var &);
+void rgba_get_data(double  *, var &);
+void rgba_set_data(uint8_t *, var &);
+void rgba_set_data(float   *, var &);
+void rgba_set_data(double  *, var &);
 
 template <typename T>
 struct RGBA {
@@ -24,8 +24,8 @@ struct RGBA {
     RGBA(const char *pc) {
         parse(pc);
     }
-    RGBA(Data &d) {
-        if (d == Data::Str) {
+    RGBA(var &d) {
+        if (d == var::Str) {
             parse(d);
         } else {
             if      constexpr (std::is_same_v<T, uint8_t>)
@@ -50,8 +50,8 @@ struct RGBA {
             sprintf(&str[i * 2], "%02x", arr[i]);
         return (const char *)str;
     }
-    operator Data() {
-        Data d;
+    operator var() {
+        var d;
         if      constexpr (std::is_same_v<T, uint8_t>)
             rgba_set_data((uint8_t *)this, d);
         else if constexpr (std::is_same_v<T, float>)

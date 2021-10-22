@@ -142,19 +142,19 @@ bool Web::write_headers(Socket sc, Args &headers) {
     return true;
 }
 
-Data Web::content_data(Socket sc, Data &c, Args& headers) {
-    if (c.t == Data::Map || c.t == Data::Array)
+var Web::content_data(Socket sc, var &c, Args& headers) {
+    if (c.t == var::Map || c.t == var::Array)
         headers["Content-Type"] = "application/json";
     str s = std::string(c);
-    return Data(s);
+    return var(s);
 }
 
-Data Web::read_content(Socket sc, Args& headers) {
+var Web::read_content(Socket sc, Args& headers) {
     const char      *te = "Transfer-Encoding";
     const char      *cl = "Content-Length";
   //const char      *ce = "Content-Encoding";
     int            clen = headers.count(cl) ? str(headers[cl]).integer() : -1;
-    bool        chunked = headers.count(te) && headers[te] == Data("chunked");
+    bool        chunked = headers.count(te) && headers[te] == var("chunked");
     ssize_t        tlen = clen;
     ssize_t        rlen = 0;
     const ssize_t r_max = 1024;
@@ -198,7 +198,7 @@ Data Web::read_content(Socket sc, Args& headers) {
             }
         } while (!error && chunked && tlen != 0);
     }
-    return error ? Data(null) : Data(v_data);
+    return error ? var(null) : var(v_data);
 }
 
 #if !defined(_WIN32)
@@ -218,8 +218,8 @@ struct SocketInternal {
     mbedtls_pk_context       pkey; // for server only
 };
 
-vec<std::filesystem::path> files(std::filesystem::path p, vec<str> exts = {}) {
-    vec<std::filesystem::path> v;
+vec<path_t> files(path_t p, vec<str> exts = {}) {
+    vec<path_t> v;
     if (std::filesystem::is_directory(p)) {
         for (const auto &f: std::filesystem::directory_iterator(p))
             if (f.is_regular_file() && (!exts || exts.index_of(f.path().string()) >= 0))
@@ -251,7 +251,7 @@ Socket::Socket(bool secure, bool listen) {
             std::cerr << " failed: mbedtls_ctr_drbg_seed\n";
             exit(1);
         }
-        std::filesystem::path path = listen ? "trust/server.cer" : "trust";
+        path_t path = listen ? "trust/server.cer" : "trust";
         auto vf = files(path, {".cer"});
         for (auto &p: vf) {
             int r = mbedtls_x509_crt_parse_file(&i.ca_cert, p.string().c_str());
@@ -261,7 +261,7 @@ Socket::Socket(bool secure, bool listen) {
             }
         }
         
-        std::filesystem::path sv_path = "server.key";
+        path_t sv_path = "server.key";
         if (std::filesystem::exists(sv_path)) {
             std::string p = sv_path.string();
             int r = mbedtls_pk_parse_keyfile(&i.pkey, p.c_str(),
@@ -352,13 +352,13 @@ bool Socket::write(vec<char> &v) {
     return write(v.data(), v.size(), 0);
 }
 
-bool Socket::write(str s, std::vector<Data> a) {
+bool Socket::write(str s, std::vector<var> a) {
     str f = str::format(s, a);
     return write(f.cstr(), f.length(), 0);
 }
 
-bool Socket::write(Data &v) {
-    if (v == Data::Str)
+bool Socket::write(var &v) {
+    if (v == var::Str)
         return write(str(v));
     assert(false); // todo
     return true;
@@ -475,7 +475,7 @@ Socket Socket::connect(str uri) {
 }
 
 Future Web::request(str s_uri, Args args) {
-    return Async(1, [s_uri=s_uri, args=args](auto p, int i) -> Data {
+    return Async(1, [s_uri=s_uri, args=args](auto p, int i) -> var {
         Args            &a = *(Args *)&args;
         str       s_method = a.count("method")    ? str(a["method"]) : str{"GET"};
         URI::Method method = s_method == "GET"    ? URI::Get    :
@@ -483,7 +483,7 @@ Future Web::request(str s_uri, Args args) {
                              s_method == "PUT"    ? URI::Put    :
                              s_method == "DELETE" ? URI::Delete : URI::Undefined;
         Args*      headers = a.count("headers")   ? (Args *) a["headers"] : nullptr;
-        Data*      content = a.count("content")   ? (Data *)&a["content"] : nullptr;
+        var*      content = a.count("content")   ? (var *)&a["content"] : nullptr;
         Message     result = {URI::Response};
         
         assert(method != URI::Undefined);
@@ -532,15 +532,14 @@ Future Web::request(str s_uri, Args args) {
         /// read headers
         auto  &r = result.headers = Web::read_headers(sc);
         str   ct = r.count("Content-Type") ? str(r["Content-Type"]) : str("");
-        Data rcv = read_content(sc, result.headers);
+        var rcv = read_content(sc, result.headers);
         
         /// read content
         if (ct == "application/json") {
-            const char *c = rcv.data<const char>();
-            size_t     sz = rcv.size();
-            str        js = str(c, sz);
-            result.content = Data(Data::Map);
-            result.content.read_json(js); // eh.
+            const char  *c = rcv.data<const char>();
+            size_t      sz = rcv.size();
+            str         js = str(c, sz);
+            result.content = var::read_json(js);
         } else
             result.content = rcv;
         
@@ -550,20 +549,20 @@ Future Web::request(str s_uri, Args args) {
 }
 
 Future Web::json(str resource, Args args, Args headers) {
-    std::function<void(Data &)> s, f;
+    std::function<void(var &)> s, f;
     Completer c = { s, f };
-    Web::request(resource, headers).then([s, f](Data &d) {
+    Web::request(resource, headers).then([s, f](var &d) {
         auto &headers = d["headers"];
         str ct = headers["Content-Type"];
         (ct == "application/json") ? s(d) : f(d);
-    }).except([&](Data &d) {
+    }).except([&](var &d) {
         f(d);
     });
     return Future(c);
 }
 
 Async Socket::listen(str uri, std::function<void(Socket)> fn) {
-    return Async(1, [&, uri=uri, fn=fn](auto process, int t_index) -> Data {
+    return Async(1, [&, uri=uri, fn=fn](auto process, int t_index) -> var {
         auto          a = URI::parse(str("GET ") + uri);
         auto  sc_listen = Socket(true, true);
         auto         &i = *(sc_listen.intern);
@@ -618,7 +617,7 @@ Async Socket::listen(str uri, std::function<void(Socket)> fn) {
                 }
 
                 /// spawn thread for the given callback
-                Async(1, [&, sc_client=sc_client, uri=uri, fn=fn](auto process, int t_index) -> Data {
+                Async(1, [&, sc_client=sc_client, uri=uri, fn=fn](auto process, int t_index) -> var {
                     fn(sc_client);
                     sc_client.close();
                     return true;
@@ -643,10 +642,10 @@ Async Web::server(str l_uri, std::function<Message(Message &)> fn) {
             if (msg && msg.uri.resource) {
                 msg.headers = Web::read_headers(sc);
                 msg.content = Web::read_content(sc, msg.headers);
-                close       = msg.headers["Connection"] == Data("close");
+                close       = msg.headers["Connection"] == var("close");
                 Message res = fn(msg);
                 if (res && res.content) {
-                    Data    c = Web::content_data(sc, res.content, res.headers);
+                    var    c = Web::content_data(sc, res.content, res.headers);
                     size_t sz = c.size();
                     res.headers["Content-Length"] = std::to_string(sz);
                     res.headers["Connection"]     = "keep-alive";

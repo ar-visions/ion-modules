@@ -2,7 +2,7 @@
 
 template <typename K, typename V>
 class map;
-struct Data;
+struct var;
 
 template <typename K, typename V>
 struct pair {

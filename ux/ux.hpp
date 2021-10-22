@@ -3,7 +3,7 @@
 #include <media/color.hpp>
 #include <media/canvas.hpp>
 
-typedef Data &Event;
+typedef var &Event;
 
 #include <ux/region.hpp>
 #include <ux/node.hpp>

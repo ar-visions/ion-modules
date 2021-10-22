@@ -1,3 +1,5 @@
+#include <data/data.hpp>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -50,7 +52,7 @@ const std::string MODEL_PATH = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 const int         MAX_FRAMES_IN_FLIGHT = 2;
 
-const std::vector<const char*> validationLayers = {
+const vec<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
@@ -233,6 +235,8 @@ private:
     std::vector<VkFence> imagesInFlight;
     size_t currentFrame = 0;
 
+    vec<VkLayerProperties> availableLayers;
+    
     bool framebufferResized = false;
 
     struct Skia {
@@ -426,7 +430,20 @@ private:
     }
 
     void createInstance() {
-        if (enableValidationLayers && !checkValidationLayerSupport()) {
+
+        /// get available layers
+        uint32_t layerCount;
+        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+        availableLayers = vec<VkLayerProperties>(layerCount);
+        vkEnumerateInstanceLayerProperties(&layerCount, (VkLayerProperties *)availableLayers.data());
+        
+        const bool has_validation = (validationLayers.query_first([&](const char *&n) -> var {
+            return availableLayers.query_first([&](VkLayerProperties *&layer) {
+                return (strcmp(layer.layerName, n) == 0) ? var(null) : var(true);
+            });
+        }) == var(null));
+        
+        if (enableValidationLayers && !has_validation) {
             throw std::runtime_error("validation layers requested, but not available!");
         }
 
@@ -1862,32 +1879,7 @@ private:
 
         return extensions;
     }
-
-    bool checkValidationLayerSupport() {
-        uint32_t layerCount;
-        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-        std::vector<VkLayerProperties> availableLayers(layerCount);
-        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-
-        for (const char* layerName : validationLayers) {
-            bool layerFound = false;
-
-            for (const auto& layerProperties : availableLayers) {
-                if (strcmp(layerName, layerProperties.layerName) == 0) {
-                    layerFound = true;
-                    break;
-                }
-            }
-
-            if (!layerFound) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
+    
     static std::vector<char> readFile(const std::string& filename) {
         std::ifstream file(filename, std::ios::ate | std::ios::binary);
 

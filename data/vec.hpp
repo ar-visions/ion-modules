@@ -26,13 +26,13 @@ struct Vec2: Vector<T> {
         return *n;
     }
     
-    Vec2(Data &d) {
+    Vec2(var &d) {
         if (d.size() < 2) {
             x = std::numeric_limits<T>::quiet_NaN();
-        } else if (d.t == Data::Array) {
+        } else if (d.t == var::Array) {
             x = T(d[size_t(0)]);
             y = T(d[size_t(1)]);
-        } else if (d.t == Data::Map) {
+        } else if (d.t == var::Map) {
             x = T(d["x"]);
             y = T(d["y"]);
         } else {
@@ -40,7 +40,7 @@ struct Vec2: Vector<T> {
         }
     }
     
-    operator Data() {
+    operator var() {
         return std::vector<T> { x, y };
     }
 
@@ -100,6 +100,24 @@ struct Vec3: Vector<T> {
     
     operator Vec3<float>()          { return Vec3<float>  { float(x),  float(y),  float(z)  }; }
     operator Vec3<double>()         { return Vec3<double> { double(x), double(y), double(z) }; }
+    
+    operator var() {
+        return std::vector<T> { x, y, z };
+    }
+    
+    Vec3(var &d) {
+        x = T(d[size_t(0)]);
+        y = T(d[size_t(1)]);
+        z = T(d[size_t(2)]);
+    }
+    
+    Vec3<T> &operator=(const std::vector<T> f) {
+        assert(f.size() == 3);
+        x = f[0];
+        y = f[1];
+        z = f[2];
+        return *this;
+    }
 };
 
 
@@ -142,11 +160,11 @@ struct Vec4: Vector<T> {
     Vec2<T> xy()                    { return Vec2<T> { x, y }; }
     Vec3<T> xyz()                   { return Vec3<T> { x, y, z }; }
     
-    operator Vec4<float>()  { return Vec4<float>  { float(x),  float(y),  float(z),  float(w)  }; }
-    operator Vec4<double>() { return Vec4<double> { double(x), double(y), double(z), double(w) }; }
+    operator Vec4<float>()          { return Vec4<float>  { float(x),  float(y),  float(z),  float(w)  }; }
+    operator Vec4<double>()         { return Vec4<double> { double(x), double(y), double(z), double(w) }; }
 };
 
-typedef map<std::string, Data> Args;
+typedef map<std::string, var> Args;
 
 template <typename T>
 struct Rect: Vector<T> {
@@ -185,7 +203,20 @@ struct Rect: Vector<T> {
     operator Rect<int>()     { return {    int(x),    int(y),    int(w),    int(h) }; }
     operator Rect<float>()   { return {  float(x),  float(y),  float(w),  float(h) }; }
     operator Rect<double>()  { return { double(x), double(y), double(w), double(h) }; }
-    operator Args()          { return Args {{"x",T(x)}, {"y",T(y)}, {"w",T(w)}, {"h",T(h)}}; }
+
+    operator var() {
+        return std::vector<T> { x, y, w, h };
+    }
+    
+    Rect<T>(var &d) {
+        if (d.size()) {
+            x = T(d[size_t(0)]);
+            y = T(d[size_t(1)]);
+            w = T(d[size_t(2)]);
+            h = T(d[size_t(3)]);
+        } else
+            x = std::numeric_limits<double>::quiet_NaN();
+    }
 };
 
 typedef Vec2<float>  vec2f;

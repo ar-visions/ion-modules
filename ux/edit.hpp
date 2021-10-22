@@ -15,10 +15,10 @@ struct Edit:node {
     } props;
     
     static FnFilter LCase() {
-        return FnFilter([](Data &d) {
+        return FnFilter([](var &d) {
             std::string s = *(d.s);
             std::transform(s.begin(), s.end(), s.begin(), [](uint8_t c) { return std::tolower(c); });
-            return Data(s);
+            return var(s);
         });
     }
     

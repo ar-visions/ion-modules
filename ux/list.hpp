@@ -20,15 +20,15 @@ struct List:node {
         Column(str id, int value, Align align = Align::Start) :
             id(id), size(value), scale(false), align(align) { }
         
-        void import_data(Data &d) {
-            if (d.t == Data::Array) {
+        void import_data(var &d) {
+            if (d.t == var::Array) {
                 id     =             str(d[size_t(0)]);
                 size   =          double(d[size_t(1)]);
                 scale  =            bool(d[size_t(2)]);
                 final  =          double(d[size_t(3)]);
                 align  = Align::Type(int(d[size_t(4)]));
             } else {
-                assert(d.t == Data::Str);
+                assert(d.t == var::Str);
                 id = str(d);
             }
         }
@@ -41,8 +41,8 @@ struct List:node {
             align = r.align;
         }
         
-        Data export_data() {
-            return std::vector<Data> { id, size, scale, final, align };
+        var export_data() {
+            return std::vector<var> { id, size, scale, final, align };
         }
         
         serializer(Column, id);
@@ -142,7 +142,7 @@ struct List:node {
         if (columns) {
             bool prev = false;
             cells([&](Column &c, rectd cell) {
-                Data d_id = c.id;
+                var d_id = c.id;
                 auto text = context("resolve")(d_id);
                 canvas.color(node::props.text.color);
                 canvas.text(text, pad_rect(cell), {c.align, Align::Middle}, {0,0});

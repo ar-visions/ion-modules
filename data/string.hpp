@@ -9,7 +9,7 @@ struct str {
     str(const char *cstr, size_t len);
     str(std::string s);
     str(std::ifstream& in);
-    str(std::filesystem::path p);
+    str(path_t p);
     str(char c);
     size_t find(str &str, size_t from) const;
     size_t length() const;
@@ -20,7 +20,12 @@ struct str {
     int index_of(const char *f) const;
     vec<str> split(str delim) const;
     vec<str> split(const char *delim) const;
-    static str format(str t, std::vector<Data> p = {});
+    static str format(str t, std::vector<var> p = {});
+    /*
+    str operator %(std::vector<var> p) {
+        return format(str(s), p);
+    }*/
+    
     const char *cstr() const;
     
     operator std::string()                const &;
@@ -34,11 +39,12 @@ struct str {
     bool   operator< (const str& rhs)     const {
         return s < rhs.s;
     }
+    operator path_t()      const;
     int    integer()                      const;
     double real()                         const;
     bool   is_numeric()                   const;
-  //operator Data();
-    str(Data &d);
+  //operator var();
+    str(var &d);
     str to_lower()                        const;
     str to_upper()                        const;
     str operator+   (const str &b) { return str(s + b.s);    }

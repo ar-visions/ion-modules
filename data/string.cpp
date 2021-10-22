@@ -5,6 +5,10 @@ str::str(std::string s)    : s(s)                              { }
 str::str(const char *s)    : s(s)                              { }
 str::str(const char *s, size_t len) : s({s, len})              { }
 
+str::operator path_t() const {
+    return s;
+}
+
 str::str(char c) {
     char cv[2] = { c, 0 };
     s = std::string(cv);
@@ -16,7 +20,7 @@ str::str(std::ifstream& in) {
     s = sstr.str();
 }
 
-str::str(std::filesystem::path p) {
+str::str(path_t p) {
     std::ifstream f(p);
     std::ostringstream sstr;
     sstr << f.rdbuf();
@@ -70,11 +74,11 @@ str str::substr(size_t start) const {
     return s.substr(start);
 }
 /*
-str::operator Data() {
+str::operator var() {
     return s;
 }*/
 
-str::str(Data &d) : s(std::string(d)) { }
+str::str(var &d) : s(std::string(d)) { }
 
 vec<str> str::split(str delim) const {
     size_t start = 0, end, delim_len = delim.length();
@@ -147,7 +151,7 @@ bool str::is_numeric() const {
     return s != "" && (s[0] == '-' || isdigit(s[0]));
 }
 
-str str::format(str t, std::vector<Data> p) {
+str str::format(str t, std::vector<var> p) {
     for (size_t k = 0; k < p.size(); k++) {
         auto p0 = str("{") + str(std::to_string(k)) + str("}");
         auto p1 = str(p[k]);

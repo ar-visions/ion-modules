@@ -17,15 +17,15 @@ static Typefaces           faces;
 struct FontData {
     sk_sp<SkTypeface>      face;
     SkFont                 font;
-    std::filesystem::path  path;
+    path_t  path;
 };
 
 Font::Font() { }
 
-Font::Font(std::string alias, double sz, std::filesystem::path path, FontData *data)
+Font::Font(std::string alias, double sz, path_t path, FontData *data)
          : alias(alias), sz(sz), path(path), data(data) { }
 
-Font::Font(std::string alias, double sz, std::filesystem::path path) {
+Font::Font(std::string alias, double sz, path_t path) {
     if (!sk_manager) {
          sk_manager = SkFontMgr::RefDefault();
          assert(sk_manager);

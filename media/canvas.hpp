@@ -17,8 +17,8 @@ struct Align {
     } type;
                Align(Type t = Undef) : type(t) { }
     void        copy(const Align &ref) { type = ref.type; }
-    void import_data(Data &data)       { type = Type(int(data)); }
-    Data export_data()                 { return int(type); }
+    void import_data(var &data)       { type = Type(int(data)); }
+    var export_data()                 { return int(type); }
     bool  operator==(Type t)           { return type == t; }
     serializer(Align, type != Undef);
 };
@@ -76,8 +76,8 @@ struct DrawState {
            DrawState(Canvas *h, double s, double f, double o, m44 m, rgba c, vec2 b) :
                      host(h), stroke_sz(s), font_scale(f), opacity(o), m(m), color(c), blur(b) { }
            DrawState()              { }
-    void import_data(Data &d)       { }
-    Data export_data()              { return null; }
+    void import_data(var &d)       { }
+    var export_data()              { return null; }
     void copy(const DrawState &r);
 
     serializer(DrawState, true);
@@ -199,14 +199,14 @@ struct TextMetrics {
                     line_height(line_height),
                     cap_height(cap_height) { }
     
-    Data export_data() {
+    var export_data() {
         return std::vector<float> {
             w, h, ascent, descent,
             line_height, cap_height
         };
     }
     
-    void import_data(Data& d) {
+    void import_data(var& d) {
         w           = float(d[size_t(0)]);
         h           = float(d[1]);
         ascent      = float(d[2]);
@@ -250,8 +250,8 @@ struct Blending {
     
     /// data import export
     void copy(const Blending &ref) { type = ref.type;         }
-    Data export_data()             { return int32_t(type);    }
-    void import_data(Data &d)      { type = Type(int32_t(d)); }
+    var export_data()             { return int32_t(type);    }
+    void import_data(var &d)      { type = Type(int32_t(d)); }
     
     serializer(Blending, type >= Clear);
 };
