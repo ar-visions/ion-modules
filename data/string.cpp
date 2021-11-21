@@ -1,17 +1,51 @@
 #include <data/data.hpp>
+#include <fstream>
 
 str::str(nullptr_t n)                                          { }
 str::str(std::string s)    : s(s)                              { }
 str::str(const char *s)    : s(s)                              { }
 str::str(const char *s, size_t len) : s({s, len})              { }
 
+str::str(vec<char> &v) {
+    s = std::string((const char *)v.data(), v.size());
+}
 str::operator path_t() const {
     return s;
+}
+
+str str::read_file(path_t f) {
+    std::ifstream fs;
+    fs.open(f);
+    std::ostringstream sstr;
+    sstr << fs.rdbuf();
+    fs.close();
+    return str(sstr.str());
+}
+
+bool str::starts_with(const char *cstr) const {
+    size_t l0 = strlen(cstr);
+    size_t l1 = length();
+    if (l1 < l0)
+        return false;
+    return memcmp(cstr, s.c_str(), l0) == 0;
+}
+
+bool str::ends_with(const char *cstr) const {
+    size_t l0 = strlen(cstr);
+    size_t l1 = length();
+    if (l1 < l0)
+        return false;
+    const char *end = &(s.c_str())[l1 - l0];
+    return memcmp(cstr, end, l0) == 0;
 }
 
 str::str(char c) {
     char cv[2] = { c, 0 };
     s = std::string(cv);
+}
+
+str::str(int v) {
+    s = std::to_string(v);
 }
 
 str::str(std::ifstream& in) {
@@ -21,6 +55,7 @@ str::str(std::ifstream& in) {
 }
 
 str::str(path_t p) {
+    /// deprecate, its a bit unclear syntax-wise whats going on
     std::ifstream f(p);
     std::ostringstream sstr;
     sstr << f.rdbuf();
@@ -34,7 +69,7 @@ bool str::operator< (const str& rhs) const {
 
 str str::to_lower() const {
     std::string s = this->s;
-    std::transform(s.begin(), s.end(), s.begin(), ::tolower); // transform is more C than C++
+    std::transform(s.begin(), s.end(), s.begin(), ::tolower); // transform and this style of api is more C than C++
     return s;
 }
 
@@ -56,12 +91,14 @@ const char *str::cstr() const {
     return s.c_str();
 }
 
-str str::replace(str from, str to) const {
+str str::replace(str from, str to, bool all) const {
     size_t start_pos = 0;
     std::string str = s;
     while((start_pos = str.find(from.s, start_pos)) != std::string::npos) {
         str.replace(start_pos, from.length(), to.s);
-        start_pos += to.length(); // Handles case where 'to' is a substring of 'from'
+        start_pos += to.length();
+        if (!all)
+            break;
     }
     return str;
 }
@@ -98,6 +135,25 @@ vec<str> str::split(str delim) const {
 
 vec<str> str::split(const char *delim) const {
     return split(std::string(delim));
+}
+
+/// split by whitespace in 38 seconds both in design time and runtime
+vec<str> str::split() const {
+    ::vec<str> result;
+    str chars = "";
+    for (char const &c: s) { /// replace traditional for uses where index not used
+        bool is_ws = isspace(c);
+        if (is_ws) {
+            if (chars) {
+                result += chars;
+                chars = "";
+            }
+        } else
+            chars += str(c);
+    }
+    if (chars || !result)
+        result += chars;
+    return result;
 }
 
 int str::index_of(const char *f) const {

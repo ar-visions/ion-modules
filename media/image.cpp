@@ -11,13 +11,75 @@ Image::Image(path_t p, Image::Format f) {
     bool  rgba = (f == Format::Rgba);
     vec3i   sh = { 0, 0, rgba ? 4 : 1 };
     uint8_t *m = (uint8_t *)stbi_load(p.string().c_str(), &sh.x, &sh.y, null, sh.z);
-    auto    sp = std::shared_ptr<uint8_t>(m);
-    pixels     = var(sp, std::vector<int> { sh.y, sh.x, 1 });
-    pixels.c   = rgba ? var::ui32 : var::ui8;
+    pixels     = { rgba ? var::ui32 : var::ui8, std::shared_ptr<uint8_t>(m), { sh.y, sh.x, 1 }};
     assert(pixels.size());
 }
 
-// it holds onto a reference crop inside of the pixel data
+Image::Image(vec2i sz, Format f) {
+    auto g = f == Gray;
+    pixels = {g ? var::ui8 :
+                  var::ui32,
+              std::vector<int> { sz.y, sz.x, g ? 1 : 4 }};
+}
+
+Image::Image(vec2i sz, rgba clr) {
+    pixels = {var::ui32, std::vector<int>{ sz.y, sz.x, 4 }};
+}
+
+Image::Format Image::format() {
+    return pixels.c == var::ui32 ? Rgba : Gray;
+}
+
+vec2 Image::size() {
+    return vec2 {real(pixels.sh[1]), real(pixels.sh[0])};
+}
+
+Image Image::resample(vec2i sz) {
+    vec2 sc = vec2(sz) / vec2(size());
+    m44   m = m44().scale(vec2(1.0) / sc);
+    return transform(m, sz);
+}
+
+Image Image::transform(m44 m, vec2i vp) {
+    Format    f = format();
+    Image    vi = Image(vp, f);
+    vec2     sz = size();
+    rectd     r = {0.0, 0.0, sz[0], sz[1]};
+    vec<vec2> clip = {{r.x,r.y}, {r.x + r.w,r.y},
+                      {r.x + r.w,r.y + r.w}, {r.x,r.y + r.h}};
+    
+    for (    int y = 0; y < vp.y; y++)
+        for (int x = 0; x < vp.x; x++)
+            vi.pixel<uint8_t>(x, y) = 0;
+    
+    switch (f) {
+        case Image::Gray: {
+            auto tx = vi.pixels.data<uint8_t>();
+            for     (int y = 0; y < vp.y; y++) {
+                for (int x = 0; x < vp.x; x++) {
+                    vec4  h = m * vec4(x + 0.5, y + 0.5, 0.0, 1.0);
+                    vec2 uv = h.xy() / h.w / sz;
+                    *(tx++) = bicubic(uv, sz);
+                }
+            }
+            break;
+        }
+        case Image::Rgba: {
+            auto tx = vi.pixels.data<rgba>();
+            for     (int y = 0; y < vp.y; y++) {
+                for (int x = 0; x < vp.x; x++) {
+                    vec4  h = m * vec4(x + 0.5, y + 0.5, 0.0, 1.0);
+                    vec2 uv = h.xy() / h.w / sz;
+                    *(tx++) = rgba(bicubic_4(uv, sz));
+                }
+            }
+            break;
+        }
+    }
+    
+    return vi;
+}
+
 Image::operator var() {
     return pixels;
 }
@@ -46,17 +108,16 @@ void Image::save(path_t p) {
     
     if      (e == ".png")
         stbi_write_png(p.c_str(), r.w, r.h, c, d, rsize);
-    else if (e == ".jpg" ||
-             e == ".jpeg") {
+    else if (e == ".jpg" || e == ".jpeg")
         stbi_write_jpg(p.c_str(), r.w, r.h, c, d, 100);
-    } else
+    else
         assert(false);
     
     free(d);
 }
 
 Image Image::crop(recti r) {
-    auto     sh = pixels.shape(); // data shape!.. we have it.
+    auto     sh = pixels.shape();
     const int w = sh[1],
               h = sh[0];
     recti    cr = pixels.count("crop") ?
@@ -67,13 +128,8 @@ Image Image::crop(recti r) {
                     r.w, r.h };
     bool copy   = (rr.x < 0 || rr.x + rr.w > w) ||
                   (rr.y < 0 || rr.y + rr.h > h);
-    // check if its out of bounds
-    // if so, a copy must be made
     assert(!copy);
-    var result = pixels.tag({{"crop", rr}});
-    recti rrect = result["crop"];
-    int test = 0;
-    test++;
+    var result  = pixels.tag({{"crop", rr}});
     return result;
 }
 

@@ -12,14 +12,18 @@ template <typename T>
 struct RGBA {
     alignas(T) T r = 0, g = 0, b = 0, a = 0;
     RGBA(nullptr_t n = nullptr) { }
-    RGBA(double r, double g, double b, double a) {
-        double sc = 1;
-        if constexpr (std::is_same_v<T, uint8_t>)
-            sc = 1;
-        this->r = r * sc;
-        this->g = g * sc;
-        this->b = b * sc;
-        this->a = a * sc;
+    RGBA(real r, real g, real b, real a) {
+        const auto sc = real(255.0);
+        this->r = std::clamp(r * sc, 0.0, 255.0);
+        this->g = std::clamp(g * sc, 0.0, 255.0);
+        this->b = std::clamp(b * sc, 0.0, 255.0);
+        this->a = std::clamp(a * sc, 0.0, 255.0);
+    }
+    RGBA(vec4 v) {
+        r = v.x * 255.0;
+        g = v.y * 255.0;
+        b = v.z * 255.0;
+        a = v.w * 255.0;
     }
     RGBA(const char *pc) {
         parse(pc);
@@ -97,11 +101,26 @@ struct RGBA {
             b = ib;
             a = ia;
         } else {
-            r = ir / T(255.0);
+            r = ir / T(255.0); // not so sure if we should even keep this one templated. it does make some good sense though
             g = ig / T(255.0);
             b = ib / T(255.0);
             a = ia / T(255.0);
         }
+    }
+    inline RGBA<T> operator+(RGBA<T> b) {
+        return RGBA<T> {
+            real(this->r + b.r) / real(255.0),
+            real(this->g + b.g) / real(255.0),
+            real(this->b + b.b) / real(255.0),
+            real(this->a + b.a) / real(255.0)
+        };
+    }
+    inline RGBA<T> operator*(real f) {
+        real m = f / 255.0;
+        return RGBA<T> { r * m, g * m, b * m, a * m };
+    }
+    operator vec4() {
+        return vec4 { r / 255.0, g / 255.0, b / 255.0, a / 255.0 };
     }
     std::vector<double> doubles() {
         if constexpr (std::is_same_v<T, uint8_t>)
@@ -113,3 +132,11 @@ struct RGBA {
 };
 
 typedef RGBA<uint8_t> rgba;
+
+template <typename T>
+struct Weighted {
+    real p; /// pos
+    real w; /// weight
+    T    v; /// value
+};
+

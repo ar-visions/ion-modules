@@ -35,6 +35,7 @@ inline SkColor sk_color(rgba c) {
                   (uint32_t(c.r * s) << 16) | (uint32_t(c.a * s) << 24));
 }
 
+// this really needs to be in vk
 struct Skia {
     sk_sp<GrDirectContext> sk_context;
     Skia(sk_sp<GrDirectContext> sk_context) : sk_context(sk_context) { }
@@ -45,25 +46,27 @@ struct Skia {
 
         //GrBackendFormat gr_conv = GrBackendFormat::MakeVk(VK_FORMAT_R8G8B8_SRGB);
         sk_sp<GrDirectContext> sk_context;
+        Vulkan::init();
         
         #if defined(SK_VULKAN)
-        GrVkBackendContext grc {
-            Vulkan::get_instance(),
-            Vulkan::get_gpu(),
-            Vulkan::get_device(),
-            Vulkan::get_queue(),
-            Vulkan::get_queue_index(),
-            Vulkan::get_version()
-        };
-        grc.fMaxAPIVersion = Vulkan::get_version();
-        //grc.fVkExtensions = new GrVkExtensions(); // internal needs population perhaps
-        grc.fGetProc = [](const char *name, VkInstance inst, VkDevice dev) -> PFN_vkVoidFunction {
-            return (dev == VK_NULL_HANDLE) ? vkGetInstanceProcAddr(inst, name) :
-                                             vkGetDeviceProcAddr  (dev,  name);
-        };
-        sk_context = GrDirectContext::MakeVulkan(grc);
+            GrVkBackendContext grc {
+                Vulkan::instance(),
+                Vulkan::gpu(),
+                Vulkan::device(),
+                Vulkan::queue(),
+                Vulkan::queue_index(),
+                Vulkan::version()
+            };
+            grc.fMaxAPIVersion = Vulkan::version();
+            //grc.fVkExtensions = new GrVkExtensions(); // internal needs population perhaps
+            grc.fGetProc = [](const char *name, VkInstance inst, VkDevice dev) -> PFN_vkVoidFunction {
+                return (dev == VK_NULL_HANDLE) ? vkGetInstanceProcAddr(inst, name) :
+                                                 vkGetDeviceProcAddr  (dev,  name);
+            };
+            
+            sk_context = GrDirectContext::MakeVulkan(grc);
         #elif defined(SK_GL)
-        sk_context = GrDirectContext::MakeGL(GrGLMakeNativeInterface());
+            sk_context = GrDirectContext::MakeGL(GrGLMakeNativeInterface());
         #elif defined(SK_METAL)
         #endif
         assert(sk_context);
@@ -91,28 +94,32 @@ struct Context2D:ICanvasBackend {
     }
     
     Context2D(vec2i sz) {
-        // get canvas working without framebuffer, it wont use that
-        // the idea of this subsystem is it fits into a larger drawing system
-        // it wont be a hinderance on performance to go from
-        // VkImage to our dest VkSwapbuffer or whatever its called.
-        
       //Vulkan::init();
       //Vulkan::resize(sz.x, sz.y);
         
+        
+        
+        
+        
+        
+        
+        
+        
+        texture = sz;
+        
         GrDirectContext *ctx    = Skia::Context()->sk_context.get();
         auto imi                = GrVkImageInfo { };
-        imi.fImage              = Vulkan::get_image();
+        imi.fImage              = Vulkan::image();
         imi.fImageTiling        = VK_IMAGE_TILING_OPTIMAL;
         imi.fImageLayout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imi.fFormat             = VK_FORMAT_R8G8B8A8_UNORM;
       //imi.fImageUsageFlags    = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         imi.fSampleCount        = 1;
         imi.fLevelCount         = 1;
-        imi.fCurrentQueueFamily = Vulkan::get_queue_index(); //VK_QUEUE_FAMILY_IGNORED;
+        imi.fCurrentQueueFamily = Vulkan::queue_index(); //VK_QUEUE_FAMILY_IGNORED;
         imi.fProtected          = GrProtected::kNo;
         imi.fSharingMode        = VK_SHARING_MODE_EXCLUSIVE;
-        
-        vk_image = imi.fImage;
+        vk_image                = imi.fImage;
         auto rt                 = GrBackendRenderTarget { sz.x, sz.y, imi };
         sk_surf                 = SkSurface::MakeFromBackendRenderTarget(
                                        ctx, rt, kBottomLeft_GrSurfaceOrigin,
@@ -121,24 +128,28 @@ struct Context2D:ICanvasBackend {
         set_size(sz);
     }
     
-    void flush(DrawState &) {
+    void clear(DrawState &ds) {
+        sk_canvas->clear(sk_color(ds.color));
+    }
+    
+    void flush(DrawState &ds) {
         sk_canvas->flush();
     }
     
-    void save(DrawState &d_state) {
+    void save(DrawState &ds) {
         State *s    = new State;
-        State *prev = (State *)(d_state.b_state);
+        State *prev = (State *)(ds.b_state);
         if (prev) {
             s->ps = prev->ps;
             delete  prev;
         } else {
             s->ps = SkPaint { };
         }
-        d_state.b_state = s;
+        ds.b_state = s;
     }
 
-    void restore(DrawState &d_state) {
-        delete (State *)d_state.b_state;
+    void restore(DrawState &ds) {
+        delete (State *)ds.b_state;
     }
     
     void *data() {
@@ -148,22 +159,26 @@ struct Context2D:ICanvasBackend {
     void set_size(vec2i sz_new) {
         sz = sz_new;
     }
-
-    void text(DrawState &state, str &s, rectd &rect, Vec2<Align> &align, vec2 &offset) {
+    
+    vec2i size() {
+        return sz;
     }
 
-    void clip(DrawState &st, rectd &path) {
+    void text(DrawState &ds, str &s, rectd &rect, Vec2<Align> &align, vec2 &offset) {
+    }
+
+    void clip(DrawState &ds, rectd &path) {
         assert(false);
     }
 
-    void stroke(DrawState &state, rectd &rect) {
+    void stroke(DrawState &ds, rectd &rect) {
     }
 
-    void fill(DrawState &state, rectd &rect) {
-        State   *s = (State *)state.b_state; // backend state (this)
+    void fill(DrawState &ds, rectd &rect) {
+        State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
-        if (state.opacity != 1.0f)
-            ps.setAlpha(float(ps.getAlpha()) * float(state.opacity));
+        if (ds.opacity != 1.0f)
+            ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
         SkRect   r = SkRect {
             SkScalar(rect.x),          SkScalar(rect.y),
             SkScalar(rect.x + rect.w), SkScalar(rect.y + rect.h) };
@@ -212,6 +227,10 @@ struct Terminal:ICanvasBackend {
         str hex    = str("#") + str(c);
         str result = map.count(hex) ? map[hex] : "";
         return result;
+    }
+    
+    vec2i size() {
+        return sz;
     }
 
     Terminal(vec2i sz) {
@@ -396,53 +415,61 @@ map<str, str> Terminal::t_bg_colors_8 = {
     { "#ffffff",  "\u001b[47m" }};
 
 
-void ICanvasBackend::translate(DrawState &st, vec2  &tr)  { st.m     = st.m * m44::translation({tr.x, tr.y, 0.0}); }
-void ICanvasBackend::    scale(DrawState &st, vec2  &sc)  { st.m     = st.m * m44::scale(      {sc.x, sc.y, 1.0}); }
-void ICanvasBackend::   rotate(DrawState &st, double deg) { st.m     = st.m * m44::rotation_z(deg); }
+void ICanvasBackend::texture  (DrawState &st, Image *im)  {
+    st.im = im;
+};
+
+void ICanvasBackend::translate(DrawState &st, vec2  &tr)  { st.m = st.m.translate(tr); }
+void ICanvasBackend::    scale(DrawState &st, vec2  &sc)  { st.m = st.m.scale(sc); }
+void ICanvasBackend::   rotate(DrawState &st, double deg) { st.m = st.m.rotate_z(deg); }
 void ICanvasBackend::    color(DrawState &st, rgba  &c)   { st.color = c;  }
 void ICanvasBackend:: gaussian(DrawState &st, vec2  &sz, rectd cr)  { st.blur  = sz; }
 
 Canvas::Canvas(nullptr_t n) : type(Undefined) { }
 
-Canvas::Canvas(vec2i sz, Canvas::Type type) : type(type),
+Canvas::Canvas(vec2i sz, Canvas::Type type, var *result) : type(type),
                backend(type == Terminal ? (ICanvasBackend *)new ::Terminal(sz) :
                                           (ICanvasBackend *)new ::Context2D(sz)) {
-    backend->host = this;
+    backend->host   = this;
+    backend->result = result;
     defaults();
     save();
 }
 
-void *Canvas::data() { return backend ? ((::Terminal *)backend)->data() : null; }
-str  Canvas::get_char(  int x, int y     ) { return backend->get_char(state, x, y); }
-void Canvas::defaults(                   ) { state = {this, 1, 1, 1, m44::identity(), "#000f", vec2 {0, 0}}; }
-void Canvas::stroke_sz( double sz        ) { state.stroke_sz = sz;                                  }
-void Canvas::font_scale(double sc        ) { state.font_scale  = sc;                                }
-void Canvas::save(                       ) { states.push(state); backend->save(state);              }
-void Canvas::restore(                    ) {
-    state = states.top();
-    states.pop();
-    assert(states.size() >= 1);
-}
-void Canvas::scale(     vec2   sc        ) { state.m = state.m * m44::scale({sc.x, sc.y, 1});       }
-void Canvas::rotate(    double d         ) { state.m = state.m * m44::rotation_z(d);                }
-str  Canvas::ansi_color(rgba c, bool t   ) { return backend->ansi_color(c, t);                      }
-void Canvas::translate( vec2   tr        ) { backend->translate(state, tr);                         }
-void Canvas::color(     rgba   c         ) { backend->color(state, c);                              }
-void Canvas::gaussian(  vec2   s, rectd c) { backend->gaussian(state, s, c);                        }
-void Canvas::clip(      Path   &path     ) { backend->clip  (state, path);                          }
-void Canvas::clip(      rectd  &rect     ) { backend->clip  (state, rect);                          }
-void Canvas::fill(      Path   &path     ) { backend->fill  (state, path);                          }
-void Canvas::fill(      rectd  &rect     ) { backend->fill  (state, rect);                          }
-void Canvas::stroke(    Path   &path     ) { backend->stroke(state, path);                          }
-void Canvas::stroke(    rectd  &rect     ) { backend->stroke(state, rect);                          }
-void Canvas::flush()                       { backend->flush (state);                                }
-bool Canvas::operator==(Type   t)          { return type == t;                                      }
-void Canvas::text(str s,rectd r, Vec2<Align> align, vec2 o) {
-    backend->text(state, s, r, align, o);
+void  Canvas::restore() {
+     state = states.top();
+     states.pop();
+     assert(states.size() >= 1);
 }
 
-void *Canvas::copy_bstate(void *bs) {
-    return backend->copy_bstate(bs);
+void  Canvas::save()                    { states.push(state); backend->save(state); }
+void *Canvas::data()                    { return backend ? ((::Terminal *)backend)->data() : null; }
+str   Canvas::get_char(int x, int y)    { return backend->get_char(state, x, y); }
+void  Canvas::defaults()                { state = {this, 1, 1, 1, m44(), "#000f", vec2 {0, 0}}; }
+void  Canvas::stroke_sz( double sz)     { state.stroke_sz = sz;                            }
+void  Canvas::font_scale(double sc)     { state.font_scale  = sc;                          }
+void *Canvas::copy_bstate(void *bs)     { return backend->copy_bstate(bs);                 }
+vec2i Canvas::size()                    { return backend->size();                          }
+void  Canvas::scale(vec2 sc)            { state.m = state.m.scale(sc);                     }
+void  Canvas::rotate(double d)          { state.m = state.m.rotate_z(d);                   }
+void  Canvas::translate(vec2 tr)        { backend->translate(state, tr);                   }
+void  Canvas::texture(Image &im)        {
+    backend->texture(state, im ? &im : null);
+}
+void  Canvas::color(rgba c)             { backend->color(state, c);                        }
+void  Canvas::gaussian(vec2 s, rectd c) { backend->gaussian(state, s, c);                  }
+void  Canvas::clip(Path &path)          { backend->clip  (state, path);                    }
+void  Canvas::clip(rectd &rect)         { backend->clip  (state, rect);                    }
+void  Canvas::fill(Path &path)          { backend->fill  (state, path);                    }
+void  Canvas::fill(rectd &rect)         { backend->fill  (state, rect);                    }
+void  Canvas::stroke(Path &path)        { backend->stroke(state, path);                    }
+void  Canvas::stroke(rectd &rect)       { backend->stroke(state, rect);                    }
+void  Canvas::clear()                   { backend->clear(state);                           }
+void  Canvas::flush()                   { backend->flush (state);                          }
+bool  Canvas::operator==(Type   t)       { return type == t;                               }
+str   Canvas::ansi_color(rgba c, bool t) { return backend->ansi_color(c, t);               }
+void  Canvas::text(str s,rectd r, Vec2<Align> align, vec2 o) {
+    backend->text(state, s, r, align, o);
 }
 
 Path::Path()                    { }

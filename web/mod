@@ -1,6 +1,4 @@
-dep(data ux media mbedtls:mbedtls==3.0.0
-                  mbedtls:mbedcrypto==3.0.0
-                  mbedtls:mbedx509==3.0.0)
+dep(data mbedtls:mbedtls==3.0.0 mbedtls:mbedcrypto==3.0.0 mbedtls:mbedx509==3.0.0)
 if(NOT WIN32)
     dep(pthread)
 endif()

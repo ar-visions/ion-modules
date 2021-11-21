@@ -2,6 +2,9 @@
 #include <data/data.hpp>
 #include <vector>
 #include <queue>
+#include <list>
+#include <random>
+#include <data/rand.hpp>
 
 struct var;
 template <class T>
@@ -26,6 +29,15 @@ public:
         for (auto &i: v)
             a += i;
         return a;
+    }
+    void resize(size_t sz) {
+        a.resize(sz);
+    }
+    void shuffle() {
+        std::vector<std::reference_wrapper<const T>> v(a.begin(), a.end());
+        std::shuffle(v.begin(), v.end(), Rand::e);
+        std::vector<T> sh { v.begin(), v.end() };
+        a.swap(sh);
     }
     vec(const T *d, size_t sz) { // todo: remove
         a.reserve(sz);
@@ -53,6 +65,9 @@ public:
             v.push_back(i);
         return v;
     }
+    void clear() {
+        a.clear();
+    }
     void expand(size_t sz, T f)     {
         for (size_t i = 0; i < sz; i++)
             a.push_back(f);
@@ -78,7 +93,7 @@ public:
         return null;
     }
     static inline vec<T> import(var &a) {
-        assert(a.t == var::Array);
+        assert(a == var::Array);
         vec<T> v(a.size());
         for (auto &i: *a.a)
             v += i;

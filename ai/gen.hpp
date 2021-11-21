@@ -1,16 +1,18 @@
 #pragma once
 #include <data/data.hpp>
+#include <media/image.hpp>
+#include <media/audio.hpp>
 
 struct DataW {
-    path_t p;
-    var  data;
-    float w;
+    path_t      p;
+    var         data;
+    float       w;
 };
 
 struct Truth {
-    vec<float> label;
-    vec<var>  data;
-    
+    vec<float>  label;
+    vec<var>    data;
+    ///
     Truth(nullptr_t n = nullptr) { }
     operator bool()  { return data && label.size(); }
     bool operator!() { return !(operator bool()); }
@@ -19,9 +21,9 @@ struct Truth {
 typedef vec<Truth> Truths;
 
 struct Dataset {
-    path_t path;
-    str   dataset;
-    float w;
+    path_t      path;
+    str         dataset;
+    float       w;
     ///
     operator var()  {
         return vec<var> { var(path.string()), var(dataset), var(w) };
@@ -40,7 +42,7 @@ struct Dataset {
     }
     static vec<Dataset> parse(path_t root, str ds) {
         vec<Dataset> r;
-        vec<str>    sp = ds.split(",");
+        vec<str>     sp = ds.split(",");
         for (str &d: sp) {
             r += {root, d};
         }
@@ -48,9 +50,11 @@ struct Dataset {
     }
 };
 
-struct Generator {
-    Args             args;
-    vec<Dataset>     ds;
-    std::atomic<int> id;
-    void operator()(str model, vec<str> exts, std::function<Truths(path_t, var &)> fn);
-};
+void Gen(Args         &args,
+         vec<str>      require,
+         vec<Dataset> &ds,
+         str          model,
+         std::function<Truths(var &)> fn);
+
+Truths if_image(var &data, Image::Format format, std::function<Truths(Image &)> fn);
+Truths if_audio(var &data, std::function<Truths(Audio &)> fn);

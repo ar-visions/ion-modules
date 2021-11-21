@@ -16,17 +16,16 @@ struct Align {
         End
     } type;
                Align(Type t = Undef) : type(t) { }
-    void        copy(const Align &ref) { type = ref.type; }
-    void import_data(var &data)       { type = Type(int(data)); }
-    var export_data()                 { return int(type); }
-    bool  operator==(Type t)           { return type == t; }
+    void        copy(const Align &ref) { type = ref.type;        }
+    void import_data(var &data)        { type = Type(int(data)); }
+    var export_data()                  { return int(type);       }
+    bool  operator==(Type t)           { return type == t;       }
     serializer(Align, type != Undef);
 };
 
 struct Path {
     vec<Points>   a;
     rectd         rect;
-    
                Path();
                Path(std::initializer_list<Points> v) {
                    for (auto &points:v)
@@ -40,7 +39,8 @@ struct Path {
     Path      &line(vec2 v);
     Path    &bezier(vec2 cp0, vec2 cp1, vec2 p);
     Path      &quad(vec2 q0, vec2 q1);
-    Path &rectangle(rectd r, vec2 rounded = {0,0}, bool left = true, bool top = true, bool right = true, bool bottom = true);
+    Path &rectangle(rectd r, vec2 rounded = {0,0}, bool left = true,
+                    bool top = true, bool right = true, bool bottom = true);
     Path       &arc(vec2 c, double radius, double rads_from, double rads, bool move_start);
     Path     offset(double o);
     operator  rectd();
@@ -54,16 +54,22 @@ struct ColoredGlyph {
     str  s;
     rgba bg;
     rgba fg;
-    
     ColoredGlyph(nullptr_t n) : s(""), bg(null), fg(null) { }
     ColoredGlyph(int border, str s, rgba bg, rgba fg) : border(border), s(s), bg(bg), fg(fg) { }
     str ansi();
-    bool operator==(ColoredGlyph &lhs) { return   (border == lhs.border) && (s == lhs.s) && (bg == lhs.bg) && (fg == lhs.fg);  }
-    bool operator!=(ColoredGlyph &lhs) { return !((border == lhs.border) && (s == lhs.s) && (bg == lhs.bg) && (fg == lhs.fg)); }
+    bool operator==(ColoredGlyph &lhs) {
+        return   (border == lhs.border) && (s == lhs.s) &&
+                 (bg == lhs.bg) && (fg == lhs.fg);
+    }
+    bool operator!=(ColoredGlyph &lhs) {
+        return !((border == lhs.border) && (s == lhs.s) &&
+                 (bg == lhs.bg) && (fg == lhs.fg));
+    }
 };
 
 struct DrawState {
     Canvas *host;
+    Image  *im    = null;
     double stroke_sz;
     double font_scale;
     double opacity;
@@ -75,10 +81,10 @@ struct DrawState {
     
            DrawState(Canvas *h, double s, double f, double o, m44 m, rgba c, vec2 b) :
                      host(h), stroke_sz(s), font_scale(f), opacity(o), m(m), color(c), blur(b) { }
-           DrawState()              { }
+           DrawState()             { }
     void import_data(var &d)       { }
-    var export_data()              { return null; }
-    void copy(const DrawState &r);
+    var  export_data()             { return null; }
+    void        copy(const DrawState &r);
 
     serializer(DrawState, true);
 };
@@ -86,7 +92,7 @@ struct DrawState {
 struct  Canvas;
 struct ICanvasBackend {
     Canvas *host;
-    
+    var *result;
     // required implementation
     virtual void     stroke(DrawState &, Path  &) { }
     virtual void       fill(DrawState &, Path  &) { }
@@ -97,6 +103,9 @@ struct ICanvasBackend {
     virtual void      flush(DrawState &)          { }
     virtual void *     data() { return null; }
     virtual void       text(DrawState &, str &, rectd &, Vec2<Align> &, vec2 &) { }
+    virtual vec2i      size() { return null; }
+    virtual void    texture(DrawState &st, Image *im);
+    virtual void      clear(DrawState &st);
     
     // generically handled
     virtual void      color(DrawState &, rgba  &);
@@ -125,8 +134,9 @@ protected:
 public:
     DrawState state;
     Canvas(nullptr_t n = nullptr);
-    Canvas(vec2i sz, Type type);
+    Canvas(vec2i sz, Type type, var *result = null);
     bool  operator==(Canvas::Type t);
+    vec2i         sz();
     void      stroke(Path  &path);
     void        fill(Path  &path);
     void        clip(Path  &path);
@@ -134,10 +144,13 @@ public:
     void        fill(rectd &path);
     void        clip(rectd &path);
     void       color(rgba   c);
+    void       clear();
     void    gaussian(vec2   sz, rectd cr);
+    vec2i       size();
     void       scale(vec2   sc);
     void      rotate(double deg);
     void   translate(vec2   tr);
+    void     texture(Image &im);
     void        text(str str, rectd rect, Vec2<Align> align, vec2 offset);
     void       flush();
     void   stroke_sz(double sz);
@@ -150,6 +163,8 @@ public:
     void *      data();
     str     get_char(int x, int y);
     str   ansi_color(rgba c, bool text);
+    Image   resample(vec2i size, double deg = 0.0f, rectd view = null, vec2 rc = null);
+    
     void *copy_bstate(void *bs);
     
     operator bool() {
@@ -250,8 +265,8 @@ struct Blending {
     
     /// data import export
     void copy(const Blending &ref) { type = ref.type;         }
-    var export_data()             { return int32_t(type);    }
-    void import_data(var &d)      { type = Type(int32_t(d)); }
+    var export_data()              { return int32_t(type);    }
+    void import_data(var &d)       { type = Type(int32_t(d)); }
     
     serializer(Blending, type >= Clear);
 };

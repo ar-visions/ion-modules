@@ -1,6 +1,6 @@
-dep(data glfw:glfw3==master AppKit Foundation IOKit)
+dep(data media glfw:glfw3==master)
 if(APPLE)
-    dep(vulkan.1)
+    dep(vulkan.1 AppKit Foundation IOKit)
 else()
     dep(vulkan)
 endif()

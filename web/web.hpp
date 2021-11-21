@@ -41,11 +41,20 @@ struct URI {
     
     static map<str, URI::Method> mmap;
     
-    static str parse_encoded(str e);
-    
+    static str decode(str e);
     static str encode(str s);
-    
     static Method parse_method(str s);
+    
+    str method_name() {
+        for (auto &[k,v]: mmap) {
+            if (v == type)
+                return k;
+        }
+        return null;
+    }
+    
+    bool operator==(Method m) { return type == m; }
+    bool operator!=(Method m) { return type != m; }
     
     /// must contain: GET/PUT/POST/DELETE uri [PROTO]
     static URI parse(str uri, URI *ctx = null) {
@@ -84,11 +93,11 @@ struct URI {
         // parse resource and query
         auto iq           = u.index_of("?");
         if (iq > 0) {
-            ret.resource  = parse_encoded(u.substr(0, iq));
+            ret.resource  = decode(u.substr(0, iq));
             str q         = u.substr(iq + 1);
             ret.args      = {}; // arg=1,arg=2
         } else
-            ret.resource  = parse_encoded(u);
+            ret.resource  = decode(u);
         
         if (sp.size() >= 3)
             ret.version = sp[2];
@@ -132,16 +141,15 @@ protected:
     static Args    read_headers(Socket sc);
     static bool   write_headers(Socket sc, Args &headers);
     static var    content_data(Socket sc, var &c, Args &headers);
+    static str          cookie(var &result);
     
 public:
     
     struct Message {
         URI    uri;
         int    code = 0;
-        var   content;
+        var    content;
         Args   headers;
-        operator bool()  { return uri.type != URI::Undefined;  }
-        bool operator!() { return !(operator bool()); }
         
         Message(int code, var content = null, Args headers = null):
                 code(code), content(content), headers(headers) {
@@ -171,6 +179,10 @@ public:
             content = d["content"];
             headers = d["headers"];
         }
+        map<str, str> cookies();
+        str text() {
+            return str(content);
+        }
         operator var() {
             return Args {
                 {"uri",     uri},
@@ -179,20 +191,14 @@ public:
                 {"headers", headers}
             };
         }
+        operator bool() {
+            return uri.type != URI::Undefined && code >= 200 && code < 300;
+        }
+        bool operator!() {
+            return !(operator bool());
+        }
     };
     static Async         server(str uri, std::function<Message(Message &)> fn);
     static Future       request(str uri, Args headers = {});
     static Future          json(str uri, Args args = {}, Args headers = {});
 };
-
-/*
-static int strnicmp(const char *s1, const char *s2, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        int i1 = s1[i];
-        int i2 = s2[i];
-        if (i1 != i2)
-            return i1 - i2;
-    }
-    return 0;
-}
-*/

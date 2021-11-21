@@ -257,9 +257,9 @@ public:
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPool();
-        createTextureImage();
+        createTexture();
         createSkiaCanvas();
-        createTextureImageView();
+        createTextureView();
         createTextureSampler();
         createVertexBuffer();
         createIndexBuffer();
@@ -813,7 +813,7 @@ public:
         }
     }
 
-    void createTextureImage() {
+    void createTexture() {
         int texWidth, texHeight, texChannels;
         stbi_uc* pixels         = stbi_load("textures/viking_room.png",
                                             &texWidth,    &texHeight,
@@ -885,7 +885,7 @@ public:
         sk_canvas               = sk_surf->getCanvas();
     }
 
-    void createTextureImageView() {
+    void createTextureView() {
         textureImageView = createImageView(textureImage, image_format);
     }
 

@@ -8,9 +8,13 @@ struct Selector:node {
 struct MultiSelector:node {
 };
 
+// lets attempt to construct the simple window
+// the canvas for such needs to be rigged into the Vk implementation
+// instead of a spinning around idiot canvas we need to get the control tree in to drawn on it
+// we also want to display it as a texture on ortho projection
 
-struct Commander:node {
-    declare(Commander);
+struct SampleApp:node {
+    declare(SampleApp);
     
     struct Props:IProps {
         str path;
@@ -93,7 +97,7 @@ Args defaults = {
 };
 
 int main(int c, const char *v[]) {
-    return App::Window(c, v, defaults)([&] (Args &args) {
-        return Commander(args);
+    return App::UX(c, v, defaults)([&] (Args &args) {
+        return SampleApp(args);
     });
 }

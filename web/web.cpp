@@ -9,7 +9,6 @@
 #include <netdb.h>
 #include <sstream>
 #include <string.h>
-
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/debug.h>
 #include <mbedtls/ssl.h>
@@ -17,7 +16,7 @@
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/error.h>
 
-
+/// URI must retain context about the method as well.  It definitely makes sense to put
 map<str, URI::Method> URI::mmap = {
     { "GET",    URI::Get    },
     { "PUT",    URI::Put    },
@@ -66,7 +65,7 @@ str URI::encode(str s) {
 }
 
 
-str URI::parse_encoded(str e) {
+str URI::decode(str e) {
     size_t sz = e.length();
     auto    v = vec<char>(sz * 4 + 1);
     size_t  i = 0;
@@ -134,16 +133,19 @@ Args Web::read_headers(Socket sc) {
 }
 
 bool Web::write_headers(Socket sc, Args &headers) {
-    for (auto &[k,v]: headers)
+    for (auto &[k,v]: headers) {
         if (!sc.write("{0}: {1}", {k, v}))
              return false;
+        if (!sc.write("\r\n"))
+             return false;
+    }
     if (!sc.write("\r\n"))
          return false;
     return true;
 }
 
 var Web::content_data(Socket sc, var &c, Args& headers) {
-    if (c.t == var::Map || c.t == var::Array)
+    if (c == var::Map || c == var::Array)
         headers["Content-Type"] = "application/json";
     str s = std::string(c);
     return var(s);
@@ -153,16 +155,17 @@ var Web::read_content(Socket sc, Args& headers) {
     const char      *te = "Transfer-Encoding";
     const char      *cl = "Content-Length";
   //const char      *ce = "Content-Encoding";
-    int            clen = headers.count(cl) ? str(headers[cl]).integer() : -1;
+    int            clen = headers.count(cl) ?  str(headers[cl]).integer() : -1;
     bool        chunked = headers.count(te) && headers[te] == var("chunked");
-    ssize_t        tlen = clen;
+    ssize_t content_len = clen;
     ssize_t        rlen = 0;
     const ssize_t r_max = 1024;
     bool          error = false;
     int            iter = 0;
     vec<uint8_t> v_data;
+    ///
     assert(!(clen >= 0 && chunked));
-    
+    ///
     if (!(!chunked && clen == 0)) {
         do {
             if (chunked) {
@@ -180,23 +183,32 @@ var Web::read_content(Socket sc, Args& headers) {
                 }
                 std::stringstream ss;
                 ss << std::hex << rbytes.data();
-                ss >> tlen;
-                if (tlen == 0)
+                ss >> content_len;
+                if (content_len == 0) /// this will effectively drop out of the while loop
                     break;
             }
-            for (ssize_t rcv = 0; tlen == -1 || rcv < tlen; rcv += rlen) {
-                ssize_t rx = tlen > 0 ? std::min(tlen - rcv, r_max) : r_max;
-                uint8_t buf[r_max];
+            bool sff = content_len == -1; /// stawberry fields forever...
+            for (ssize_t rcv = 0; sff || rcv < content_len; rcv += rlen) {
+                ssize_t   rx = sff ? r_max : std::min(content_len - rcv, r_max);
+                uint8_t  buf[r_max];
                 rlen = sc.read_raw((const char *)buf, rx);
                 if (rlen > 0) {
                     v_data.expand(rlen, 0);
                     memcpy(&v_data[v_data.size() - rlen], buf, rlen);
                 } else if (rlen < 0) {
-                    error = tlen < 0;
+                    error = !sff;
+                    /// it is an error if we expected a certain length
+                    /// if the connection is closed during a read then
+                    /// it just means the peer ended the transfer (hopefully at the end)
                     break;
                 }
             }
-        } while (!error && chunked && tlen != 0);
+        } while (!error && chunked && content_len != 0);
+    }
+    static int test = 0;
+    if (++test == 2) {
+        int test = 0;
+        test++;
     }
     return error ? var(null) : var(v_data);
 }
@@ -238,7 +250,7 @@ Socket::Socket(bool secure, bool listen) {
     intern->secure = secure;
     if (secure) {
         const char *pers = "ion:web";
-        mbedtls_debug_set_threshold(3);
+        ///mbedtls_debug_set_threshold(3);
         mbedtls_net_init         (&i.ctx);
         mbedtls_ssl_init         (&i.ssl);
         mbedtls_ssl_config_init  (&i.conf);
@@ -302,7 +314,7 @@ bool Socket::read(const char *v, size_t sz) {
     for (int len = sz; len > 0;) {
         int r = i.secure ? mbedtls_ssl_read(&i.ssl, (unsigned char *)&v[st], len) :
                                        recv(i.fd_insecure, (void *)&v[st], len, 0);
-        if (r <= 0) // -28928
+        if (r <= 0)
             return false;
         len -= r;
         st  += r;
@@ -332,6 +344,8 @@ bool Socket::write(const char *v, size_t sz, int flags) {
     size_t tlen = sz;
     size_t  len = tlen;
     size_t ibuf = 0;
+    assert(strlen(v) == sz);
+    
     ///
     for (;;) {
         auto wlen = i.secure ?
@@ -416,8 +430,6 @@ Socket Socket::connect(str uri) {
 
         mbedtls_ssl_set_bio(&i.ssl, &i.ctx, mbedtls_net_send, mbedtls_net_recv, NULL);
 
-        console.log("handshaking...");
-        
         /// handshake
         for (;;) {
             int hs = mbedtls_ssl_handshake(&i.ssl);
@@ -426,8 +438,6 @@ Socket Socket::connect(str uri) {
             if (hs != MBEDTLS_ERR_SSL_WANT_READ && hs != MBEDTLS_ERR_SSL_WANT_WRITE)
                 return null;
         }
-        
-        console.log("handshook.");
         
         /// verify server ca x509; exit if flags != 0
         int flags = mbedtls_ssl_get_verify_result(&i.ssl);
@@ -474,77 +484,99 @@ Socket Socket::connect(str uri) {
     return s;
 }
 
+/// Useful utility function here for general web requests; driven by the Future
 Future Web::request(str s_uri, Args args) {
     return Async(1, [s_uri=s_uri, args=args](auto p, int i) -> var {
-        Args            &a = *(Args *)&args;
-        str       s_method = a.count("method")    ? str(a["method"]) : str{"GET"};
-        URI::Method method = s_method == "GET"    ? URI::Get    :
-                             s_method == "POST"   ? URI::Post   :
-                             s_method == "PUT"    ? URI::Put    :
-                             s_method == "DELETE" ? URI::Delete : URI::Undefined;
-        Args*      headers = a.count("headers")   ? (Args *) a["headers"] : nullptr;
-        var*      content = a.count("content")   ? (var *)&a["content"] : nullptr;
-        Message     result = {URI::Response};
-        
-        assert(method != URI::Undefined);
-        assert(method != URI::Get || content == null);
-        
+        Args   st_headers;
+        Args           &a = *(Args *)&args;
+        str            m0 = a.count("method") ? str(a["method"]) : str{"GET"};
+        URI           uri = URI::parse(m0 + " " + s_uri);
+        str      s_method = uri.method_name();
+        Args      headers = a.count("headers")   ? *((Args *) a["headers"]) : st_headers;
+        var*      content = a.count("content")   ?   (var  *)&a["content"]  : nullptr;
+        Message   message = {URI::Response};
+        ///
+        assert(uri != URI::Undefined);
+        assert(uri != URI::Get || content == null);
+        ///
         /// connect to server (secure or insecure depending on uri)
-        console.log("connecting to {0}", {s_uri});
+        console.log("request: {0}", {s_uri});
         Socket sc = Socket::connect(s_uri);
         if (!sc)
             return null;
-        
+        ///
         /// write query
         str s_query = sc.uri.query;
-        sc.write("{0} {1} HTTP/1.1\r\n", {s_method, s_query});
-        
-        /// write headers
-        if (!headers || headers->count("User-Agent") == 0)
-            sc.write("User-Agent: ion\r\n");
-        if (!headers || headers->count("Host") == 0)
-            sc.write("Host: {0}\r\n", {sc.uri.host});
-        if (!headers || headers->count("Accept-Language") == 0)
-            sc.write("Accept-Language: en-us\r\n");
-        if (!headers || headers->count("Accept-Encoding") == 0)
-            sc.write("Accept-Encoding: gzip, deflate, br\r\n");
-        if (!headers || headers->count("Accept") == 0)
-            sc.write("Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n");
-        
-        assert(method == URI::Post || (!headers || headers->count("Content-Length") == 0));
-        size_t plen = content ? content->size() : 0;
-        sc.write("Content-Length: {0}\r\n", {int(plen)});
-        if (headers)
-            for (auto &[k,v]: *headers)
-                sc.write("{0}: {1}\r\n", {k, v});
-        
-        /// end message
+        sc.write("{0} {1} HTTP/1.1\r\n", {s_method, uri.query});
+        ///
+        /// prepare post string
+        str   post = null;
+        if (content) {
+            if (content->t == var::Map) {
+                /// compatible with Form systems and their RESTful APIs
+                for (auto &[key,val]: content->map()) {
+                    if (post)
+                        post += "&";
+                    post += URI::encode(key); /// encoded due to the hash representation
+                    post += "=";
+                    post += URI::encode(val); /// encoded due to the hash representation
+                }
+            } else if (content->t == var::Str)
+                post = str(*content);
+            else {
+                /// no solution for the serialization
+                assert(false);
+            }
+        }
+        ///
+        struct Defs          { bool force; str name, value;     };
+           vec<Defs> vdefs = {
+                { false, "User-Agent",      "ion"               },
+                { false, "Host",             sc.uri.host        },
+                { false, "Accept-Language", "en-us"             },
+                { false, "Accept-Encoding", "gzip, deflate, br" },
+                { false, "Accept",          "*/*"               },
+                {  true, "Content-Length",  int(post.length())  },
+              //{  true, "Content-Type",    "application/x-www-form-urlencoded" }
+        };
+        for (auto &d: vdefs)
+            if (d.force || headers.count(d.name) == 0)
+                headers[d.name] = d.value;
+        for (auto &[k,v]: headers)
+            sc.write("{0}: {1}\r\n", {k, v});
+
+        /// end headers
         sc.write("\r\n");
         
-        /// write content data
-        if (plen > 0) {
-            // todo: support serializing this content into json object
-            const char *send_data = content->data<const char>();
-            size_t      send_len  = content->size();
-            sc.write(send_data, send_len, 0);
-        }
+        /// write POST data
+        if (post)
+            sc.write(post.cstr(), post.length(), 0);
         
         /// read headers
-        auto  &r = result.headers = Web::read_headers(sc);
-        str   ct = r.count("Content-Type") ? str(r["Content-Type"]) : str("");
-        var rcv = read_content(sc, result.headers);
+        auto    &r = message.headers = Web::read_headers(sc);
+        str     ct = r.count("Content-Type") ? str(r["Content-Type"]) : str("");
+        var    rcv = read_content(sc, message.headers);
+        
+        /// set status on message
+        message.code = r["Status"];
         
         /// read content
         if (ct == "application/json") {
             const char  *c = rcv.data<const char>();
             size_t      sz = rcv.size();
-            str         js = str(c, sz);
-            result.content = var::read_json(js);
-        } else
-            result.content = rcv;
-        
+            str         js = str(c, sz); // this blows.
+            message.content = var::parse_json(js);
+        } else if (ct.starts_with("text/"))
+            message.content = str(rcv.data<const char>(), rcv.size());
+        else {
+            /// other non-text types must be supported, not going to just leave them as array for now
+            assert(message.content.size() == 0);
+            message.content = var(null);
+        }
+        ///
+        /// close socket
         sc.close();
-        return result;
+        return message;
     });
 }
 
@@ -560,7 +592,8 @@ Future Web::json(str resource, Args args, Args headers) {
     });
     return Future(c);
 }
-
+///
+/// listen on https (the only one supported at the moment)
 Async Socket::listen(str uri, std::function<void(Socket)> fn) {
     return Async(1, [&, uri=uri, fn=fn](auto process, int t_index) -> var {
         auto          a = URI::parse(str("GET ") + uri);
@@ -571,17 +604,15 @@ Async Socket::listen(str uri, std::function<void(Socket)> fn) {
         int        port = a.port;
         
         if (p == "https") {
-            /// to me this is probably the least efficient way of connecting and storing the ssl state
-            /// but if it goes wrong, its definitely less cross contaminable
             if (mbedtls_net_bind(&i.ctx, h.cstr(), std::to_string(port).c_str(), MBEDTLS_NET_PROTO_TCP) != 0)
                 return false;
             if (mbedtls_ssl_config_defaults(&i.conf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT) != 0)
                 return false;
-            
+            ///
             mbedtls_ssl_conf_rng(&i.conf, mbedtls_ctr_drbg_random, &i.ctr_drbg);
             mbedtls_ssl_conf_dbg(&i.conf, logging, stdout);
             mbedtls_ssl_conf_ca_chain(&i.conf, &i.ca_cert, NULL);
-            
+            ///
             /// load in cert we use with private key.
             if (mbedtls_ssl_conf_own_cert(&i.conf, &i.ca_cert, &i.pkey) != 0)
                 return false;
@@ -591,22 +622,22 @@ Async Socket::listen(str uri, std::function<void(Socket)> fn) {
             if (p == "https") {
                 char    cip[64] = { 0 };
                 size_t  cip_len = 0;
-                
+                ///
                 /// create client socket first (not used to this!)
                 auto  sc_client = Socket(true, true);
                 auto        &ci = *(sc_client.intern);
-                
+                ///
                 /// setup ssl with the configuration of the accepting socket
                 if (mbedtls_ssl_setup(&ci.ssl, &i.conf) != 0)
                     return false;
-                
+                ///
                 /// accept connection
                 if (mbedtls_net_accept(&i.ctx, &ci.ctx, cip, sizeof(cip), &cip_len) != 0)
                     return false;
-                
+                ///
                 /// tell it where the tubing is
                 mbedtls_ssl_set_bio(&ci.ssl, &ci.ctx, mbedtls_net_send, mbedtls_net_recv, NULL);
-                
+                ///
                 /// handshake through said tubes
                 for (;;) {
                     int hs = mbedtls_ssl_handshake(&ci.ssl);
@@ -615,7 +646,7 @@ Async Socket::listen(str uri, std::function<void(Socket)> fn) {
                     if (hs != MBEDTLS_ERR_SSL_WANT_READ && hs != MBEDTLS_ERR_SSL_WANT_WRITE)
                         return false;
                 }
-
+                ///
                 /// spawn thread for the given callback
                 Async(1, [&, sc_client=sc_client, uri=uri, fn=fn](auto process, int t_index) -> var {
                     fn(sc_client);
@@ -626,7 +657,10 @@ Async Socket::listen(str uri, std::function<void(Socket)> fn) {
         return true;
     });
 }
-
+///
+/// high level server method (on top of listen)
+/// you receive messages from clients through lambda; supports https
+/// web sockets should support the same interface with some additions
 Async Web::server(str l_uri, std::function<Message(Message &)> fn) {
     return Socket::listen(l_uri, [&, l_uri=l_uri, fn=fn](Socket sc) {
         for (bool close = false; !close;) {
@@ -638,7 +672,7 @@ Async Web::server(str l_uri, std::function<Message(Message &)> fn) {
             Message msg;
             str s_uri = str(m.data(), m.size() - 2);
               msg.uri = URI::parse(s_uri);
-
+            ///
             if (msg && msg.uri.resource) {
                 msg.headers = Web::read_headers(sc);
                 msg.content = Web::read_content(sc, msg.headers);
@@ -658,8 +692,25 @@ Async Web::server(str l_uri, std::function<Message(Message &)> fn) {
                 }
             }
         }
-        
-        // needs loop.
         return true;
     });
+}
+///
+/// structure cookies into usable format
+map<str, str> Web::Message::cookies() {
+    const char *n = "Set-Cookie";
+    if (!headers.count(n))
+        return null;
+    str  dec = URI::decode(headers[n]);
+    str  all = dec.split(",")[0];
+    auto sep = all.split(";");
+    auto res = map<str, str>();
+    ///
+    for (str &s: sep) {
+        auto pair = s.split("=");   assert(pair.size() >= 2);
+        str   key = pair[0];
+        str   val = pair[1];
+        res[key]  = val;
+    }
+    return res;
 }

@@ -21,14 +21,14 @@ struct List:node {
             id(id), size(value), scale(false), align(align) { }
         
         void import_data(var &d) {
-            if (d.t == var::Array) {
+            if (d == var::Array) {
                 id     =             str(d[size_t(0)]);
                 size   =          double(d[size_t(1)]);
                 scale  =            bool(d[size_t(2)]);
                 final  =          double(d[size_t(3)]);
                 align  = Align::Type(int(d[size_t(4)]));
             } else {
-                assert(d.t == var::Str);
+                assert(d == var::Str);
                 id = str(d);
             }
         }

@@ -12,130 +12,12 @@
 
 #define  vk_load(inst, addr) PFN_##addr addr = (PFN_##addr)glfwGetInstanceProcAddress(inst, #addr);
 
-struct GLFWwindow;
-
-static GLFWwindow *g_glfw;
-
-struct WindowInternal {
-protected:
-    static void glfw_error  (int, const char *) {
-        console.log("glfw error");
-    }
-    
-    static void glfw_key    (GLFWwindow*, int, int, int, int) {
-        console.log("glfw key");
-    }
-    
-    static void glfw_char   (GLFWwindow*, uint32_t) {
-        console.log("glfw char");
-    }
-    
-    static void glfw_mbutton(GLFWwindow*, int, int, int) {
-        console.log("glfw mbutton");
-    }
-    
-    static void glfw_cursor (GLFWwindow*, double x, double y) {
-        console.log("glfw cursor: {0}, {1}", { x, y });
-    }
-    
-    static void glfw_resize (GLFWwindow*, int32_t, int32_t) {
-        console.log("glfw resize");
-    }
-    
-public:
-    GLFWwindow  *glfw;
-    var         mouse     = Args {};
-    std::string  title     = "";
-    vec2         dpi_scale = { 1, 1 };
-    Vec2<size_t> size      = { 0, 0 };
-    bool         repaint   = false;
-    KeyStates    k_states  = { };
-    
-    std::string clipboard();
-    void set_clipboard(std::string text);
-    WindowInternal(std::string title, Vec2<size_t> size) : title(title), size(size) {
-        assert(g_glfw == null);
-        
-        /*
-        glfwInit();
-        
-        // **important** create window without initializing GL subsystem
-        
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-          glfw = glfwCreateWindow(size.x, size.y, title.c_str(), null, null);
-        g_glfw = glfw;
-        */
-        
-        glfw   = Vulkan::get_window();
-        g_glfw = glfw;
-        
-        
-        //Vulkan::init();
-        //Vulkan::resize(size.x, size.y);
-        /*
-        glfwSetWindowUserPointer      (glfw, this);
-        glfwSetFramebufferSizeCallback(glfw, glfw_resize);
-        glfwSetKeyCallback            (glfw, glfw_key);
-        glfwSetCursorPosCallback      (glfw, glfw_cursor);
-        glfwSetCharCallback           (glfw, glfw_char);
-        glfwSetMouseButtonCallback    (glfw, glfw_mbutton);*/
-    }
-    ~WindowInternal() {
-        glfwDestroyWindow(glfw);
-        glfwTerminate();
-    }
-    void set_title(str title) {
-        glfwSetWindowTitle(glfw, title.cstr());
-    }
-    void init_cursor();
-    bool resize();
-    bool mouse_down(MouseButton button);
-};
-
-GLFWwindow *App::Window::handle() { return g_glfw; }
-
-void App::Window::set_title(str t) {
-    if (t != title) {
-        intern->set_title(t);
-        title = t;
-    }
+int App::UX::operator()(FnRender fn) {
+    return Vulkan::main(fn);
 }
 
-int App::Window::operator()(FnRender fn) {
-    /// allocate composer, the class which takes rendered elements and manages instances
-    //auto composer = Composer(*this);
-    
-    /// allocate window internal (glfw subsystem) and canvas
-    intern = new WindowInternal("", {size_t(sz.x), size_t(sz.y)});
-    canvas = Canvas({int(sz.x), int(sz.y)}, Canvas::Context2D);
-    
-    /// render loop with node event processing
-    while (!glfwWindowShouldClose(intern->glfw)) {
-        rectd box   = {   0,   0, 320, 240 };
-        rgba  color = { 255, 255,   0, 255 };
-        
-        canvas.color(color);
-        canvas.fill(box);
-        canvas.flush();
-        //Vulkan::swap(sz);
-        
-        // glfw might just manage swapping? but lets remove it for now
-        //glfwSwapBuffers(intern->glfw);
-        glfwWaitEventsTimeout(1.0);
-        /*
-        composer(fn(args));
-        set_title(composer.root->props.text.label);
-        if (!composer.process())
-            glfwWaitEventsTimeout(1.0);
-        */
-        glfwPollEvents();
-    }
-    delete intern;
-    return 0;
-}
-
-App::Window::Window(int c, const char *v[], Args &defaults) {
-    type = Interface::Window;
+App::UX::UX(int c, const char *v[], Args &defaults) {
+    type = Interface::UX;
     args = var::args(c, v);
     for (auto &[k,v]: defaults) {
         if (args.count(k) == 0)
@@ -176,8 +58,7 @@ Web::Message App::Server::query(Web::Message &m, Args &a, var &p) {
     if (sz < 2 || sp[0])
         return {400, "bad request"};
     
-    // route/to/data#id
-    
+    /// route/to/data#id
     Composer cc = Composer((Interface *)this);
     
     /// instantiate components -- this may be in session cache
@@ -190,7 +71,6 @@ Web::Message App::Server::query(Web::Message &m, Args &a, var &p) {
         if (!n)
             return {404, "not found"};
     }
-
     return msg;
 }
 

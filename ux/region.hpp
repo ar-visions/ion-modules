@@ -71,10 +71,10 @@ struct Region {
     Region(Coord left, Coord top, Coord right, Coord bottom) :
         left(left),   top(top),
         right(right), bottom(bottom) {
-        assert(left.t   == Coord::Left || left.t   == Coord::Right);
-        assert(top.t    == Coord::Top  || top.t    == Coord::Bottom);
-        assert(right.t  == Coord::Left || right.t  == Coord::Right  || right.t  == Coord::Width);
-        assert(bottom.t == Coord::Top  || bottom.t == Coord::Bottom || bottom.t == Coord::Height);
+        assert(left   == Coord::Left || left   == Coord::Right);
+        assert(top    == Coord::Top  || top    == Coord::Bottom);
+        assert(right  == Coord::Left || right  == Coord::Right  || right  == Coord::Width);
+        assert(bottom == Coord::Top  || bottom == Coord::Bottom || bottom == Coord::Height);
     }
     
     inline rectd operator()(rectd rt) const {

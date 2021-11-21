@@ -24,7 +24,7 @@ AI::AI(path_t p) {
 }
 ///
 /// forward pass data
-vec<float> AI::operator()(vec<var> in) {
+vec<float> AI::operator()(Table in) { /// Table == vec<var>
     assert(in.size() > 0);
     assert(equals(in[0].t, { var::f32, var::ui8, var::i8 }));
     auto     itr = i->itr.get();

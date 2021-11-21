@@ -1,4 +1,4 @@
-dep(data media)
+dep(data web media vk)
 if(NOT WIN32)
     dep(pthread)
 endif()

@@ -1,20 +1,25 @@
 #pragma once
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 #include <vulkan/vulkan.hpp>
 #include <data/data.hpp>
+#include <media/canvas.hpp>
+#include <vk/gpu.hpp>
+#include <vk/device.hpp>
+#include <vk/buffer.hpp>
+#include <vk/texture.hpp>
+#include <vk/pipeline.hpp> // this one is tricky to organize because of Shader binding
 
 struct Vulkan {
-    static int run(std::function<void(void)> fn);
-    
-    static GLFWwindow      *get_window();
-    static VkInstance       get_instance();
-    static VkDevice         get_device();
-    static VkPhysicalDevice get_gpu();
-    static VkQueue          get_queue();
-    static VkSurfaceKHR     get_surface();
-    static VkSwapchainKHR   get_swapchain();
-    static VkImage          get_image();
-    static uint32_t         get_queue_index();
-    static uint32_t         get_version();
+    static void             init();
+    static VkInstance       instance();
+    static Device          &device();
+    static GPU             &gpu();
+    static VkQueue          queue();
+    static VkSurfaceKHR     surface();
+    static VkSwapchainKHR   swapchain();
+    static VkImage          image();
+    static uint32_t         queue_index();
+    static uint32_t         version();
+    static Canvas           canvas(vec2i sz);
+    static void             set_title(str s);
+    static int              main(FnRender fn);
 };

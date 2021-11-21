@@ -7,61 +7,8 @@
 struct AppInternal;
 int run(AppInternal **, var &);
 
-enum KeyState {
-    KeyUp,
-    KeyDown
-};
-
-struct KeyStates {
-    bool shift;
-    bool ctrl;
-    bool meta;
-};
-
-struct KeyInput {
-    int key;
-    int scancode;
-    int action;
-    int mods;
-};
-
-enum MouseButton {
-    LeftButton,
-    RightButton,
-    MiddleButton
-};
-
-enum KeyCode {
-    D           = 68,
-    N           = 78,
-    Backspace   = 8,
-    Tab         = 9,
-    LineFeed    = 10,
-    Return      = 13,
-    Shift       = 16,
-    Ctrl        = 17,
-    Alt         = 18,
-    Pause       = 19,
-    CapsLock    = 20,
-    Esc         = 27,
-    Space       = 32,
-    PageUp      = 33,
-    PageDown    = 34,
-    End         = 35,
-    Home        = 36,
-    Left        = 37,
-    Up          = 38,
-    Right       = 39,
-    Down        = 40,
-    Insert      = 45,
-    Delete      = 46, // or 127 ?
-    Meta        = 91
-};
-
 struct Composer;
-struct GLFWwindow;
 struct var;
-struct WindowInternal;
 
 struct App {
     struct Interface {
@@ -69,7 +16,7 @@ struct App {
             Undefined,
             Server,
             Console,
-            Window
+            UX
         }      type = Undefined;
         vec2i  sz   = {0,0};
         Args   args;
@@ -91,10 +38,9 @@ struct App {
         }
     };
     
-    struct Window:Interface {
-        struct WindowInternal* intern;
-        static GLFWwindow *handle();
-        Window(int c, const char *v[], Args &defaults);
+    struct UX:Interface {
+        struct Internal* intern;
+        UX(int c, const char *v[], Args &defaults);
         int operator()(FnRender fn);
         void set_title(str t);
         str title;
@@ -138,9 +84,7 @@ struct App {
                     size_t index = iy * size_t(sz.x) + ix;
                     ColoredGlyph &n = (*buf)[index];
                     ColoredGlyph &c =  cache[index];
-                    
                     assert(index < buf->size());
-                    
                     if (update_cache || n != c) {
                         /// print colored ansi text at xy
                         auto ansi = [&](ColoredGlyph &n, std::string s) -> std::string {
@@ -153,7 +97,6 @@ struct App {
                         auto ch = canvas.get_char(ix, iy);
                         auto  a = ansi(n, ch);
                         fprintf(stdout, "\033[%zu;%zuH%s", iy + 1, ix + 1, a.c_str());
-                        
                         /// update cache
                         c = n;
                     }

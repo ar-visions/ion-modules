@@ -62,9 +62,9 @@ typedef std::filesystem::path                       path_t;
 struct node;
 struct var;
 typedef std::function<void(var &)>                 Fn;
-typedef std::function<var(var &)>                 FnFilter;
-typedef std::function<var(var &, std::string &)>  FnFilterMap;
-typedef std::function<var(var &, size_t)>         FnFilterArray;
+typedef std::function< var(var &)>                 FnFilter;
+typedef std::function< var(var &, std::string &)>  FnFilterMap;
+typedef std::function< var(var &, size_t)>         FnFilterArray;
 typedef std::function<void(var &, std::string &)>  FnEach;
 typedef std::function<void(var &, size_t)>         FnArrayEach;
 
@@ -77,25 +77,38 @@ struct str;
 
 struct var {
     enum Type {
+        /// null state and other uses
         Undefined,
+        /// primitive, vectorable types
         i8,  ui8,
         i16, ui16,
         i32, ui32,
         i64, ui64,
-        f32, f64,
-        Bool, Str, Map, Array, Ref, Lambda, Filter, Any
+        f32,  f64,
+        Bool,
+        /// higher level types
+        Str, Map, Array, Ref, Node, Lambda, Filter, Any
     } t = Undefined,
       c = Undefined;
 
+    enum Binding {
+        Insert,
+        Update,
+        Delete
+    };
+
     enum Flags {
-        Encode  = 1,
-        Compact = 2
+        Encode   = 1,
+        Compact  = 2,
+        ReadOnly = 4,
     };
     
     struct TypeFlags {
         var::Type t;
         int flags;
     };
+    
+    typedef ::map<std::string, TypeFlags> FieldFlags;
     
     enum Format {
         Binary,
@@ -112,55 +125,96 @@ struct var {
         int64_t vi64;
         float   vf32;
         double  vf64;
+        var    *vref;
+        node   *vnode;
     };
     u                   n_value = { 0 };
     Fn                       fn;
     FnFilter                 ff;
     std::shared_ptr<uint8_t>                  d = nullptr;
-    std::shared_ptr<::map<std::string, var>> m = nullptr;
-    std::shared_ptr<std::vector<var>>        a = nullptr;
+    std::shared_ptr<::map<std::string, var>>  m = nullptr;
+    std::shared_ptr<std::vector<var>>         a = nullptr;
     std::shared_ptr<std::string>              s = nullptr;
     u                                        *n = nullptr; // we CAN utilize n.
     
     int                   flags = 0;
     std::vector<int>         sh;
     
+//protected:
+    ///
+    /// observer fn and pointer (used by Storage controllers)
+    std::function<void(Binding op, var &row, str &field, var &value)> fn_change;
+    std::string  field    = "";
+    var         *row      = null;
+    var         *observer                  = null;
+
+    void observe_row(var &row);
+    
+    static var &resolve(var &in);
+    
+    static char *parse_obj(  var &scope, char *start, std::string field, FieldFlags &flags);
+    static char *parse_arr(  var &scope, char *start, std::string field, FieldFlags &flags);
+    static char *parse_value(var &scope, char *start, std::string field, Type enforce_type, FieldFlags &flags);
+    
+public:
+    
+    var *ptr() {
+        return this;
+    }
+    void clear();
+    bool operator==(Type tt);
+    void observe(std::function<void(Binding op, var &row, str &field, var &value)> fn);
     void write(std::ofstream &f, enum Format format = Binary);
     void write(path_t p, enum Format format = Binary);
     var(nullptr_t p);
     var(Type t = Undefined, Type c = Undefined, size_t count = 0);
-    var(Type t, u *n) : t(t), n((u *)n) { } // todo: change this to union type.
-    var(path_t p, enum var::Format format);
+    var(Type t, u *n) : t(t), n((u *)n) { }
+    var(Type t, std::string str);
+    var(var *vref) : t(Ref), n(null) {
+        assert(vref);
+        while (vref->t == Ref)
+            vref = vref->n_value.vref; // refactor the names.
+        n_value.vref = vref;
+    }
+    var(path_t p, Format format);
     
     std::vector<int> shape();
     void set_shape(std::vector<int> v_shape);
     
-    var tag(map<str, var> m);
+    var tag(::map<std::string, var> m);
     var(std::ifstream &f, enum var::Format format);
+    //var(str templ, vec<var> arr);
+    var(Type c, std::vector<int> sh) : sh(sh) {
+        size_t sz   = shape_volume(sh);
+        size_t t_sz = type_size(c);
+        this->t = Array;
+        this->c = c; //data_type(ptr);
+        this->d = std::shared_ptr<uint8_t>((uint8_t *)calloc(t_sz, sz));
+        assert(c >= i8 && c <= f64);
+    }
     
     template <typename T>
-    var(std::shared_ptr<T> d, std::vector<int> sh) : sh(sh) {
-        T *ptr = d.get();
+    var(Type c, std::shared_ptr<T> d, std::vector<int> sh) : sh(sh) {
         this->t = Array;
-        this->c = data_type(ptr);
+        this->c = c; //data_type(ptr);
         this->d = std::static_pointer_cast<uint8_t>(d);
         assert(c >= i8 && c <= f64);
     }
     
     template <typename T>
-    var(std::shared_ptr<T> d, size_t sz) {
+    var(Type c, std::shared_ptr<T> d, size_t sz) {
         T *ptr = d.get();
         this->t = Array;
-        this->c = data_type(ptr);
+        this->c = c; //data_type(ptr);
         this->d = std::static_pointer_cast<uint8_t>(d);
         this->sh = std::vector<int> { int(sz) };
         assert(c >= i8 && c <= f64);
     }
+    
     var(path_t p);
     operator path_t();
     static bool type_check(var &a, var &b);
     var(void*    v);
-    var(var  *ref);
     var(VoidRef  r);
     var(size_t  sz);
     var(float    v);
@@ -171,33 +225,42 @@ struct var {
     var(uint16_t v);
     var(int32_t  v);
     var(uint32_t v);
-    var(int64_t  v);
-    //var(uint64_t v);
+    var(int64_t  v, int flags = 0);
+  //var(uint64_t v);
     var(FnFilter v);
     var(Fn       v);
-    //var(::map<std::string, var> data_map);
+  //var(::map<std::string, var> data_map);
     var(std::vector<var> data_array);
     var(std::string str);
     var(const char *str);
-    var(path_t p, ::map<std::string, TypeFlags> types = {});
+    static var load(path_t p);
     static ::map<std::string, var> args(int argc, const char* argv[], ::map<std::string, var> def = {});
     
     static int shape_volume(std::vector<int> &sh);
     
+    ::map<std::string, var> &map() { /// refs cant have their own map
+        var &v   = var::resolve(*this);
+        if (!v.m)
+             v.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>);
+        return *v.m;
+    }
+    
     var operator()(var &d) {
-        var r;
-        if (t == Filter)
-            r = ff(d);
-        else if (t == Lambda)
+        var &v = var::resolve(*this);
+        var res;
+        if (v == Filter)
+            res = ff(d);
+        else if (v == Lambda)
             fn(d);
-        return r;
+        return res;
     }
     
     template <typename T>
     T value(std::string key, T default_v) {
-        if (!m || m->count(key) == 0)
+        var &v = var::resolve(*this);
+        if (!v.m || v.m->count(key) == 0)
             return default_v;
-        return T((*m)[key]);
+        return T((*v.m)[key]);
     }
     
     template <typename K, typename T>
@@ -279,49 +342,126 @@ struct var {
     }
     
     inline var &operator[] (const char *s) {
-        if (!m)
-             m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>);
-        return (*m)[std::string(s)];
+        var &v = var::resolve(*this);
+        if (!v.m)
+             v.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>);
+        return (*v.m)[std::string(s)];
     }
     
     var &operator[] (str s);
     
-    // probably best to switch to value
     inline var &operator[] (const size_t i) {
-        int sz = int(shape_volume(sh));
-        bool needs_refs = (sz > 0 && !a);
+        var &v = var::resolve(*this);
+        int sz = int(shape_volume(v.sh));
+        bool needs_refs = (sz > 0 && !v.a); ///#
         if (needs_refs) {
-            a          = std::shared_ptr<std::vector<var>>(new std::vector<var>());
-            uint8_t *v = (uint8_t *)d.get();
-            size_t  ts = type_size(c);
-            a->reserve(sz);
-            for (int i = 0; i < sz; i++, v += ts)
-                a->push_back(var {c, (u *)v});
+            v.a         = std::shared_ptr<std::vector<var>>(new std::vector<var>());
+            uint8_t *u8 = (uint8_t *)v.d.get();
+            size_t   ts = type_size(v.c);
+            v.a->reserve(sz);
+            for (int i = 0; i < sz; i++)
+                v.a->push_back(var {v.c, (u *)&u8[i * ts]});
         }
-        return (*a)[i];
+        return (*v.a)[i];
     }
     
-    inline size_t count(std::string v) {
-        return m ? m->count(v) : 0;
+    inline size_t count(std::string fv) {
+        var &v = var::resolve(*this);
+        if (v.t == Array) {
+            if (a) {
+                var conv  = fv;
+                int count = 0;
+                for (auto &v: *a)
+                    if (conv == v)
+                        count++;
+                return count;
+            }
+        }
+        if (v.m) /// no creation of this map unless required (change cases)
+            return v.m->count(fv);
+        return v.m ? v.m->count(fv) : 0;
     }
     
     template <typename T>
     inline operator    std::shared_ptr<T> () { return std::static_pointer_cast<T>(d); }
-
+    
+    /// no implicit type conversion [for the most part], easier to spot bugs this way
+    /// strict/non-strict modes should be appropriate in the future but its probably too much now
     inline operator         Fn&() { return fn;               }
     inline operator   FnFilter&() { return ff;               }
-    inline operator      int8_t() { return *((  int8_t *)n); }
-    inline operator     uint8_t() { return *(( uint8_t *)n); }
-    inline operator     int16_t() { return *(( int16_t *)n); }
-    inline operator    uint16_t() { return *((uint16_t *)n); }
-    inline operator     int32_t() { return *(( int32_t *)n); }
-    inline operator    uint32_t() { return *((uint32_t *)n); }
-    inline operator     int64_t() { return *(( int64_t *)n); }
-    inline operator    uint64_t() { return *((uint64_t *)n); }
-    inline operator       void*() { assert(t == Ref); return n; };
-    inline operator       node*() { assert(t == Ref); return (node*)n; };
-    inline operator       float() { return *((float    *)n); }
-    inline operator      double() { return *((double   *)n); }
+    inline operator      int8_t() {
+        var &v = var::resolve(*this);
+        if (v.t == Ref)
+            return int8_t(*v.n_value.vref);
+        return *((  int8_t *)v.n);
+    }
+    inline operator     uint8_t() {
+        var &v = var::resolve(*this);
+        if (v.t == Ref)
+            return uint8_t(*v.n_value.vref);
+        return *(( uint8_t *)v.n);
+    }
+    inline operator     int16_t() {
+        var &v = var::resolve(*this);
+        if (v.t == Ref)
+            return uint16_t(*v.n_value.vref);
+        return *(( int16_t *)v.n);
+    }
+    inline operator    uint16_t() {
+        var &v = var::resolve(*this);
+        if (v.t == Ref)
+            return uint16_t(*v.n_value.vref);
+        return *((uint16_t *)v.n);
+    }
+    inline operator     int32_t() {
+        var &v = var::resolve(*this);
+        if (v.t == Ref)
+            return int32_t(*v.n_value.vref);
+        if (v.t == Str)
+            return stoi(*v.s.get());
+        return *(( int32_t *)v.n);
+    }
+    inline operator    uint32_t() {
+        var &v = var::resolve(*this);
+        if (v.t == Ref)
+            return uint32_t(*v.n_value.vref);
+        return *((uint32_t *)v.n);
+    }
+    inline operator     int64_t() {
+        if (t == Ref)
+            return int64_t(*n_value.vref);
+        return *(( int64_t *)n);
+    }
+    inline operator    uint64_t() {
+        var &v = var::resolve(*this);
+        if (v.t == Ref)
+            return uint64_t(*v.n_value.vref);
+        return *((uint64_t *)v.n);
+    }
+    inline operator       void*() { /// choppy cross usage here, and we need to fix up node refs
+        var &v = var::resolve(*this);
+        assert(v.t == Ref);           /// best thing to do is make node* a union member
+        return v.n;
+    };
+    inline operator       node*() {   /// we can get rid of this n usage in favor of v.vnode [todo]
+        var &v = var::resolve(*this);
+        assert(v.t == Ref);
+        return (node*)v.n;
+    };
+    inline operator       float() {
+        var &v = var::resolve(*this);
+        /// minor convenience with check
+        if (v.t == Ref) return float(*v.n_value.vref);
+        assert( v.t == f32 || v.t == f64);
+        return (v.t == f32) ? *(float    *)v.n : float(*(double *)v.n);
+    }
+    inline operator      double() {
+        var &v = var::resolve(*this);
+        /// minor convenience with check
+        if (v.t == Ref) return double(*v.n_value.vref);
+        assert( v.t == f32 || v.t == f64);
+        return (v.t == f64) ? *(double    *)v.n : double(*(float *)v.n);
+    }
            operator std::string();
            operator        bool();
     
@@ -329,15 +469,17 @@ struct var {
     
     template <typename T>
     T *data() {
-        //compact();
-        return (T *)d.get();
+        var &v = var::resolve(*this);
+        //v.compact();
+        return (T *)v.d.get();
     }
     
     var(str s);
     
     void reserve(size_t sz);
-    size_t size() const;
+    size_t size();
     void copy(var &ref);
+    var copy();
     
    ~var();
     var(const var &ref);
@@ -345,11 +487,10 @@ struct var {
     bool operator!=(const var &ref);
     bool operator==(const var &ref);
     bool operator==(var &ref);
-    bool operator==(enum Type t) { return this->t == t; }
     
     var& operator=(const var &ref);
-    bool operator==(::map<std::string, var> &m) const;
-    bool operator!=(::map<std::string, var> &m) const;
+    bool operator==(::map<std::string, var> &m);
+    bool operator!=(::map<std::string, var> &m);
 
     bool operator==(uint16_t v);
     bool operator==( int16_t v);
@@ -365,21 +506,25 @@ struct var {
         return *a;
     }*/
     
-    operator map<std::string, var> &() {
+    operator ::map<std::string, var> &() {
         return *m;
     }
 
     void operator += (var d);
     
-    static var read_json(str &js, ::map<std::string, TypeFlags> flags = {});
+    static var parse_json(str &js);
 
     template <typename T>
     operator T *() {
         return data<T>();
     }
+    void notify_insert();
+    void notify_delete();
+    void notify_update();
     
     template <typename T>
     var& operator=(std::vector<T> aa) {
+        /// [design] never perform ref assignment without observation
         m = null;
         t = Array;
         c = Any;
@@ -397,28 +542,36 @@ struct var {
         }
         if (types == 1)
             c = Type(last_type);
+        
+        notify_update();
         return *this;
     }
     
     template <typename T>
     var& operator=(::map<std::string, T> mm) {
+        /// [design] never perform ref assignment without observation
         a = null;
         m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>);
         for (auto &[k, v]: mm)
             (*m)[k] = v;
+        notify_update();
         return *this;
     }
     
     /// rename lambda to Fn
     var &operator=(Fn _fn) {
+        /// [design] never perform ref assignment without observation
          t = Lambda;
         fn = _fn;
+        notify_update();
         return *this;
     }
     
     var &operator=(FnFilter _ff) {
+        /// [design] never perform ref assignment without observation
          t = Filter;
         ff = _ff;
+        notify_update();
         return *this;
     }
     
@@ -427,10 +580,15 @@ struct var {
     static std::shared_ptr<uint8_t> decode(const char *b64,  size_t b64_len, size_t *alloc);
     void each(FnEach each);
     void each(FnArrayEach each);
+    
+    /// queries are messy but what are you going to do
+    var select_first(std::function<var(var &)> fn);
+    std::vector<var> select(std::function<var(var &)> fn);
 };
 
 #include <data/vec.hpp>
 
+/// beat this with a stick later; handle all Refs within var if possible
 class Ref {
 protected:
     void *v = null;
@@ -444,6 +602,7 @@ public:
     }
 };
 
+#define valloc(N, T) ((T *)calloc(N, sizeof(T)))
 #define serializer(C,E) \
     C(nullptr_t n) : C()       { }                      \
     C(const C &ref)            { copy(ref);            }\
@@ -466,13 +625,28 @@ public:
 typedef map<std::string, var> Args;
 void _log(str t, std::vector<var> a, bool error);
 
+
 struct Logging {
+#ifndef NDEBUG
     static void log(str t, std::vector<var> a = {}) { // add this operation to Array
         _log(t, a, false);
     }
-    
-    static void error(str t, std::vector<var> a = {}) {
+#else
+    static inline void log(str t, std::vector<var> a = {}) { }
+#endif
+    static inline void error(str t, std::vector<var> a = {}) {
         _log(t, a, true);
+    }
+    static inline void fatal(str t, std::vector<var> a = {}) {
+        _log(t, a, true);
+        exit(1);
+    }
+    template <typename T>
+    static T prompt(str t, std::vector<var> a = {}) {
+        _log(t, a, false);
+        T v;
+        std::cin >> v;
+        return v;
     }
 };
 
@@ -524,4 +698,81 @@ bool equals(T v, vec<T> values) {
 template <typename T>
 bool isnt(T v, vec<T> values) {
     return !equals(v, values);
+}
+
+/// adding these declarations here.
+/// its not an idiotic thing to do, really.
+/// vk needs them, ux needs them.  they are data descriptors in context
+/// having a ux-common module would also work. [fgs i prefer not]
+enum KeyState {
+    KeyUp,
+    KeyDown
+};
+
+struct KeyStates {
+    bool shift;
+    bool ctrl;
+    bool meta;
+};
+
+struct KeyInput {
+    int key;
+    int scancode;
+    int action;
+    int mods;
+};
+
+enum MouseButton {
+    LeftButton,
+    RightButton,
+    MiddleButton
+};
+
+enum KeyCode {
+    D           = 68,
+    N           = 78,
+    Backspace   = 8,
+    Tab         = 9,
+    LineFeed    = 10,
+    Return      = 13,
+    Shift       = 16,
+    Ctrl        = 17,
+    Alt         = 18,
+    Pause       = 19,
+    CapsLock    = 20,
+    Esc         = 27,
+    Space       = 32,
+    PageUp      = 33,
+    PageDown    = 34,
+    End         = 35,
+    Home        = 36,
+    Left        = 37,
+    Up          = 38,
+    Right       = 39,
+    Down        = 40,
+    Insert      = 45,
+    Delete      = 46, // or 127 ?
+    Meta        = 91
+};
+
+typedef map<str, var> Schema; // We're giving out names
+typedef map<str, var> Map;
+typedef vec<var>      Table;
+typedef map<str, var> ModelMap;
+
+/// It's just a map with a string field set
+/// All of the internals of var could be set in different ways to allow for lots of shapeless fun
+/// if you can effectively hide the smart pointer init that would be nice in my view.
+/// add to master todo.
+inline var Model(str name, Schema schema) {
+    var m   = schema;
+        m.s = std::shared_ptr<std::string>(new std::string(name));
+    return m;
+}
+
+inline var Resolves(str name) {
+    var m = { var::Map, var::Undefined }; /// invalid state used as trigger.
+        m.s = std::shared_ptr<std::string>(new std::string(name));
+    m["resolves"] = name;
+    return m;
 }
