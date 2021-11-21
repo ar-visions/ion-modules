@@ -2,6 +2,7 @@
 
 /// implicit data-binding used here
 int main(int argc, char **argv) {
+    ModelContext ctx;
     ///
     /// define models
     ctx.models["A"] =   Model("A", {
@@ -28,7 +29,7 @@ int main(int argc, char **argv) {
     ///
     var a_found =
         A.select_first([&](var &a) -> var {
-            if (a["a_1"] == str("abc")) { /// support <, >, >=, <=
+            if (a["a_1"] == var { str("abc") }) { /// support <, >, >=, <=
                 console.log("a row exists");
                 return &a;
             }
