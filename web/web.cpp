@@ -257,7 +257,7 @@ Socket::Socket(bool secure, bool listen) {
     intern->secure = secure;
     if (secure) {
         const char *pers = "ion:web";
-        mbedtls_debug_set_threshold(3);
+      //mbedtls_debug_set_threshold(3);
         mbedtls_net_init         (&i.ctx);
         mbedtls_ssl_init         (&i.ssl);
         mbedtls_ssl_config_init  (&i.conf);
