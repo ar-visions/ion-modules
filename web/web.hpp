@@ -116,7 +116,7 @@ struct Socket {
     Socket(bool secure, bool listen);
    ~Socket();
     Socket &operator=(const Socket &ref);
-    static Socket connect(str uri);
+    static Socket connect(str uri, bool trusted_only = true);
     static Async   listen(str uri, std::function<void(Socket)> fn);
     static void   logging(void *ctx, int level, const char *file, int line, const char *str);
     bool            write(const char *v, size_t sz, int flags);

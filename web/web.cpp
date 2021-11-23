@@ -404,7 +404,7 @@ void Socket::logging(void *ctx, int level, const char *file, int line, const cha
     fprintf((FILE *)ctx, "%s:%04d: %s", file, line, str);
 }
 
-Socket Socket::connect(str uri) {
+Socket Socket::connect(str uri, bool trusted_only) {
     URI    a = URI::parse(str("GET ") + uri);
     str   qy = a.query;
     Socket s = null;
@@ -448,13 +448,15 @@ Socket Socket::connect(str uri) {
         
         /// verify server ca x509; exit if flags != 0
         int flags = mbedtls_ssl_get_verify_result(&i.ssl);
-#if !defined(MBEDTLS_X509_REMOVE_INFO)
-        if (flags != 0) {
-            char vrfy_buf[512];
-            mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "  ! ", flags);
-        }
-#endif
+        if (flags != 0 && trusted_only)
+            return null;
+        
     } else if (p == "http") {
+        if (trusted_only) {
+            console.fatal("insecure protocol with trusted_only:true");
+            return null;
+        }
+        
         struct sockaddr_in server_addr;
         
         /// lookup host by name

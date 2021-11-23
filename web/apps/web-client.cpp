@@ -1,13 +1,13 @@
 #include <web/web.hpp>
 #include <ux/ux.hpp>
 
-/// fetch a json resource
-/// to run, set cwd
-int main(int c, const char *v[]) {
+/// grab a json resource into var form
+/// when debugging, set cwd to res so the web module sees the https trust certs
+int main(int argc, const char *argv[]) {
     var  defs = Map {
         { "url", "https://ar-visions.github.io/test-resource.json" }
     };
-    Args args = var::args(c, v, defs, "url");
+    Args args = var::args(argc, argv, defs, "url");
     ///
     Web::json(args["url"]).then([&](Web::Message msg) {
         if (msg.content["wonderful"])
