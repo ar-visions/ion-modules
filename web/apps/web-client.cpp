@@ -1,7 +1,7 @@
 #include <web/web.hpp>
 #include <ux/ux.hpp>
 
-/// fetch a json resource, with quotes from anton petrov
+/// fetch a json resource
 /// to run, set cwd
 int main(int c, const char *v[]) {
     var  defs = Map {
