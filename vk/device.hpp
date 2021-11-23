@@ -1,6 +1,7 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <vk/vk.hpp>
+#include <vk/buffer.hpp>
 
 struct Framebuffer {
     VkImage         image;
@@ -49,7 +50,7 @@ protected:
     
     std::vector<VkImage>       images;
     std::vector<VkImageView>   views;
-    std::vector<VkFramebuffer> framebuffers;
+    //std::vector<VkFramebuffer> framebuffers;
     
 public:
     ///
@@ -60,7 +61,7 @@ public:
     operator        VkPhysicalDevice();
     operator        VkDevice();
     operator        VkCommandPool();
-    Device(GPU &gpu, bool aa = false, std::vector<const char*> *validation = null);
+    Device(GPU *gpu, bool aa = false, std::vector<const char*> *validation = null);
     VkQueue &operator()(GPU::Capability cap);
 };
 

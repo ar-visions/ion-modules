@@ -23,10 +23,10 @@
 #include <media/canvas.hpp>
 #include <media/image.hpp>
 #include <media/color.hpp>
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <media/canvas.hpp>
-#include <data/data.hpp>
-#include <data/vec.hpp>
+#include <dx/dx.hpp>
+#include <dx/vec.hpp>
 #include <vk/vk.hpp>
 
 inline SkColor sk_color(rgba c) {

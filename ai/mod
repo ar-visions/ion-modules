@@ -1,4 +1,4 @@
-dep(data matrix media tensorflow:tensorflowlite==dev)
+dep(dx matrix media tensorflow:tensorflowlite==dev)
 
 if(NOT WIN32)
     dep(pthread)

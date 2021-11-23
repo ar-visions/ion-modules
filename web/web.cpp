@@ -110,14 +110,21 @@ Args Web::read_headers(Socket sc) {
     Args headers;
     int line = 0;
     for (;;) {
-        vec<char> rbytes = sc.read_until({"\r\n"}, 8192);
+        vec<char> rbytes = sc.read_until({"\r\n"}, 8192); /// implicit data passing with vec?
         size_t sz = rbytes.size();
         if (sz == 0)
             return false;
         if (sz == 2)
             break;
-        if (line++ == 0) {
-            headers["Status"]  = str(rbytes);
+        if (line++   == 0) {
+            str hello = str(rbytes, sz - 2);
+            int  code = 0;
+            auto   sp = hello.split(" ");
+            if (hello.length() >= 12) {
+                if (sp.size()  >= 2)
+                    code = sp[1].integer();
+            }
+            headers["Status"]  = code;
         } else {
             for (size_t i = 0; i < sz; i++) {
                 if (rbytes[i] == ':') {
@@ -250,7 +257,7 @@ Socket::Socket(bool secure, bool listen) {
     intern->secure = secure;
     if (secure) {
         const char *pers = "ion:web";
-        ///mbedtls_debug_set_threshold(3);
+        mbedtls_debug_set_threshold(3);
         mbedtls_net_init         (&i.ctx);
         mbedtls_ssl_init         (&i.ssl);
         mbedtls_ssl_config_init  (&i.conf);
@@ -303,7 +310,7 @@ Socket::~Socket() { }
 int Socket::read_raw(const char *v, size_t sz) {
     SocketInternal &i = *intern;
     int r = i.secure ? mbedtls_ssl_read(&i.ssl, (unsigned char *)v, sz) :
-                                   recv(i.fd_insecure, (void *)v, sz, 0);
+                                   recv(i.fd_insecure,   (void *)v, sz, 0);
     return r;
 }
 
@@ -313,7 +320,7 @@ bool Socket::read(const char *v, size_t sz) {
     ///
     for (int len = sz; len > 0;) {
         int r = i.secure ? mbedtls_ssl_read(&i.ssl, (unsigned char *)&v[st], len) :
-                                       recv(i.fd_insecure, (void *)&v[st], len, 0);
+                                       recv(i.fd_insecure,   (void *)&v[st], len, 0);
         if (r <= 0)
             return false;
         len -= r;
@@ -502,8 +509,9 @@ Future Web::request(str s_uri, Args args) {
         /// connect to server (secure or insecure depending on uri)
         console.log("request: {0}", {s_uri});
         Socket sc = Socket::connect(s_uri);
-        if (!sc)
+        if (!sc) {
             return null;
+        }
         ///
         /// write query
         str s_query = sc.uri.query;
@@ -553,19 +561,19 @@ Future Web::request(str s_uri, Args args) {
             sc.write(post.cstr(), post.length(), 0);
         
         /// read headers
-        auto    &r = message.headers = Web::read_headers(sc);
-        str     ct = r.count("Content-Type") ? str(r["Content-Type"]) : str("");
-        var    rcv = read_content(sc, message.headers);
+        auto     &r = message.headers = Web::read_headers(sc);
+        str      ct = r.count("Content-Type") ? str(r["Content-Type"]) : str("");
+        var     rcv = read_content(sc, message.headers);
         
-        /// set status on message
+        /// set status code on message (just an integer stored here)
         message.code = r["Status"];
         
         /// read content
-        if (ct == "application/json") {
-            const char  *c = rcv.data<const char>();
-            size_t      sz = rcv.size();
-            str         js = str(c, sz); // this blows.
-            message.content = var::parse_json(js);
+        if (ct.split(";").count("application/json")) {
+            size_t sz = rcv.size();
+            str    js = str(rcv, sz);
+            auto  obj = var::parse_json(js);
+            message.content = obj;
         } else if (ct.starts_with("text/"))
             message.content = str(rcv.data<const char>(), rcv.size());
         else {
@@ -584,10 +592,8 @@ Future Web::json(str resource, Args args, Args headers) {
     std::function<void(var &)> s, f;
     Completer c = { s, f };
     Web::request(resource, headers).then([s, f](var &d) {
-        auto &headers = d["headers"];
-        str ct = headers["Content-Type"];
-        (ct == "application/json") ? s(d) : f(d);
-    }).except([&](var &d) {
+        (d == var::Map) ? s(d) : f(d);
+    }).except([f](var &d) {
         f(d);
     });
     return Future(c);

@@ -1,6 +1,6 @@
 #pragma once
-#include <data/data.hpp>
-#include <data/vec.hpp>
+#include <dx/dx.hpp>
+#include <dx/vec.hpp>
 
 struct Coord {
     enum Type {

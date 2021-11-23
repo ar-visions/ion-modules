@@ -1,8 +1,9 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <vk/vk.hpp>
+#include <vk/buffer.hpp>
 
-Buffer::Buffer(Device &device, size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
+Buffer::Buffer(Device *device, size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
     VkBufferCreateInfo bi {};
     bi.sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bi.size         = VkDeviceSize(size);

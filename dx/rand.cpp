@@ -1,4 +1,4 @@
-#include <data/rand.hpp>
+#include <dx/rand.hpp>
 
 std::default_random_engine Rand::e;
 

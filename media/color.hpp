@@ -1,5 +1,5 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 
 void rgba_get_data(uint8_t *, var &);
 void rgba_get_data(float   *, var &);

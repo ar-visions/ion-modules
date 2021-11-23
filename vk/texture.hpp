@@ -1,5 +1,5 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <vk/vk.hpp>
 
 ///
@@ -26,8 +26,8 @@ struct Texture {
     void           destroy();
     operator       VkImageView();
     
-    bool transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels);
-    
+    void transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels);
+
     Texture(vec2i size, rgba clr, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB, int mip_levels = -1);
     Texture(Image &im, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB, int mip_levels = -1);
     

@@ -1,5 +1,5 @@
-#include <data/data.hpp>
 #include <dx/dx.hpp>
+#include <db/db.hpp>
 #include <stdio.h>
 #include <sqlite3.h>
 
@@ -169,20 +169,21 @@ void SQLite::observe(str model_name) {
         char    *err = 0;
         str       qy = null;
         int       rc = sqlite3_open(uri.cstr(), &db);
-        bool key_req = op == var::Binding::Update ||
-                       op == var::Binding::Delete;
+        bool key_req = op == var::Binding::Update || op == var::Binding::Delete;
+        ///
+        assert(!key_req || row.count(kname)); /// if the key is required, it needs to exist on the row
+        ///
         int64_t ikey = key_req ? int64_t(row[kname])  : int64_t(-1);
-        str     skey = key_req ? std::to_string(ikey) : null;
+        str     skey = key_req ? str(std::to_string(ikey)) : str(null);
         var    &refs = ctx->data[model_name]["refs"];
         ///
         assert(rc == SQLITE_OK);
-        assert(row[kname] == var::i64);
         ///
         auto str_from_value = [&](str field, var &value) {
             if (value == var::Str)
                 return str::format("'{0}'", {sql_encode(value)});
             ///
-            if (value == var::Map)
+            if (value == var::Map) {
                 for (auto &[peer_name, v_fields]: refs.map()) {
                     std::string speer_name = peer_name;
                     var field_names_used = v_fields;
@@ -190,6 +191,7 @@ void SQLite::observe(str model_name) {
                         auto peer_key = ctx->first_fields[peer_name];
                         return value ? str(value[peer_key]) : str("NULL");
                     }
+                }
                 console.fatal("unsupported value: {0}", {field}); /// unsupported value
             }
             return str(value);
@@ -206,8 +208,10 @@ void SQLite::observe(str model_name) {
                 str   values = "";
                 bool   first = true;
                 for (auto &[field, v]: model.map()) {
-                    /// skip over precious key
-                    if (first) {
+                    /// automatic / explicit key handling
+                    str  explicit_key = (first && row.count(field) && row[field] == var::i64) ?
+                                            str(int64_t(row[field])) : str(null);
+                    if (first && !explicit_key) {
                         first = false;
                         continue;
                     }
@@ -219,7 +223,8 @@ void SQLite::observe(str model_name) {
                     auto s_field = std::string(field);
                     var    &rval = var::resolve(row[s_field]);
                     fields      += field;
-                    values      += str_from_value(field, rval);
+                    values      += explicit_key ? explicit_key : str_from_value(field, rval);
+                    first        = false;
                 }
                 qy = str::format(INSERT_QY, { model_name, fields, values });
                 break;
@@ -266,6 +271,8 @@ void SQLite::fetch() {
         for (auto &[field, value]: model.map())
             if (first || value.count("resolves")) {
                 str model_name = first ? str(model) : str(value["resolves"]); // model name
+                if (!table["refs"][model_name])
+                     table["refs"][model_name] = { var::Array, var::Str };
                 table["refs"][model_name] += field;
                 if (first)
                     ctx.first_fields[m] = field;

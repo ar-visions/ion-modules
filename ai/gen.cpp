@@ -1,5 +1,5 @@
 #include <ai/gen.hpp>
-#include <data/async.hpp>
+#include <dx/async.hpp>
 #include <media/image.hpp>
 
 void first_data(str model, Truth &schema, vec<std::ofstream *> &odata, std::ofstream *& olabels) {

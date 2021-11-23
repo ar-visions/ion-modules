@@ -1,6 +1,6 @@
 #pragma once
 #include <functional>
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 
 struct GLFWwindow;
 struct Window {

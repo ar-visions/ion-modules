@@ -1,4 +1,4 @@
-dep(data matrix)
+dep(dx matrix)
 
 if(NOT WIN32)
     dep(pthread)

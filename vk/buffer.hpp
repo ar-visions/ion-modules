@@ -1,7 +1,9 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <vk/vk.hpp>
+#include <vk/device.hpp>
 
+struct Device;
 ///
 /// a good vulkan api will be fully accessible but minimally interfaced
 struct Buffer {
@@ -13,8 +15,6 @@ struct Buffer {
     operator       VkBuffer();
     operator       VkDeviceMemory();
     
-    void Buffer::copy(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-    
-    Buffer(Device &, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
-    void copy_to(Buffer &dst, size_t size);
+    Buffer(Device *, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
+    void copy_to(Buffer &, size_t);
 };

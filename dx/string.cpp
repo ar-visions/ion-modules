@@ -1,4 +1,4 @@
-#include <data/data.hpp>
+#include <dx/var.hpp>
 #include <fstream>
 
 str::str(nullptr_t n)                                          { }
@@ -37,6 +37,17 @@ bool str::ends_with(const char *cstr) const {
         return false;
     const char *end = &(s.c_str())[l1 - l0];
     return memcmp(cstr, end, l0) == 0;
+}
+
+str   str::operator()(size_t start, size_t len)  const {
+    return substr(start, len);
+}
+str   str::operator()(size_t start)              const {
+    return substr(start);
+}
+
+str::str(int64_t v) {
+    s = std::to_string(v);
 }
 
 str::str(char c) {

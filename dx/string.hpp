@@ -1,6 +1,6 @@
 #pragma once
-#include <data/data.hpp>
-#include <data/array.hpp>
+#include <dx/var.hpp>
+#include <dx/array.hpp>
 
 struct str {
     std::string s;
@@ -12,30 +12,28 @@ struct str {
     str(std::ifstream& in);
     str(path_t p);
     str(char c);
-    str(int  v);
-    size_t      find(str &str, size_t from) const;
-    size_t    length() const;
+    str(int  v); // deprecate for ambiguity sake
+    str(int64_t v);
+    size_t      find(str &str, size_t from)     const;
+    size_t    length()                          const;
     static str read_file(path_t p);
-    str      replace(str from, str to, bool all = true) const;
-    str       substr(size_t start, size_t len) const;
-    str       substr(size_t start) const;
-    bool starts_with(const char *cstr) const;
-    bool   ends_with(const char *cstr) const;
-    int     index_of(const char *f) const;
-    vec<str>   split(str delim) const;
-    vec<str>   split(const char *delim) const;
-    vec<str>   split() const;
+    str      replace(str, str, bool all = true) const;
+    str       substr(size_t start, size_t len)  const;
+    str       substr(size_t start)              const;
+    str   operator()(size_t start, size_t len)  const;
+    str   operator()(size_t start)              const;
+    bool starts_with(const char *cstr)          const;
+    bool   ends_with(const char *cstr)          const;
+    int     index_of(const char *f)             const;
+    vec<str>   split(str delim)                 const;
+    vec<str>   split(const char *delim)         const;
+    vec<str>   split()                          const;
     /// not definite on the decision of str vs const char *
     static str format(str t, std::vector<var> p = {});
     
     friend auto operator<<(std::ostream& os, str const& m) -> std::ostream& {
         return os << m.s;
     }
-    
-    /*
-    str operator %(std::vector<var> p) {
-        return format(str(s), p);
-    }*/
     
     const char *cstr() const;
     

@@ -1,4 +1,7 @@
-#include <data/data.hpp>
+#include <dx/var.hpp>
+
+// nullptr verbose, incorrect (nullptr_t is not constrained to pointers at all)
+//static const nullptr_t null = nullptr;
 
 Logging console;
 
@@ -169,15 +172,17 @@ void var::clear() {
         v.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
 }
 
-Args var::args(int argc, const char* argv[], Args def) {
-    Args m = def;
+map<std::string, var> var::args(int argc, const char* argv[], Args def, std::string first_field) {
+    Args        m   = def;
     std::string key = "";
     for (int i = 1; i < argc; i++) {
         auto a = argv[i];
         if (a[0] == '-' && a[1] == '-')
-            key = std::string(&a[2], strlen(&a[2]));
-        else if (key != "") {
-            bool is_n = is_numeric(a);
+            key  = std::string(&a[2], strlen(&a[2]));
+        if (i == 1 && first_field != "")
+            m[first_field] = std::string(a);
+        else if (key  != "") {
+            bool  is_n = is_numeric(a);
             if (is_n)
                 m[key] = stod(std::string(a)); // todo: additional conversions in var (double <-> int)
             else
@@ -522,6 +527,7 @@ var::operator std::string() {
 var::operator bool() {
     var &v = var::resolve(*this);
     switch (v.t) {
+        case Bool:  return *((  bool   *)v.n) != false;
         case i8:    return *((  int8_t *)v.n) > 0;
         case ui8:   return *(( uint8_t *)v.n) > 0;
         case i16:   return *(( int16_t *)v.n) > 0;
@@ -990,7 +996,6 @@ void var::each(FnArrayEach each) {
 void var::observe_row(var &row) {
     var &o = var::resolve(*this);
     var &r = var::resolve(row);
-    /// the stack is fun
     r.observer = o.observer ? o.observer : o.ptr();
     for (auto &[field, value]: r.map()) {
         var &v = var::resolve(value);
@@ -1059,17 +1064,12 @@ void var::copy(var &ref) {
 
 void var::operator+= (var ref) {
     var  &v = var::resolve(*this);
-    if (v.t != Array) {
-        /// why not
-        v.t  = Array;
-        v.a  = std::shared_ptr<std::vector<var>>(new std::vector<var>());
-    }
     auto &a = *v.a;
     a.push_back(ref);
     if (v.observer) {
         var &e = a[a.size() - 1];
-        v.observe_row(e);   // update bindings
-        e.notify_insert();
+        v.observe_row(e);  /// update bindings
+        e.notify_insert(); ///
     }
 }
 

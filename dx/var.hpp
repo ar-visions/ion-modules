@@ -55,7 +55,7 @@ static inline void memcopy(T *dst, T *src, size_t count = 1) {
     memcpy(dst, src, count * sizeof(T));
 }
 
-#include <data/map.hpp>
+#include <dx/map.hpp>
 
 typedef std::filesystem::path                       path_t;
 
@@ -234,7 +234,8 @@ public:
     var(std::string str);
     var(const char *str);
     static var load(path_t p);
-    static ::map<std::string, var> args(int argc, const char* argv[], ::map<std::string, var> def = {});
+    static ::map<std::string, var> args(
+        int argc, const char* argv[], ::map<std::string, var> def = {}, std::string field_field = "");
     
     static int shape_volume(std::vector<int> &sh);
     
@@ -418,7 +419,7 @@ public:
         if (v.t == Ref)
             return int32_t(*v.n_value.vref);
         if (v.t == Str)
-            return stoi(*v.s.get());
+            return atoi(v.s.get()->c_str());
         return *(( int32_t *)v.n);
     }
     inline operator    uint32_t() {
@@ -586,7 +587,7 @@ public:
     std::vector<var> select(std::function<var(var &)> fn);
 };
 
-#include <data/vec.hpp>
+#include <dx/vec.hpp>
 
 /// beat this with a stick later; handle all Refs within var if possible
 class Ref {
@@ -617,10 +618,10 @@ public:
     }\
 
 
-#include <data/array.hpp>
-#include <data/string.hpp>
-#include <data/async.hpp>
-#include <data/rand.hpp>
+#include <dx/array.hpp>
+#include <dx/string.hpp>
+#include <dx/async.hpp>
+#include <dx/rand.hpp>
 
 typedef map<std::string, var> Args;
 void _log(str t, std::vector<var> a, bool error);
@@ -770,9 +771,26 @@ inline var Model(str name, Schema schema) {
     return m;
 }
 
-inline var Resolves(str name) {
-    var m = { var::Map, var::Undefined }; /// invalid state used as trigger.
-        m.s = std::shared_ptr<std::string>(new std::string(name));
-    m["resolves"] = name;
-    return m;
-}
+#define ident null
+
+struct Remote {
+        int64_t value;
+            str remote;
+    Remote(int64_t value)                  : value(value)                 { }
+    Remote(nullptr_t n = nullptr)          : value(-1)                    { }
+    Remote(str remote, int64_t value = -1) : value(value), remote(remote) { }
+    operator int64_t() { return value; }
+    operator var() {
+        if (remote) {
+            var m = { var::Map, var::Undefined }; /// invalid state used as trigger.
+                m.s = std::shared_ptr<std::string>(new std::string(remote));
+            m["resolves"] = remote;
+            return m;
+        }
+        return var(value);
+    }
+};
+
+struct Ident:Remote {
+    Ident() : Remote(null) { }
+};

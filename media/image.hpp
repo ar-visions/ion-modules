@@ -1,8 +1,8 @@
 #pragma once
-#include <data/data.hpp>
-#include <data/vec.hpp>
+#include <dx/dx.hpp>
+#include <dx/vec.hpp>
+#include <dx/m44.hpp>
 #include <media/color.hpp>
-#include <math/matrix.hpp>
 
 struct Image {
     enum Format {

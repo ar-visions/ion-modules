@@ -1,8 +1,8 @@
-#pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <vk/vk.hpp>
+#include <vk/device.hpp>
 
-Device::Device(GPU &gpu, bool aa, std::vector<const char*> *validation) {
+Device::Device(GPU *gpu, bool aa, std::vector<const char*> *validation) {
     std::vector<VkDeviceQueueCreateInfo> vq;
     std::vector<uint32_t> families = {
         gpu.index(GPU::Graphics),

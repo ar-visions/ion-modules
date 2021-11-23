@@ -1,5 +1,4 @@
-#pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <vk/vk.hpp>
 
 GPU::GPU(VkPhysicalDevice gpu) : gpu(gpu) {

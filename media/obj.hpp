@@ -1,5 +1,5 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 
 typedef size_t IPos;
 typedef size_t INormal;

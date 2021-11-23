@@ -1,10 +1,10 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/var.hpp>
 #include <vector>
 #include <queue>
 #include <list>
 #include <random>
-#include <data/rand.hpp>
+#include <dx/rand.hpp>
 
 struct var;
 template <class T>
@@ -32,6 +32,13 @@ public:
     }
     void resize(size_t sz) {
         a.resize(sz);
+    }
+    int count(T v) {
+        int ret = 0;
+        for (auto &i: a)
+            if (v == i)
+                ret++;
+        return ret;
     }
     void shuffle() {
         std::vector<std::reference_wrapper<const T>> v(a.begin(), a.end());
@@ -127,5 +134,8 @@ public:
     }
     inline bool operator!=(vec<T> &b) {
         return !operator==(b);
+    }
+    inline operator T *() {
+        return data();
     }
 };

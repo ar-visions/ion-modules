@@ -1,12 +1,11 @@
 #pragma once
-#include <data/data.hpp>
-#include <iostream>
+
+#include <dx/array.hpp>
 #include <stdexcept>
 #include <cstdlib>
 #include <algorithm>
 #include <cmath>
-#include <data/data.hpp>
-#include <data/array.hpp>
+#include <dx/var.hpp>
 
 template <typename T>
 struct Vector {
@@ -17,7 +16,6 @@ struct Vector {
         return v[i];
     }
 };
-
 
 template <typename T>
 struct Vec4;

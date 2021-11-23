@@ -1,2 +1,3 @@
-# fix this; somehow sqlite3 doesnt compile a static or dylib
-dep(data sqlite3:sqlite3==3.8.6 sqlite3 sqlite)
+if(NOT WIN32)
+    dep(pthread)
+endif()

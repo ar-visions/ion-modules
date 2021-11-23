@@ -1,0 +1,2 @@
+# fix this; somehow sqlite3 doesnt compile a static or dylib
+dep(dx sqlite3)

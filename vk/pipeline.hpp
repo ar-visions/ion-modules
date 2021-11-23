@@ -1,14 +1,8 @@
 #pragma once
-#include <data/data.hpp>
+#include <dx/dx.hpp>
 #include <vk/vk.hpp>
-
-struct Framebuffer {
-    VkImage         image;
-    VkImageView     view;
-    VkFramebuffer   framebuffers;
-    Buffer          uniform;
-    void destroy(VkDevice &device);
-};
+#include <vk/vk.hpp>
+#include <glm/glm.hpp>
 
 struct IVertex {
     virtual vec<VkVertexInputAttributeDescription> attrs() {

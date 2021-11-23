@@ -1,12 +1,13 @@
 #pragma once
-#include <data/data.hpp>
-#include <data/vec.hpp>
+#include <dx/dx.hpp>
+#include <dx/vec.hpp>
 #include <media/color.hpp>
 #include <media/image.hpp>
-#include <math/matrix.hpp>
+#include <dx/m44.hpp>
 
 typedef vec<vec2> Points;
 
+///
 struct Canvas;
 struct Align {
     enum Type {
