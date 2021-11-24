@@ -35,9 +35,9 @@ Standard-Order (syntax shown):
 dep(module)              # build from source
 dep(peer-repo:module)    # build from source, given a peer repo
 dep(peer-repo:module==V) # try to grab a product set with this V
-dep(pkg-config)	        # can be something found by pkg-config
+dep(pkg-config)          # can be something found by pkg-config
 dep(framework.framework) # can be a .framework
-dep(lib)		        # ordinary lib
+dep(lib)                 # ordinary lib
 ```
 Each module folder has a base set of translation units and headers in its folder, with app targets built from apps and tests built from tests.\
 Tests require exit code 0 on every app target in order to pass a 'package' target.
