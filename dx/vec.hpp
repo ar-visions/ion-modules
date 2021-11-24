@@ -429,6 +429,9 @@ typedef float        real;
 #error Unknown pointer size or missing size macros!
 #endif
 
+typedef float        r32;
+typedef double       r64;
+
 typedef Vec2<float>  vec2f;
 typedef Vec2<real>   vec2;
 typedef Vec2<double> vec2d;

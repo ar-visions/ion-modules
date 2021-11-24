@@ -24,6 +24,11 @@ Buffer::Buffer(Device *device, size_t size, VkBufferUsageFlags usage, VkMemoryPr
     alloc.memoryTypeIndex   = findMemoryType(req.memoryTypeBits, properties);
     assert(vkAllocateMemory(device, &alloc, nullptr, &memory) == VK_SUCCESS);
     vkBindBufferMemory(device, buffer, memory, 0);
+    
+    info = VkDescriptorBufferInfo {};
+    info.buffer = buffer;
+    info.offset = 0;
+    info.range  = size; /// was:sizeof(UniformBufferObject)
 }
 
 void Buffer::copy_to(Buffer &dst, size_t size) {

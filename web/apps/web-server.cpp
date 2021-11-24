@@ -1,6 +1,7 @@
 #include <web/web.hpp>
 #include <ux/ux.hpp>
 
+/// Development In progress...
 struct Animals:node {
     declare(Animals);
     Element render() {
@@ -24,7 +25,6 @@ struct ExampleServer:node {
     }
 };
 
-// so you render based on the client; thats fairly simple
 Args defaults = {
     {"port", int(443)}
 };

@@ -24,15 +24,15 @@ Device::Device(GPU *gpu, bool aa, std::vector<const char*> *validation) {
     
     VkDeviceCreateInfo         ci {};
     ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    ci.queueCreateInfoCount    = static_cast<uint32_t>(vq.size());
+    ci.queueCreateInfoCount    = uint32_t(vq.size());
     ci.pQueueCreateInfos       = vq.data();
     ci.pEnabledFeatures        = &feat;
-    ci.enabledExtensionCount   = static_cast<uint32_t>(deviceExtensions.size());
+    ci.enabledExtensionCount   = uint32_t(deviceExtensions.size());
     ci.ppEnabledExtensionNames = ext.data();
 
 #ifndef NDEBUG
     if (validation) {
-        ci.enabledLayerCount       = static_cast<uint32_t>(validation->size());
+        ci.enabledLayerCount       = uint32_t(validation->size()); /// why do people do static cast when most of the time it effectively does nothing different
         ci.ppEnabledLayerNames     = validation->data();
     }
 #endif
@@ -180,13 +180,12 @@ void Device::create_swapchain() {
     
     /// create descriptor pool
     std::array<VkDescriptorPoolSize, 2> ps {};
-    ps[0].type                    = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ps[0].descriptorCount         = uint32_t(frame_count);
-    ps[1].type                    = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    ps[1].descriptorCount         = uint32_t(frame_count);
+    ps[0]                         = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, uint32_t(frame_count) };
+    ps[1]                         = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(frame_count) };
 
     VkDescriptorPoolCreateInfo pi {};
-    pi.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pi.sType                      = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
+                                      uint32_t(frame_count), uint32_t(ps.size()), &desc_pool,  };
     pi.poolSizeCount              = uint32_t(ps.size());
     pi.pPoolSizes                 = ps.data();
     pi.maxSets                    = uint32_t(frame_count);
@@ -311,48 +310,6 @@ void Device::create_render_pass() {
     assert(vkCreateRenderPass(device, &rpi, nullptr, &render_pass) == VK_SUCCESS);
 }
 
-void Device::create_descriptor_sets() {
-    std::vector<VkDescriptorSetLayout> layouts(frames.size(), descriptorSetLayout);
-    VkDescriptorSetAllocateInfo allocInfo {};
-    allocInfo.sType                         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool                = descriptorPool;
-    allocInfo.descriptorSetCount            = static_cast<uint32_t>(frames.size());
-    allocInfo.pSetLayouts                   = layouts.data();
-
-    descriptorSets.resize(swapChainImages.size());
-    if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS)
-        throw std::runtime_error("failed to allocate descriptor sets!");
-
-    for (size_t i = 0; i < swapChainImages.size(); i++) {
-        VkDescriptorBufferInfo bufferInfo {};
-        bufferInfo.buffer                   = uniformBuffers[i];
-        bufferInfo.offset                   = 0;
-        bufferInfo.range                    = sizeof(UniformBufferObject);
-        
-        VkDescriptorImageInfo imageInfo {};
-        imageInfo.imageLayout               = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView                 = texture;
-        imageInfo.sampler                   = textureSampler;
-
-        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-        descriptorWrites[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet          = descriptorSets[i];
-        descriptorWrites[0].dstBinding      = 0;
-        descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo     = &bufferInfo;
-        descriptorWrites[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[1].dstSet          = descriptorSets[i];
-        descriptorWrites[1].dstBinding      = 1;
-        descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pImageInfo      = &imageInfo;
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-    }
-}
-
 
 void Device::create_command_buffers() {
     commandBuffers.resize(swapChainFramebuffers.size());
@@ -463,6 +420,10 @@ Device::operator VkDevice() {
     return device;
 }
 
+Device::operator VkDescriptorPool() {
+    return desc_pool;
+}
+
 ///
 void Device::destroy() {
     ///
@@ -492,7 +453,7 @@ void Device::destroy() {
         vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
     }
 
-    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+    vkDestroyDescriptorPool(device, desc_pool, nullptr);
 }
 
 ///
@@ -519,5 +480,5 @@ void Frame::destroy(VkDevice &device) {
         vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
     }
 
-    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+    ///vkDestroyDescriptorPool(device, desc_pool, nullptr);
 }

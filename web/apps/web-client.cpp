@@ -1,7 +1,7 @@
 #include <web/web.hpp>
 
 /// grab a json resource into var form
-/// when debugging, set cwd to res so the web module sees the https trust certs
+/// set cwd to res so the web module sees the https trust certs
 int main(int argc, const char *argv[]) {
     Args defs = {{ "url", "https://ar-visions.github.io/test-resource.json" }};
     Args args = var::args(argc, argv, defs, "url");

@@ -1,4 +1,3 @@
-#pragma once
 #include <dx/dx.hpp>
 #include <vk/vk.hpp>
 
@@ -7,7 +6,5 @@
 /// too many bindings have redundancy and it will make sense to contain this
 
 
-
-
-Pipeline::Pipeline(Device &device) {
+Pipeline::Pipeline(Device *device) {
 }

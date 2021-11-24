@@ -1,4 +1,4 @@
-#include <vk/texture.hpp>
+#include <vk/vk.hpp>
 
 static void
 generate_mipmaps(Device &device, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
