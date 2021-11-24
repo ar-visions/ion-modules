@@ -1,6 +1,6 @@
 ## ion-modules README
 [!] Work is on-going at the moment, not all targets are buildable with Vulkan core getting a bit of development\
-Welcome. This repository is host to ion modules, a project aimed at being a lean and build-for-everywhere software framework written in C++17.  Simply clone, and make an app at the same directory space as ion-modules.  A package.json and 4 line CMake boilerplate is all you need from there:\
+Welcome. This repository is host to ion modules, a project aimed at being a lean and build-for-everywhere software framework written in C++17.  Simply clone, and make an app at the same directory space as ion-modules.  A package.json and 4 line CMake boilerplate is all you need from there:
 #### package.json
 ```json
 {
@@ -16,9 +16,9 @@ read_package("package.json" name u v s)
 project(${name})
 main()
 ```
-... And you're off.  Well you still need to make a module folder, so do that.\
-Inside that folder you make a file called 'mod' [which can be blank] so long as it's there. It's an indication that folder is a module.\
-You can't tell anyone, but this format is just CMake with some really easy to use additions.
+... **And you're off..**  Well you still need to make a module folder, so do that.\
+Inside that folder you make a file called 'mod' [which can be blank] so long as it's there. It's an indication that folder is a module.
+You can't tell anyone, but this format is just CMake with some really easy-to-use helper additions.
 #### module/mod
 ```cmake
 dep(dx matrix media tensorflow:tensorflowlite==dev)
