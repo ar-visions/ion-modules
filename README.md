@@ -1,8 +1,7 @@
 ## ion-modules README
 [!] Work is on-going at the moment, not all targets are buildable with Vulkan core getting a bit of development\
 Welcome. This repository is host to ion modules, a project aimed at being a lean and build-for-everywhere software framework written in C++17.  Simply clone, and make an app at the same directory space as ion-modules.  A package.json and 4 line CMake boilerplate is all you need from there:\
-#### client example \
-\
+#### client example
 ```json
 {
     "name":     "your-app",
