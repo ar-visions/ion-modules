@@ -66,6 +66,7 @@ int main(int argc, const char *argv[]) {
     return Async::await();
 }
 ```
-** Important to run this binary with the cwd set to the resource 'res' dir in web which has the HTTPS trust cert for the domain you are querying in the example.
+> :warning: **Important to run this binary with the cwd set to the resource 'res' dir in web which has the HTTPS trust cert for the domain you are querying in the example.**
+
 \
 ![alt text](ion-modules.jpg)
