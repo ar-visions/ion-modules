@@ -30,10 +30,19 @@ endif()
 Notice there is a unified dependency syntax here which unifies lib dyn/so, pkg-config, .frameworks, repo:module\
 When we build TensorFlow, we have it in the same peer-repo space as our lib.  That repo has in it a products folder hierarchy of versioned headers, libs and bins for different targets. While it's preferred to 'own' the library you depend on in our opinion its not always easy to do or preferred so you can still use any dependency on the system. The syntax is there to deliver a standard order and clean up what is thought as the ugliest part of software development, the make files.  It turns out using CMake is far and away the cleanest and furthest reaching if you accept some boilerplate.\
 You may remove dependencies with dep(-name)\
+Standard-Order (syntax shown):
+```
+dep(repo:module)   # build from source
+dep(module)        # build from source
+dep(pkg-config)	        # can be something found by pkg-config
+dep(framework.framework) # can be a .framework
+dep(lib)
+```
+
 Each module folder has a base set of translation units and headers in its folder, with app targets built from apps and tests built from tests.\
 Tests require exit code 0 on every app target in order to pass a 'package' target.
 #### Progress... 22%
-C++20 module conversion likely to start taking place as soon as Vulkan code is established [long and enduring process so far].  Where we shine are in general UX facilities.  The framework is driving to be on-par with the latest frameworks such as FireDB and React.  Work is ongoing to establish a Vulkan core for the UX, and after that the tests will build.  As for now we're deep in the trenches of Vulkan abstraction.
+C++20 module conversion likely to start taking place as soon as Vulkan code is established [long and enduring process so far].  Where we shine are in general UX facilities.  The framework is driving to be a major, sensible alternative to popular offerings. Work is ongoing to establish a Vulkan core for the UX, and after that the tests will build.  As for now we're deep in the trenches of Vulkan abstraction.
 #### client example
 One of the targets building fine now are the web client.  The following shows some Future-based Web::json query in action:
 ```c++
