@@ -16,9 +16,9 @@ read_package("package.json" name u v s)
 project(${name})
 main()
 ```
-... **And you're off..**  Well you still need to make a module folder, so do that.\
-Inside that folder you make a file called 'mod' [which can be blank] so long as it's there. It's an indication that folder is a module.
-You can't tell anyone, but this format is just CMake with some really easy-to-use helper additions.
+... **And you're off..**  Well you still need to make a module folder, so do that and make some translation unit in the module folder you made.  At the moment there has to be 'something' here to build. **app** translation units go into apps and **test** go in tests folders.\
+Create an empty mod file and tell it what it depends on.\
+The syntax is simple CMake with some really easy-to-use helper additions implicitly available for call.
 #### module/mod
 ```cmake
 dep(dx matrix media tensorflow:tensorflowlite==dev)
@@ -27,7 +27,7 @@ if(NOT WIN32)
     dep(pthread)
 endif()
 ```
-Notice there is a unified dependency syntax here which unifies lib dyn/so, pkg-config, .frameworks, repo:module\
+Notice there is a unified dependency syntax here which cascade rules down from module-source, to pkg-config/non-pkg-config libraries, macOS .frameworks, lib, repo:module, repo:module==V\
 When we build TensorFlow, we have it in the same peer-repo space as our lib.  That repo has in it a products folder hierarchy of versioned headers, libs and bins for different targets. While it's preferred to 'own' the library you depend on in our opinion its not always easy to do or preferred so you can still use any dependency on the system. The syntax is there to deliver a standard order and clean up what is thought as the ugliest part of software development, the make files.  It turns out using CMake is far and away the cleanest and furthest reaching if you accept some boilerplate.\
 You may remove dependencies with dep(-name)\
 Standard-Order (syntax shown):
