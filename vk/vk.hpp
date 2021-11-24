@@ -1,32 +1,50 @@
 #pragma once
 #include <vulkan/vulkan.hpp>
+#include <glm/glm.hpp>
+///
 #include <dx/dx.hpp>
 #include <media/canvas.hpp>
-#include <vk/gpu.hpp>
-#include <vk/device.hpp>
-#include <vk/pipeline.hpp> // this one is tricky to organize because of Shader binding
-///
-#include <dx/dx.hpp>
-#include <vk/vk.hpp>
-#include <glm/glm.hpp>
 #include <media/obj.hpp>
 
-
 ///
-/// a good vulkan api must be fully accessible but minimally interfaced.
-/// simplifying the API with casts is the real showcase here.  i honestly
-/// believe anyone who reads this will walk away thinking 'why on earth
-/// did i consider this a difficult api to learn?' when you realize how
-/// many types fold into simple abstract.  i do believe it should be
-/// coded in the way done on vk-app for anything in production.
-/// to manage code, you need to be able to read it.  and humans only read
-/// so much at once.  packing in as much on the screen as possible is just
-/// how you can drive understanding easier.  these operations need to be
-/// seen to be understood.
-
 /// a good vulkan api will be fully accessible but minimally interfaced
+struct GPU {
+protected:
+    var              gfx;
+    var              present;
+    
+public:
+    enum Capability {
+        Present,
+        Graphics,
+        Complete
+    };
+    struct Support {
+        VkSurfaceCapabilitiesKHR caps;
+        vec<VkSurfaceFormatKHR>  formats;
+        vec<VkPresentModeKHR>    present_modes;
+        bool                     ansio;
+    };
+    
+    Support          support;
+    VkSurfaceKHR     surface;
+    VkPhysicalDevice gpu;
+    VkQueue          queues[2];
+    ///
+    GPU(VkPhysicalDevice, VkSurfaceKHR);
+    uint32_t                index(Capability);
+    void                    destroy();
+    operator                bool();
+    operator                VkPhysicalDevice();
+    bool                    operator()(Capability);
+    VkSampleCountFlagBits   max_sampling();
+};
+
+/// a good vulkan api must be fully accessible but minimally interfaced.
 struct Device;
+struct Texture;
 struct Buffer {
+    Device        *device;
     VkDescriptorBufferInfo info;
     VkBuffer       buffer;
     VkDeviceMemory memory;
@@ -37,7 +55,7 @@ struct Buffer {
     
     Buffer(Device *, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
     void copy_to(Buffer &, size_t);
-    
+    void copy_to(Texture *);
     inline operator VkDescriptorBufferInfo &() {
         return info;
     }
@@ -46,8 +64,13 @@ struct Buffer {
 template <typename V>
 struct VertexBuffer {
     Buffer          buffer;
-    VertexBuffer(vec<V> &) {
+    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
+        return {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &buffer // lol, guessing..
+        };
     }
+    VertexBuffer(vec<V> &) { }
 };
 
 template <typename U>
@@ -72,13 +95,51 @@ struct Uniform {
     alignas(16) glm::mat4 proj;
 };
 
-/// cant use Texture in frame?
+///
+struct Texture {
+    protected:
+    void create(rgba *pixels, vec2i sz, VkFormat format, int mip_levels);
+    VkSampler create_sampler();
+    void      create_resources(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits numSamples,
+                               VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
+                               VkMemoryPropertyFlags properties, VkImage *image, VkDeviceMemory *imageMemory, VkSampler *sampler);
+    public:
+    Device        *device     = null;
+    VkImage        image      = VK_NULL_HANDLE;
+    VkImageView    view       = VK_NULL_HANDLE;
+    VkDeviceMemory memory     = VK_NULL_HANDLE;
+    VkSampler      sampler    = VK_NULL_HANDLE;
+    VkFormat       format;
+    vec2i          sz         = { 0, 0 };
+    int            mip_levels = 0;
+    void           destroy();
+    void           transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels);
+    ///
+    Texture(Device *device, vec2i size, rgba clr, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB, int mip_levels = -1);
+    Texture(Device *device, Image &im, int mip_levels = -1);
+    Texture(Device *device, vec2i sz, VkImage image, VkImageView view);
+    ///
+    operator VkDescriptorImageInfo() {
+        return { sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    }
+    ///
+    operator  bool();
+    bool operator!();
+    operator VkImage &();
+    operator VkImageView &();
+    operator VkDeviceMemory &();
+};
+
 struct Frame {
-    VkImage                 image;
-    VkImageView             view;
-    VkFramebuffer           framebuffer;
-    UniformBuffer<Uniform>  ubuffer;
+    Device                *device;
+    Texture                tx; /// just image and view used; no sampler
+    VkFramebuffer          framebuffer;
+    UniformBuffer<Uniform> uniform;
     void destroy(VkDevice &device);
+    void create(vec<VkImageView> &attachments);
+    operator VkFramebuffer &() {
+        return framebuffer;
+    }
 };
 
 /// worth having; rid ourselves of more terms =)
@@ -88,93 +149,68 @@ struct Descriptor {
     operator VkDescriptorSetLayout &() {
         return layout;
     }
+    operator VkDescriptorPool &() {
+        return pool;
+    }
 };
 
 struct Device {
-    /// combine all of this since its 1:1 frame ops
     void        create_swapchain();
     void        create_command_buffers();
     void        create_render_pass();
-    VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
-
-    /// we want to pslit off as much as we can to 'pipeline', including shader for now
-    
-    VkSampleCountFlagBits      msaa_samples;
-    VkRenderPass               render_pass;
-    Descriptor                 desc;
-    vec<VkCommandBuffer>       command_buffers;
-    
-    /// throw it all in the gumbo. -- 7th grade teacher
-
-    GPU                       &gpu;
-    VkCommandPool              pool;
-    VkDevice                   device;
-    VkQueue                    queues[GPU::Complete];
-    
-    /// important that these are here until it makes complete to split them off
-    VkSwapchainKHR             swap_chain;
-    VkFormat                   format;
-    VkExtent2D                 extent;
-    
-    /// combined image, view framebuffer, and uniform buffer into a singular data structure
-    vec<Frame>                 frames;
-    
+    VkImageView create_iview(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+    VkSampleCountFlagBits msaa_samples;
+    VkRenderPass          render_pass;
+    Descriptor            desc;
+    vec<VkCommandBuffer>  command_buffers;
+    GPU                  &gpu;
+    VkCommandPool         pool;
+    VkDevice              device;
+    VkQueue               queues[GPU::Complete];
+    VkSwapchainKHR        swap_chain;
+    VkFormat              format;
+    VkExtent2D            extent;
+    VkViewport            viewport;
+    VkRect2D              sc;
+    vec<Frame>            frames;
     ///
     void            initialize();
     void            destroy();
     VkCommandBuffer begin();
     void            submit(VkCommandBuffer commandBuffer);
+    uint32_t        memory_type(uint32_t types, VkMemoryPropertyFlags props);
+    
     operator        VkPhysicalDevice();
     operator        VkDevice();
     operator        VkCommandPool();
     operator        VkRenderPass();
-    Device(GPU *gpu, bool aa = false, std::vector<const char*> *validation = null);
+    Device(GPU *gpu, bool aa = false, bool val = false);
     VkQueue &operator()(GPU::Capability cap);
-    
-    operator VkViewport() {
-        return { 0.0f, 0.0f, r32(extent.width), r32(extent.height),
-                 0.0f, 1.0f };
+    ///
+    operator VkViewport &() {
+        return viewport;
     }
-    
     operator VkDescriptorSetLayout &() {
         return desc;
     }
-    
-};
-
-///
-struct Texture {
-    protected:
-    VkSampler create_sampler();
-    void create_resources(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits numSamples,
-                          VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-                          VkMemoryPropertyFlags properties, VkImage *image, VkDeviceMemory *imageMemory, VkSampler *sampler);
-    
-    public:
-    Device        *device;
-    VkImage        image      = VK_NULL_HANDLE;
-    VkImageView    view       = VK_NULL_HANDLE;
-    VkDeviceMemory memory     = VK_NULL_HANDLE;
-    VkSampler      sampler    = VK_NULL_HANDLE;
-    VkFormat       format;
-    vec2i          sz         = { 0, 0 };
-    int            mip_levels = 0;
-    ///
-    void           destroy();
-    operator       VkImageView();
-    
-    void transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels);
-
-    Texture(vec2i size, rgba clr, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB, int mip_levels = -1);
-    Texture(Image &im, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB, int mip_levels = -1);
-    
-    operator VkDescriptorImageInfo() {
-        return { sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    operator VkDescriptorPool &() {
+        return desc;
     }
-    operator  bool();
-    bool operator!();
+    operator VkPipelineLayoutCreateInfo() {
+        return { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, null, 0, 1, &(VkDescriptorSetLayout &)desc, 0, null };
+    }
+    operator VkPipelineViewportStateCreateInfo() {
+        sc.offset = {0, 0};
+        sc.extent = extent;
+        return { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, null, 0, 1, &viewport, 1, &sc };
+    }
+    operator VkPipelineRasterizationStateCreateInfo() {
+        return {
+            VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, null, 0, VK_FALSE, VK_FALSE,
+            VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_FALSE // ... = 0.0f
+        };
+    }
 };
-
 
 struct Vertex {
     glm::vec2 pos;
@@ -196,42 +232,41 @@ struct Vertex {
 template <typename U, typename V>
 struct Pipeline {
 protected:
-    map<std::string, int>      ubo_ids; // internal.
+    map<std::string, int>      ubo_ids; /// internal.
     Device                    *device;
     vec<VkDescriptorSet>       desc_sets;
-    VkDescriptorSetLayout      desc_layout;
-    VkPipelineLayout           pipeline_layout;
+    VkPipelineLayout           layout;
     VkPipeline                 pipeline;
-    
-
+    ///
 public:
     map<std::string, r32>      f32;
     map<std::string, vec2f>    v2;
     map<std::string, vec3f>    v3;
     map<std::string, vec4f>    v4;
-    map<std::string, Texture>  tx; // this is great.
-    
+    map<std::string, Texture>  tx; /// this is great, and must be passed into uniform
+    ///
     void create_descriptor_sets() {
         Device         &device = *this->device;
         const size_t  n_frames = device.frames.size();
-        auto           layouts = std::vector<VkDescriptorSetLayout> (device.frames.size(), *device);
+        auto           layouts = std::vector<VkDescriptorSetLayout> (device.frames.size(), device); /// add to vec.
         auto                ai = VkDescriptorSetAllocateInfo {};
         ///
         ai.sType               = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        ai.descriptorPool      = *device;
+        ai.descriptorPool      = device;
         ai.descriptorSetCount  = n_frames;
-        ai.pSetLayouts         = layouts;
+        ai.pSetLayouts         = layouts.data();
         desc_sets.resize(n_frames);
-        /// created once for each pipeline, destroyed with the pipeline
+        ///
         if (vkAllocateDescriptorSets(device, &ai, desc_sets.data()) != VK_SUCCESS)
             throw std::runtime_error("failed to allocate descriptor sets!");
         ///
-        for (auto &f: frames) {
-            auto desc_wri = vec<VkWriteDescriptorSet> {
-                device.uniform(f),
-                device.sampler(f)
+        size_t i = 0;
+        for (auto &f: device.frames) {
+            auto &ds = desc_sets[i++];
+            auto   w = vec<VkWriteDescriptorSet> {
+                f.uniform(ds), f.tx(ds)
             };
-            vkUpdateDescriptorSets(device, uint32_t(dw.size()), desc_wri, 0, nullptr);
+            vkUpdateDescriptorSets(device, uint32_t(w.size()), w, 0, nullptr);
         }
     }
     
@@ -264,7 +299,6 @@ public:
         auto attrs   = V::attrs();
 
         VkVertexInputBindingDescription binding_desc = { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
-        
         VkPipelineVertexInputStateCreateInfo vertex_info {};
         vertex_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertex_info.vertexBindingDescriptionCount   = 1;
@@ -298,7 +332,7 @@ public:
         sc.extent                                   = device.extent;
 
         /// vulkan type data should only be presented on IMAX screens
-        VkPipelineViewportStateCreateInfo vs {};
+        VkPipelineViewportStateCreateInfo vs        = device;
         vs.sType                                    = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         vs.viewportCount                            = 1;
         vs.pViewports                               = &viewport;
@@ -342,15 +376,9 @@ public:
         blending.blendConstants[1]                  = 0.0f; // they should be called params not constants; its as 'constant' as a pipeline is
         blending.blendConstants[2]                  = 0.0f;
         blending.blendConstants[3]                  = 0.0f;
-
-        VkPipelineLayoutCreateInfo layout_info {};
-        layout_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        layout_info.setLayoutCount                  = 1;
-        layout_info.pSetLayouts                     = &desc_layout;
-        
-        /// lol. this is silly
-        assert(vkCreatePipelineLayout(pipeline, &pipeline, nullptr, &pipeline) == VK_SUCCESS);
-
+        VkPipelineLayoutCreateInfo layout_info      = device;
+        ///
+        assert(vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline) == VK_SUCCESS);
         ///
         /// Pipeline <Shader, Vertex>(device; Enum for DisplayType)
         ///
@@ -369,9 +397,9 @@ public:
         pi.renderPass                               = pipeline;
         pi.subpass                                  = 0;
         pi.basePipelineHandle                       = VK_NULL_HANDLE;
-
+        ///
         assert (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &pipeline) == VK_SUCCESS);
-
+        ///
         vkDestroyShaderModule(device, frag, nullptr);
         vkDestroyShaderModule(device, vert, nullptr);
     }

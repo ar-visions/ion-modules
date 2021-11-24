@@ -28,6 +28,8 @@ public:
     void        show();
     void        hide();
     
+    static Window *first;
+    
     Window(vec2i);
    ~Window();
     Window(nullptr_t = null);

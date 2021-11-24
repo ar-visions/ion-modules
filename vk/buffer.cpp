@@ -1,4 +1,3 @@
-#pragma once
 #include <dx/dx.hpp>
 #include <vk/vk.hpp>
 #include <vk/buffer.hpp>
@@ -10,20 +9,19 @@ Buffer::Buffer(Device *device, size_t size, VkBufferUsageFlags usage, VkMemoryPr
     bi.usage        = usage;
     bi.sharingMode  = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateBuffer(device, &bi, nullptr, &buffer) != VK_SUCCESS)
-        throw std::runtime_error("failed to create buffer!");
+    assert(vkCreateBuffer(*device, &bi, nullptr, &buffer) == VK_SUCCESS);
     ///
     /// fetch 'requirements'
     VkMemoryRequirements req;
-    vkGetBufferMemoryRequirements(device, buffer, &req);
+    vkGetBufferMemoryRequirements(*device, buffer, &req);
     ///
     /// allocate and bind
     VkMemoryAllocateInfo alloc {};
     alloc.sType             = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc.allocationSize    = req.size;
-    alloc.memoryTypeIndex   = findMemoryType(req.memoryTypeBits, properties);
-    assert(vkAllocateMemory(device, &alloc, nullptr, &memory) == VK_SUCCESS);
-    vkBindBufferMemory(device, buffer, memory, 0);
+    alloc.memoryTypeIndex   = device->memory_type(req.memoryTypeBits, properties);
+    assert(vkAllocateMemory(*device, &alloc, nullptr, &memory) == VK_SUCCESS);
+    vkBindBufferMemory(*device, buffer, memory, 0);
     
     info = VkDescriptorBufferInfo {};
     info.buffer = buffer;
@@ -31,12 +29,23 @@ Buffer::Buffer(Device *device, size_t size, VkBufferUsageFlags usage, VkMemoryPr
     info.range  = size; /// was:sizeof(UniformBufferObject)
 }
 
+/// no crop support yet; simple
+void Buffer::copy_to(Texture *tx) {
+    auto device = *this->device;
+    auto cmd    = device.begin();
+    auto reg    = VkBufferImageCopy {};
+    reg.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    reg.imageExtent      = { uint32_t(tx->sz.x), uint32_t(tx->sz.y), 1 };
+    vkCmdCopyBufferToImage(cmd, buffer, *tx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
+    device.submit(cmd);
+}
+
 void Buffer::copy_to(Buffer &dst, size_t size) {
-    auto cb = device.begin();
+    auto cb = device->begin();
     VkBufferCopy params {};
     params.size = VkDeviceSize(size);
     vkCmdCopyBuffer(cb, *this, dst, 1, &params);
-    device.submit(cb);
+    device->submit(cb);
 }
 
 Buffer::operator VkDeviceMemory() {

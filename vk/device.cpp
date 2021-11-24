@@ -1,10 +1,37 @@
-#include <dx/dx.hpp>
 #include <vk/vk.hpp>
+#include <vk/window.hpp>
 #include <vk/device.hpp>
 
-Device::Device(GPU *gpu, bool aa, std::vector<const char*> *validation) {
-    std::vector<VkDeviceQueueCreateInfo> vq;
-    std::vector<uint32_t> families = {
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
+void Frame::create(vec<VkImageView> &attachments) {
+    VkFramebufferCreateInfo ci {};
+    ci.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    ci.renderPass      = device->render_pass;
+    ci.attachmentCount = static_cast<uint32_t>(attachments.size());
+    ci.pAttachments    = attachments.data();
+    ci.width           = device->extent.width;
+    ci.height          = device->extent.height;
+    ci.layers          = 1;
+    assert (vkCreateFramebuffer(*device, &ci, nullptr, &framebuffer) == VK_SUCCESS);
+}
+
+uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
+    VkPhysicalDeviceMemoryProperties mprops;
+    vkGetPhysicalDeviceMemoryProperties(gpu, &mprops);
+    ///
+    for (uint32_t i = 0; i < mprops.memoryTypeCount; i++)
+        if ((types & (1 << i)) && (mprops.memoryTypes[i].propertyFlags & props) == props)
+            return i;
+    /// no flags match
+    assert(false);
+    return 0;
+};
+
+Device::Device(GPU *p_gpu, bool aa, bool val) : gpu(*p_gpu) {
+    vec<VkDeviceQueueCreateInfo> vq;
+    vec<uint32_t> families = {
         gpu.index(GPU::Graphics),
         gpu.index(GPU::Present)
     };
@@ -16,24 +43,34 @@ Device::Device(GPU *gpu, bool aa, std::vector<const char*> *validation) {
         q.queueFamilyIndex     = family;
         q.queueCount           = 1;
         q.pQueuePriorities     = &priority;
-        vq.push_back(q);
+        vq                    += q;
     }
 
-    VkPhysicalDeviceFeatures   feat {};
+    VkPhysicalDeviceFeatures feat {};
     feat.samplerAnisotropy     = aa ? VK_TRUE : VK_FALSE;
-    
-    VkDeviceCreateInfo         ci {};
+    ///
+    uint32_t  esz;
+    auto glfw_ext = (const char **)glfwGetRequiredInstanceExtensions(&esz);
+    auto      ext = vec<const char *>(esz);
+    for (int    i = 0; i < esz; i++)
+        ext      += glfw_ext[i];
+    ///
+    if (val)
+        ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    ///
+    VkDeviceCreateInfo ci {};
     ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     ci.queueCreateInfoCount    = uint32_t(vq.size());
-    ci.pQueueCreateInfos       = vq.data();
+    ci.pQueueCreateInfos       = vq;
     ci.pEnabledFeatures        = &feat;
-    ci.enabledExtensionCount   = uint32_t(deviceExtensions.size());
-    ci.ppEnabledExtensionNames = ext.data();
+    ci.enabledExtensionCount   = uint32_t(ext.size());
+    ci.ppEnabledExtensionNames = ext;
 
 #ifndef NDEBUG
-    if (validation) {
-        ci.enabledLayerCount       = uint32_t(validation->size()); /// why do people do static cast when most of the time it effectively does nothing different
-        ci.ppEnabledLayerNames     = validation->data();
+    if (val) {
+        static const char *debug   = "VK_LAYER_KHRONOS_validation";
+        ci.enabledLayerCount       = 1;
+        ci.ppEnabledLayerNames     = &debug;
     }
 #endif
 
@@ -42,182 +79,123 @@ Device::Device(GPU *gpu, bool aa, std::vector<const char*> *validation) {
     vkGetDeviceQueue(device, gpu.index(GPU::Present),  0, &queues[GPU::Present]);
 }
 
-struct SwapChainSupportDetails {
-    VkSurfaceCapabilitiesKHR        caps;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR>   presentModes;
-};
-
-SwapChainSupportDetails swap_support_details(VkPhysicalDevice device) {
-    SwapChainSupportDetails details;
-
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.caps);
-
-    uint32_t formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-
-    if (formatCount != 0) {
-        details.formats.resize(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
-    }
-
-    uint32_t presentModeCount;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
-
-    if (presentModeCount != 0) {
-        details.presentModes.resize(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
-    }
-
-    return details;
-}
-
-VkSurfaceFormatKHR swap_surface_format(const std::vector<VkSurfaceFormatKHR> &formats) {
-    for (const auto &f: formats)s
-        if (f.format     == VK_FORMAT_B8G8R8A8_SRGB &&
-            f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-            return f;
-
-    return formats[0];
-}
- 
-
-VkPresentModeKHR swap_present_mode(const std::vector<VkPresentModeKHR> &modes) {
-    for (const auto &m: modes)
-        if (m == VK_PRESENT_MODE_MAILBOX_KHR)
-            return m;
-
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkExtent2D swap_extent(const VkSurfaceCapabilitiesKHR& caps) {
-    if (caps.currentExtent.width != UINT32_MAX) {
-        return caps.currentExtent;
-    } else {
-        int w, h;
-        glfwGetFramebufferSize(window, &w, &h);
-        VkExtent2D ext = { uint32_t(w), uint32_t(h) };
-        ext.width      = std::clamp(ext.width,  caps.minImageExtent.width,  caps.maxImageExtent.width);
-        ext.height     = std::clamp(ext.height, caps.minImageExtent.height, caps.maxImageExtent.height);
-        return ext;
-    }
-}
-
-uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-    VkPhysicalDeviceMemoryProperties m;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &m);
-
-    for (uint32_t i = 0; i < m.memoryTypeCount; i++)
-        if ((typeFilter & (1 << i)) && (m.memoryTypes[i].propertyFlags & properties) == properties)
-            return i;
-    
-    throw std::runtime_error("failed to find suitable memory type!");
-}
-
-VkImageView Device::create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
-    VkImageView             view;
-    VkImageViewCreateInfo   v {};
-    v.sType                             = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    v.image                             = image;
-    v.viewType                          = VK_IMAGE_VIEW_TYPE_2D;
-    v.format                            = format;
-    v.subresourceRange.aspectMask       = aspectFlags;
-    v.subresourceRange.baseMipLevel     = 0;
-    v.subresourceRange.levelCount       = mipLevels;
-    v.subresourceRange.baseArrayLayer   = 0;
-    v.subresourceRange.layerCount       = 1;
+VkImageView Device::create_iview(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
+    VkImageView view;
+    auto             v = VkImageViewCreateInfo {};
+    v.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    v.image            = image;
+    v.viewType         = VK_IMAGE_VIEW_TYPE_2D;
+    v.format           = format;
+    v.subresourceRange = { aspectFlags, 0, mipLevels, 0, 1 };
     assert (vkCreateImageView(device, &v, nullptr, &view) == VK_SUCCESS);
     return view;
 }
 
 /// setup everything in the Framebuffer vector
-void Device::create_swapchain() {
+void Device::create_swapchain()
+{
+    auto select_surface_format = [](vec<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR {
+        for (const auto &f: formats)
+            if (f.format     == VK_FORMAT_B8G8R8A8_SRGB &&
+                f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                return f;
+        return formats[0];
+    };
+    ///
+    auto select_present_mode = [](vec<VkPresentModeKHR> &modes) -> VkPresentModeKHR {
+        for (const auto &m: modes)
+            if (m == VK_PRESENT_MODE_MAILBOX_KHR)
+                return m;
+        return VK_PRESENT_MODE_FIFO_KHR;
+    };
+    ///
+    auto swap_extent = [](VkSurfaceCapabilitiesKHR& caps) -> VkExtent2D {
+        if (caps.currentExtent.width != UINT32_MAX) {
+            return caps.currentExtent;
+        } else {
+            int w, h;
+            glfwGetFramebufferSize(*Window::first, &w, &h);
+            VkExtent2D ext = { uint32_t(w), uint32_t(h) };
+            ext.width      = std::clamp(ext.width,  caps.minImageExtent.width,  caps.maxImageExtent.width);
+            ext.height     = std::clamp(ext.height, caps.minImageExtent.height, caps.maxImageExtent.height);
+            return ext;
+        }
+    };
+    ///
+    auto     support              = gpu.support;
     uint32_t gfx_index            = gpu.index(GPU::Graphics);
     uint32_t present_index        = gpu.index(GPU::Present);
-    auto     support              = swap_support_details(gpu);
-    auto     surface_format       = swap_surface_format(support.formats);
-    auto     presentMode          = swap_present_mode(support.presentModes);
+    auto     surface_format       = select_surface_format(support.formats);
+    auto     surface_present      = select_present_mode(support.present_modes);
     auto     extent               = swap_extent(support.caps);
     uint32_t frame_count          = support.caps.minImageCount + 1;
-    uint32_t indices[]            = {gfx_index, present_index};
-    
+    uint32_t indices[]            = { gfx_index, present_index };
+    ///
     if (support.caps.maxImageCount > 0 && frame_count > support.caps.maxImageCount)
         frame_count               = support.caps.maxImageCount;
-    
+    ///
     VkSwapchainCreateInfoKHR ci {};
     ci.sType                      = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    ci.surface                    = surface;
+    ci.surface                    = gpu.surface;
     ci.minImageCount              = frame_count;
     ci.imageFormat                = surface_format.format;
     ci.imageColorSpace            = surface_format.colorSpace;
     ci.imageExtent                = extent;
     ci.imageArrayLayers           = 1;
     ci.imageUsage                 = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
+    ///
     if (gfx_index != present_index) {
         ci.imageSharingMode       = VK_SHARING_MODE_CONCURRENT;
         ci.queueFamilyIndexCount  = 2;
         ci.pQueueFamilyIndices    = indices;
     } else
         ci.imageSharingMode       = VK_SHARING_MODE_EXCLUSIVE;
-
+    ///
     ci.preTransform               = support.caps.currentTransform;
     ci.compositeAlpha             = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    ci.presentMode                = presentMode;
+    ci.presentMode                = surface_present;
     ci.clipped                    = VK_TRUE;
-
+    ///
     /// create swap-chain
     assert(vkCreateSwapchainKHR(device, &ci, nullptr, &swap_chain) == VK_SUCCESS);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, nullptr);
-    framebuffers.resize(frame_count);
-    
+    frames.resize(frame_count);
+    ///
     /// get swap-chain images
     vec<VkImage> swap_images;
     swap_images.resize(frame_count);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, swap_images.data());
     format                        = surface_format.format;
     this->extent                  = extent;
-    
+    viewport                      = { 0.0f, 0.0f, r32(extent.width), r32(extent.height), 0.0f, 1.0f };
+    ///
     /// create descriptor pool
     std::array<VkDescriptorPoolSize, 2> ps {};
     ps[0]                         = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, uint32_t(frame_count) };
     ps[1]                         = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(frame_count) };
-
-    VkDescriptorPoolCreateInfo pi {};
-    pi.sType                      = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
-                                      uint32_t(frame_count), uint32_t(ps.size()), &desc_pool,  };
+    VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
+                                      uint32_t(frame_count), uint32_t(ps.size()), ps.data() };
     pi.poolSizeCount              = uint32_t(ps.size());
     pi.pPoolSizes                 = ps.data();
     pi.maxSets                    = uint32_t(frame_count);
-    assert(vkCreateDescriptorPool(device, &pool, nullptr, &desc_pool) == VK_SUCCESS);
-    
+    assert(vkCreateDescriptorPool(device, &pi, nullptr, &desc.pool) == VK_SUCCESS);
+    ///
     /// create view and uniform buffers
     for (size_t i = 0; i < frame_count; i++) {
-        Frame &f                  = frames[i];
-        f.image                   = swap_images[i];
-        f.view                    = create_image_view(f.image, format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-        f.uniform                 = Buffer(sizeof(UniformBufferObject), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        
-        std::array<VkImageView, 3> attachments = {
+        Frame &f  = frames[i];
+        VkImageView view = create_iview(swap_images[i], format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+        f.tx      = Texture { this, { int(extent.width), int(extent.height) }, swap_images[i], view };
+        f.uniform = UniformBuffer<Uniform>(this);
+        ///
+        vec<VkImageView> attachments = {
             colorImageView,
             depthImageView,
             swapChainImageViews[i]
         };
-
-        VkFramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();
-        framebufferInfo.width = swapChainExtent.width;
-        framebufferInfo.height = swapChainExtent.height;
-        framebufferInfo.layers = 1;
-
-        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+        ///
+        auto ci = f(attachments);
+        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS)
             throw std::runtime_error("failed to create framebuffer!");
-        }
-        
     }
 }
 
@@ -362,17 +340,17 @@ void Device::create_command_buffers() {
 
 VkCommandBuffer Device::begin() {
     VkCommandBuffer cb;
-    VkCommandBufferAllocateInfo a {};
+    VkCommandBufferAllocateInfo ai {};
     ///
-    a.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    a.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    a.commandPool        = commandPool;
-    a.commandBufferCount = 1;
-    vkAllocateCommandBuffers(device, &a, &cb);
+    ai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    ai.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    ai.commandPool        = pool;
+    ai.commandBufferCount = 1;
+    vkAllocateCommandBuffers(device, &ai, &cb);
     ///
     VkCommandBufferBeginInfo bi {};
-    bi.sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    bi.flags             = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    bi.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    bi.flags              = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(cb, &bi);
     return cb;
 }

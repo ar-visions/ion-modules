@@ -8,7 +8,7 @@ generate_mipmaps(Device &device, VkImage image, VkFormat imageFormat, int32_t te
 
     assert(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
 
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+    VkCommandBuffer commandBuffer = device.begin();
 
     VkImageMemoryBarrier barrier {};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -81,13 +81,13 @@ generate_mipmaps(Device &device, VkImage image, VkFormat imageFormat, int32_t te
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
         0, nullptr, 0, nullptr, 1, &barrier);
 
-    endSingleTimeCommands(commandBuffer);
+    device.submit(commandBuffer);
 }
 
-VkSampler create_sampler() {
+VkSampler Texture::create_sampler() {
     VkSampler                   sampler;
     VkPhysicalDeviceProperties  props {};
-    vkGetPhysicalDeviceProperties(gpu, &props);
+    vkGetPhysicalDeviceProperties(*device, &props);
 
     VkSamplerCreateInfo si {};
     si.sType                     = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -107,16 +107,17 @@ VkSampler create_sampler() {
     si.maxLod                    = float(mip_levels);
     si.mipLodBias                = 0.0f;
 
-    VkResult r = vkCreateSampler(device, &si, nullptr, &sampler);
+    VkResult r = vkCreateSampler(*device, &si, nullptr, &sampler);
     assert  (r == VK_SUCCESS);
     return sampler;
 }
 
-void create_resources(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits numSamples,
+void Texture::create_resources(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits numSamples,
                       VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
                       VkMemoryPropertyFlags properties, VkImage *image, VkDeviceMemory *imageMemory,
                       VkSampler *sampler)
 {
+    Device &device = *this->device;
     VkImageCreateInfo imi {};
     imi.sType                   = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imi.imageType               = VK_IMAGE_TYPE_2D;
@@ -139,10 +140,10 @@ void create_resources(uint32_t width, uint32_t height, uint32_t mip_levels, VkSa
     VkMemoryAllocateInfo a {};
     a.sType                     = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     a.allocationSize            = req.size;
-    a.memoryTypeIndex           = findMemoryType(req.memoryTypeBits, properties);
+    a.memoryTypeIndex           = device.memory_type(req.memoryTypeBits, properties);
     
-    assert(vkAllocateMemory(device, &a, nullptr, imageMemory) == VK_SUCCESS);
-    vkBindImageMemory(device, *image, *imageMemory, 0);
+    assert(vkAllocateMemory(device, &a, nullptr, &memory) == VK_SUCCESS);
+    vkBindImageMemory(device, *image, memory, 0);
     
     if (sampler)
         *sampler = create_sampler();
@@ -151,14 +152,15 @@ void create_resources(uint32_t width, uint32_t height, uint32_t mip_levels, VkSa
 struct LayoutMapping {
     VkImageLayout           oldLayout;
     VkImageLayout           newLayout;
-    VkAccessFlagBits        srcAccessMask;
-    VkAccessFlagBits        dstAccessMask;
+    uint64_t                srcAccessMask;
+    uint64_t                dstAccessMask;
     VkPipelineStageFlagBits srcStage;
     VkPipelineStageFlagBits dstStage;
 };
 
 void Texture::transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels)
 {
+    Device &device = *this->device;
     static vec<LayoutMapping> mappings = {
         LayoutMapping {
             VK_IMAGE_LAYOUT_UNDEFINED,                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -181,7 +183,7 @@ void Texture::transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
         },
         LayoutMapping {
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -214,90 +216,82 @@ void Texture::transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout
             barrier.srcAccessMask                   = t.srcAccessMask;
             barrier.dstAccessMask                   = t.dstAccessMask;
             ///
-            VkPipelineStageFlags sourceStage        = t.sourceStage;
-            VkPipelineStageFlags destinationStage   = t.destinationStage;
-            ///
-            /// can easily become method calls on a possible Command object from begin
-            /// until i see a need for that i dont want to add anything else
             vkCmdPipelineBarrier(
                 cb,
-                sourceStage, destinationStage,
+                t.srcStage, t.dstStage,
                 0,
                 0, nullptr,
                 0, nullptr,
                 1, &barrier);
             device.submit(cb);
-            return true;
+            return;
         }
     ///
     assert(false);
-    return false;
 }
 
 Texture::operator bool()  { return image != VK_NULL_HANDLE; }
 bool Texture::operator!() { return image == VK_NULL_HANDLE; }
 
-Texture::Texture(vec2i sz, rgba clr, VkFormat format, int mip_levels) : sz(sz) {
-    Device &device = Vulkan::device();
-    rgba   *pixels = (rgba *)malloc(sz.x * sz.y * 4);
-    auto    nbytes = VkDeviceSize(sz.x * sz.y * 4);
-    mip            = mip_levels == 0 ? (uint32_t(std::floor(std::log2(sz.max()))) + 1) : mip_levels;
 
+void Texture::create(rgba *pixels, vec2i sz, VkFormat format, int mip_levels) {
+    Device &device = *this->device;
+    auto    nbytes = VkDeviceSize(sz.x * sz.y * 4);
+    auto    mip    = mip_levels == 0 ? (uint32_t(std::floor(std::log2(sz.max()))) + 1) : mip_levels;
     assert(pixels);
-    for (int i = 0; i < sz; i++)
-        ((rgba *)pixels)[i] = clr;
     
-    Buffer staging = Buffer(nbytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    Buffer staging = Buffer(&device, nbytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     void* data = null;
     vkMapMemory(device, staging, 0, nbytes, 0, &data);
     memcpy(data, pixels, size_t(nbytes));
     vkUnmapMemory(device, staging);
-    free(pixels);
-
-    /// design: we'll create our own sampler in special cases and use device default
-    create_resources(size.x, size.y, mip,
+    
+    create_resources(sz.x, sz.y, mip,
                      VK_SAMPLE_COUNT_1_BIT,
                      format, VK_IMAGE_TILING_OPTIMAL,
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                      &image, &memory, &sampler);
-
-    /// needs param for format
-    transitionImageLayout(image, format,
-                     VK_IMAGE_LAYOUT_UNDEFINED,
-                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                     mip_levels);
-    
-    copyBufferToImage(stagingBuffer, textureImage, uint32_t(texWidth), uint32_t(texHeight));
-    //transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating mipmaps
-
+    transition_layout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mip_levels);
+    staging.copy_to(this); /// this one creeps me out
     staging.destroy();
 
     if (mip > 0)
-        generate_mipmaps(device, image, VK_FORMAT_R8G8B8A8_SRGB, size.x, size.y, mip);
+        generate_mipmaps(device, image, VK_FORMAT_R8G8B8A8_SRGB, sz.x, sz.y, mip);
 }
 
-Texture::Texture(vec2i size, rgba clr, int mip_levels) {
+/// create with solid color
+Texture::Texture(Device *device, vec2i sz, rgba clr, VkFormat format, int mip_levels) : device(device), sz(sz) {
+    rgba *px = (rgba *)malloc(sz.x * sz.y * 4);
+    create(px, sz, format, mip_levels);
+    free(px);
 }
 
-Texture::Texture(Image &im, int mip_levels) {
+/// create with image (rgba required)
+Texture::Texture(Device *device, Image &im, int mip_levels) : device(device), sz(im.size()) {
+    rgba *px = &im.pixel<rgba>(0, 0);
+    create(px, sz, format, mip_levels);
+    free(px);
 }
 
-Texture::operator VkImageView() { // vulkan was clearly made with C++ in mind
+Texture::Texture(Device *device, vec2i sz, VkImage image, VkImageView view):
+                 device(device), sz(sz), image(image), view(view) { /* nothing needed to transfer from buffer */ }
+
+Texture::operator VkImageView &() { // vulkan was clearly made with C++ in mind
     return view;
 }
 
-Texture::operator VkImage() {
+Texture::operator VkImage &() {
     return image;
 }
 
-Texture::operator VkDeviceMemory() {
+Texture::operator VkDeviceMemory &() {
     return memory;
 }
 
 void Texture::destroy() {
-    vkDestroyImageView(device, view,   nullptr);
-    vkDestroyImage(device,     image,  nullptr);
-    vkFreeMemory(device,       memory, nullptr);
+    vkDestroyImageView(*device, view,   nullptr);
+    vkDestroyImage(*device,     image,  nullptr);
+    vkFreeMemory(*device,       memory, nullptr);
 }

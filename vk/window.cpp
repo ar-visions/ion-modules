@@ -76,6 +76,8 @@ void Window::hide() {
     glfwHideWindow(handle);
 }
 
+Window *Window::first = null; // ha!
+
 ///
 /// Window Constructors
 Window::Window(nullptr_t n) { }
@@ -91,6 +93,7 @@ Window::Window(vec2i     sz) {
     glfwSetCursorPosCallback      (handle, glfw_cursor);
     glfwSetCharCallback           (handle, glfw_char);
     glfwSetMouseButtonCallback    (handle, glfw_mbutton);
+    
 }
 
 ///

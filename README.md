@@ -1,14 +1,14 @@
 ## ion-modules README
 [!] Work is on-going at the moment, not all targets are buildable with Vulkan core getting a bit of development\
 Welcome. This repository is host to ion modules, a project aimed at being a lean and build-for-everywhere software framework written in C++17.  Simply clone, and make an app at the same directory space as ion-modules.  A package.json and 4 line CMake boilerplate is all you need from there:\
-#### client example
+#### package.json
 ```json
 {
     "name":     "your-app",
     "version":  "0.22.0"
 }
 ```
-
+#### CMakeLists.txt
 ```cmake
 cmake_minimum_required(VERSION 3.3)
 include(../ion-modules/cmake/main.cmake)
@@ -16,7 +16,20 @@ read_package("package.json" name u v s)
 project(${name})
 main()
 ```
+... And you're off.  Well you still need to make a module folder; so do that.\
+Inside that folder you make a file called 'mod' [which can be blank] so long as it's there. It's an indication that folder is a module.\
+You can't tell anyone, but this format is just CMake with some really easy to use additions.\
+```cmake
+dep(dx matrix media tensorflow:tensorflowlite==dev)
 
+if(NOT WIN32)
+    dep(pthread)
+endif()
+```
+Notice there is a unified dependency syntax here which unifies lib dyn/so, pkg-config, .frameworks, repo:module\
+When we build TensorFlow, we have it in the same peer-repo space as our lib.  That repo has in it a products folder a standard hierarchy of versioned headers, libs and bins for different targets. While it's preferred to 'own' the library you depend on in our opinion its not always easy to do or preferred so you can still use any dependency on the system. The syntax is there to deliver a standard order and clean up what is thought as the ugliest part of software development, the make files.  It turns out using CMake is far and away the cleanest and furthest reaching if you accept some boilerplate.\
+You may remove dependencies with dep(-name)\
+\
 The only thing to change is the name of the app in the json (nothing to modify in CMake)
 C++20 module conversion likely to start taking place as soon as Vulkan code is established.  Where we shine are in general UX facilities.  The framework is driving to be on-par with the latest frameworks such as FireDB and React.  Work is ongoing to establish a Vulkan core for the UX, and after that the tests will build.  As for now we're deep in the trenches of Vulkan abstraction.
 #### client example
