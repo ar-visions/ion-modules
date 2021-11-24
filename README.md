@@ -18,7 +18,8 @@ main()
 ```
 ... And you're off.  Well you still need to make a module folder; so do that.\
 Inside that folder you make a file called 'mod' [which can be blank] so long as it's there. It's an indication that folder is a module.\
-You can't tell anyone, but this format is just CMake with some really easy to use additions.\
+You can't tell anyone, but this format is just CMake with some really easy to use additions.
+#### module/mod
 ```cmake
 dep(dx matrix media tensorflow:tensorflowlite==dev)
 
@@ -27,7 +28,7 @@ if(NOT WIN32)
 endif()
 ```
 Notice there is a unified dependency syntax here which unifies lib dyn/so, pkg-config, .frameworks, repo:module\
-When we build TensorFlow, we have it in the same peer-repo space as our lib.  That repo has in it a products folder a standard hierarchy of versioned headers, libs and bins for different targets. While it's preferred to 'own' the library you depend on in our opinion its not always easy to do or preferred so you can still use any dependency on the system. The syntax is there to deliver a standard order and clean up what is thought as the ugliest part of software development, the make files.  It turns out using CMake is far and away the cleanest and furthest reaching if you accept some boilerplate.\
+When we build TensorFlow, we have it in the same peer-repo space as our lib.  That repo has in it a products folder hierarchy of versioned headers, libs and bins for different targets. While it's preferred to 'own' the library you depend on in our opinion its not always easy to do or preferred so you can still use any dependency on the system. The syntax is there to deliver a standard order and clean up what is thought as the ugliest part of software development, the make files.  It turns out using CMake is far and away the cleanest and furthest reaching if you accept some boilerplate.\
 You may remove dependencies with dep(-name)\
 \
 The only thing to change is the name of the app in the json (nothing to modify in CMake)
