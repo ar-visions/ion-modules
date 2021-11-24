@@ -1,7 +1,7 @@
 ## ion-modules
 \
-Welcome. This repository is host to ion modules, a project aimed at being a lean and build-for-everywhere software framework written in C++17.  Simply clone, and make an app at the same directory space as ion-modules.  A package.json and 4 line CMake boilerplate is all you need from there:
-\
+Welcome. This repository is host to ion modules, a project aimed at being a lean and build-for-everywhere software framework written in C++17.  Simply clone, and make an app at the same directory space as ion-modules.  A package.json and 4 line CMake boilerplate is all you need from there:\
+#### client example \
 \
 ```json
 {
@@ -19,7 +19,7 @@ main()
 ```
 
 The only thing to change is the name of the app in the json (nothing to modify in CMake)\\
-C++20 module conversion likely to start taking place as soon as Vulkan code is established.  Where we shine are in general UX facilities.  The framework is driving to be on-par with the latest frameworks such as FireDB and React.  Work is ongoing to establish a Vulkan core for the UX, and after that the tests will build.  As for now we're deep in the trenches of Vulkan abstraction.\\
+C++20 module conversion likely to start taking place as soon as Vulkan code is established.  Where we shine are in general UX facilities.  The framework is driving to be on-par with the latest frameworks such as FireDB and React.  Work is ongoing to establish a Vulkan core for the UX, and after that the tests will build.  As for now we're deep in the trenches of Vulkan abstraction.\
 #### client example \
 One of the targets building fine now are the web client.  The following shows some Future-based Web::json query in action:\
 \
@@ -44,6 +44,4 @@ int main(int argc, const char *argv[]) {
 ```
 \
 ![alt text](ion-modules.jpg)
-A robust, open source modular framework for advanced ux app and service development\
-Development ongoing in UX and Vulkan-related areas\
-\
+Work is on-going at the moment, not all targets are buildable with Vulkan core getting a bit of development\
