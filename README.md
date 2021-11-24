@@ -29,7 +29,7 @@ if(NOT WIN32)
 endif()
 ```
 Notice there is a unified dependency syntax here which cascade rules down from module-source, to pkg-config/non-pkg-config libraries, macOS .frameworks, lib, repo:module, repo:module==V\
-When we build TensorFlow, we have it in the same peer-repo space as our lib.  That repo has in it a products folder hierarchy of versioned headers, libs and bins for different targets. While it's preferred to 'own' the library you depend on in our opinion its not always easy to do or preferred so you can still use any dependency on the system. The syntax is there to deliver a standard order and clean up what is thought as the ugliest part of software development, the make files.  It turns out using CMake is far and away the cleanest and furthest reaching if you accept some boilerplate. Once your makefiles are using a cascading, modular approach with built in implicit rules it's simply easier to manage them.
+When we build TensorFlow, we have it in the same peer-repo space as our lib.  That repo has in it a products folder hierarchy of versioned headers, libs and bins for different targets. While it's preferred to 'own' the library you depend on in our opinion its not always easy to do or preferred so you can still use any dependency on the system. The syntax is there to deliver a standard order and clean up what is thought as the ugliest part of software development, the make files.  It turns out using CMake is far and away the cleanest and furthest reaching if you accept some boilerplate. Once your makefiles are using a cascading, modular approach with built in implicit rules, it's simply easier to manage them.
 
 You may remove dependencies with dep(-name)\
 Standard-Order (syntax shown):
