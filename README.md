@@ -41,8 +41,8 @@ dep(lib)
 Each module folder has a base set of translation units and headers in its folder, with app targets built from apps and tests built from tests.\
 Tests require exit code 0 on every app target in order to pass a 'package' target.
 #### Progress... 22%
-C++20 module conversion likely to start taking place as soon as Vulkan code is established [long and enduring process so far].  Where we are to shine is in general UX facilities, providing next gen composition facilities for a variety of domains. The framework is driving to be a major, sensible alternative to popular offerings. Work is ongoing to establish a Vulkan core for :ux:, and after that the tests will build.  As for now we're deep in the trenches of Vulkan abstraction.
-#### client example
+C++20 module conversion likely to start taking place as soon as Vulkan code is established [long and enduring process so far].  Where we are to shine is in general UX facilities, providing next gen composition facilities for a variety of domains. The framework is driving to be a major, sensible alternative to popular offerings. Work is ongoing to establish a Vulkan core for UX, and after that the tests will build.  As for now we're deep in the trenches of Vulkan abstraction.
+#### Working https secure client example
 One of the targets building fine now are the web client.  The following shows some Future-based Web::json query in action:
 ```c++
 #include <web/web.hpp>
@@ -63,5 +63,6 @@ int main(int argc, const char *argv[]) {
     return Async::await();
 }
 ```
+** Important to run this binary with the cwd set to the resource 'res' dir in web which has the HTTPS trust cert for the domain you are querying in the example.
 \
 ![alt text](ion-modules.jpg)
