@@ -5,4 +5,4 @@ xcode
 ai/gen/*
 ai/data/*
 extern/*
-store/res/*.sqlite
+dx/res/*.sqlite

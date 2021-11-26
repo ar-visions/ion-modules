@@ -5,16 +5,40 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-void Frame::create(vec<VkImageView> &attachments) {
+Pipeline &Plumbing::operator[](std::string n) {
+    return *pipelines[n];
+}
+
+Pipeline &Device::operator[](std::string n) {
+    return plumbing[n];
+}
+
+void Plumbing::update(Frame &frame) {
+    Device &device = *this->device;
+    for (auto &[n, p]: pipelines) {
+        if (frame.render_commands.count(n))
+            vkFreeCommandBuffers(device, pool, 1, &frame.render_commands[n]);
+        auto ai = VkCommandBufferAllocateInfo {
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            null, pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
+        assert(vkAllocateCommandBuffers(device, &ai, &frame.render_commands[n]) == VK_SUCCESS);
+        Pipeline  &pipeline = plumbing[n];
+        VkCommandBuffer &rc = frame.render_commands[n];
+        pipeline.update(rc);
+    }
+}
+
+void Frame::create(vec<VkImageView> attachments) {
+    auto &device = *this->device;
     VkFramebufferCreateInfo ci {};
     ci.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    ci.renderPass      = device->render_pass;
+    ci.renderPass      = device.render_pass;
     ci.attachmentCount = static_cast<uint32_t>(attachments.size());
     ci.pAttachments    = attachments.data();
-    ci.width           = device->extent.width;
-    ci.height          = device->extent.height;
+    ci.width           = device.extent.width;
+    ci.height          = device.extent.height;
     ci.layers          = 1;
-    assert (vkCreateFramebuffer(*device, &ci, nullptr, &framebuffer) == VK_SUCCESS);
+    assert (vkCreateFramebuffer(device, &ci, nullptr, &framebuffer) == VK_SUCCESS);
 }
 
 uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
@@ -79,21 +103,79 @@ Device::Device(GPU *p_gpu, bool aa, bool val) : gpu(*p_gpu) {
     vkGetDeviceQueue(device, gpu.index(GPU::Present),  0, &queues[GPU::Present]);
 }
 
-VkImageView Device::create_iview(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
-    VkImageView view;
-    auto             v = VkImageViewCreateInfo {};
-    v.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    v.image            = image;
-    v.viewType         = VK_IMAGE_VIEW_TYPE_2D;
-    v.format           = format;
-    v.subresourceRange = { aspectFlags, 0, mipLevels, 0, 1 };
-    assert (vkCreateImageView(device, &v, nullptr, &view) == VK_SUCCESS);
-    return view;
+/// essentially a series of tubes...
+void Device::update() {
+    Pipeline &pipeline = *p;
+    uint32_t  frame_count = frames.size();
+    ///
+    /// create VkCommandBuffer for pipelines across all frames
+    /// create view, uniform buffer, render command
+    for (size_t i = 0; i < frame_count; i++) {
+        VkImage     image = swap_images[i];
+        VkImageView  view = Texture::create_view(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+        Frame      &frame = frames[i];
+        if (frame.tx)
+            frame.tx.destroy();
+        frame.tx          = Texture { this, { int(extent.width), int(extent.height) }, image, view };
+        if (frame.uniform)
+            frame.uniform.destroy();
+        frame.uniform     = UniformBuffer<Uniform>(this);
+        frame.create({ tx_color, tx_depth, frame.tx });
+        plumbing.update(frame);
+    }
 }
 
-/// setup everything in the Framebuffer vector
-void Device::create_swapchain()
-{
+/// a series of tubes...
+void Device::plumb() {
+    Pipeline &pipeline    = *p;
+    uint32_t  frame_count = frames.size();
+    ///
+    /// create VkCommandBuffer for pipelines across all frames
+    /// create view, uniform buffer, render command
+    for (size_t i = 0; i < frame_count; i++) {
+        VkImage       image = swap_images[i];
+        VkImageView    view = Texture::create_view(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+        Frame        &frame = frames[i];
+        frame.tx            = Texture { this, { int(extent.width), int(extent.height) }, image, view };
+        frame.uniform       = UniformBuffer<Uniform>(this);
+        frame.create({ tx_color, tx_depth, frame.tx });
+        frame.pipeline      = &pipeline; /// will need to be a vector or map
+        ///
+        VkCommandBuffer &rc = frame.render_command;
+        vkFreeCommandBuffers(device, pool, 1, &rc);
+        /// needs to delete previous tubing
+        auto     alloc_info = VkCommandBufferAllocateInfo {
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, null, pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
+        assert(vkAllocateCommandBuffers(device, &alloc_info, &rc) == VK_SUCCESS);
+        ///
+        auto     begin_info = VkCommandBufferBeginInfo {
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+        assert(vkBeginCommandBuffer(rc, &begin_info) == VK_SUCCESS);
+        /// consecutive ones intra frame would have an alpha as 0 but its a bit simpleton right now
+        /// this needs to be called when a pipeline is initializing
+        pipeline(frame, rc);
+        assert (vkEndCommandBuffer(rc) == VK_SUCCESS);
+    }
+}
+
+void Device::initialize_swap(Pipeline &pipeline) {
+    plumbing = Plumbing { this };
+    vec2i sz = vec2i { int(extent.width), int(extent.height) };
+    /// we really need implicit flagging on these if we can manage it.
+    tx_color = Texture { this, sz, null,
+        VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /// other: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        msaa_samples,
+        format, -1 };
+    ///
+    tx_depth = Texture { this, sz, null,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT,
+        msaa_samples,
+        format, -1 };
+    
     auto select_surface_format = [](vec<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR {
         for (const auto &f: formats)
             if (f.format     == VK_FORMAT_B8G8R8A8_SRGB &&
@@ -168,56 +250,43 @@ void Device::create_swapchain()
     format                        = surface_format.format;
     this->extent                  = extent;
     viewport                      = { 0.0f, 0.0f, r32(extent.width), r32(extent.height), 0.0f, 1.0f };
+    
+    uint32_t frame_count = frames.size();
     ///
     /// create descriptor pool
     std::array<VkDescriptorPoolSize, 2> ps {};
-    ps[0]                         = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, uint32_t(frame_count) };
-    ps[1]                         = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(frame_count) };
+    ps[0]                         = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frame_count };
+    ps[1]                         = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count };
     VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
-                                      uint32_t(frame_count), uint32_t(ps.size()), ps.data() };
+                                      frame_count, uint32_t(ps.size()), ps.data() };
     pi.poolSizeCount              = uint32_t(ps.size());
     pi.pPoolSizes                 = ps.data();
-    pi.maxSets                    = uint32_t(frame_count);
+    pi.maxSets                    = frame_count;
     assert(vkCreateDescriptorPool(device, &pi, nullptr, &desc.pool) == VK_SUCCESS);
-    ///
-    /// create view and uniform buffers
-    for (size_t i = 0; i < frame_count; i++) {
-        Frame &f  = frames[i];
-        VkImageView view = create_iview(swap_images[i], format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-        f.tx      = Texture { this, { int(extent.width), int(extent.height) }, swap_images[i], view };
-        f.uniform = UniformBuffer<Uniform>(this);
-        ///
-        vec<VkImageView> attachments = {
-            colorImageView,
-            depthImageView,
-            swapChainImageViews[i]
-        };
-        ///
-        auto ci = f(attachments);
-        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS)
-            throw std::runtime_error("failed to create framebuffer!");
+}
+
+VkFormat supported_format(VkPhysicalDevice gpu, vec<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+    for (VkFormat format: candidates) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(gpu, format, &props);
+
+        bool fmatch = (props.linearTilingFeatures & features) == features;
+        bool tmatch = (tiling == VK_IMAGE_TILING_LINEAR || tiling == VK_IMAGE_TILING_OPTIMAL);
+        if  (fmatch && tmatch)
+            return format;
     }
+
+    throw std::runtime_error("failed to find supported format!");
 }
-
-void Device::create_color_resources() {
-    
-    tx_color = Texture( vec2i { extent.width, extent.height }, format,  )
-    
-    VkFormat colorFormat = swapChainImageFormat;
-
-    createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage, colorImageMemory);
-    colorImageView = createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-}
-
-void Device::create_depth_resources() {
-    VkFormat depthFormat = findDepthFormat();
-
-    createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
-    depthImageView = createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-}
-
 
 void Device::create_render_pass() {
+    auto depth_format = [](VkPhysicalDevice gpu) -> VkFormat {
+        return supported_format(gpu,
+            {VK_FORMAT_D32_SFLOAT,    VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+             VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+        );
+    };
+    
     VkAttachmentDescription color {};
     color.format                = format;
     color.samples               = msaa_samples;
@@ -229,7 +298,7 @@ void Device::create_render_pass() {
     color.finalLayout           = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentDescription depth {};
-    depth.format                = find_depth_format();
+    depth.format                = depth_format(gpu); /// simplify or store
     depth.samples               = msaa_samples;
     depth.loadOp                = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth.storeOp               = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -286,56 +355,6 @@ void Device::create_render_pass() {
     rpi.pDependencies           = &dep;
 
     assert(vkCreateRenderPass(device, &rpi, nullptr, &render_pass) == VK_SUCCESS);
-}
-
-
-void Device::create_command_buffers() {
-    commandBuffers.resize(swapChainFramebuffers.size());
-
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = (uint32_t) commandBuffers.size();
-
-    if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate command buffers!");
-    }
-
-    for (size_t i = 0; i < commandBuffers.size(); i++) {
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-        if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS)
-            throw std::runtime_error("failed to begin recording command buffer!");
-
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = renderPass;
-        renderPassInfo.framebuffer = swapChainFramebuffers[i];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = swapChainExtent;
-
-        std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-        clearValues[1].depthStencil = {1.0f, 0};
-
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
-        vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-            vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-            VkBuffer vertexBuffers[] = {vertexBuffer};
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-            vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
-            vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-        vkCmdEndRenderPass(commandBuffers[i]);
-
-        if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
-            throw std::runtime_error("failed to record command buffer!");
-    }
 }
 
 VkCommandBuffer Device::begin() {

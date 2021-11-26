@@ -93,7 +93,6 @@ Window::Window(vec2i     sz) {
     glfwSetCursorPosCallback      (handle, glfw_cursor);
     glfwSetCharCallback           (handle, glfw_char);
     glfwSetMouseButtonCallback    (handle, glfw_mbutton);
-    
 }
 
 ///

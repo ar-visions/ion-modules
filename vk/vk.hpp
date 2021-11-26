@@ -48,11 +48,10 @@ struct Buffer {
     VkDescriptorBufferInfo info;
     VkBuffer       buffer;
     VkDeviceMemory memory;
-    ///
     void           destroy();
     operator       VkBuffer();
     operator       VkDeviceMemory();
-    
+    ///
     Buffer(Device *, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
     void copy_to(Buffer &, size_t);
     void copy_to(Texture *);
@@ -61,16 +60,41 @@ struct Buffer {
     }
 };
 
-template <typename V>
-struct VertexBuffer {
+struct IBufferData {
     Buffer          buffer;
+    operator VkBuffer() {
+        return buffer;
+    }
+};
+
+struct VBufferData {
+    Buffer          buffer;
+    operator VkBuffer() {
+        return buffer;
+    }
+};
+
+/// its the stack, thats all.
+template <typename V>
+struct VertexBuffer:VBufferData {
+    VBufferData buffer;
+    ///
     VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
-        return {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &buffer // lol, guessing..
-        };
+        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
+                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
     VertexBuffer(vec<V> &) { }
+};
+
+template <typename I>
+struct IndexBuffer:VBufferData {
+    VBufferData buffer;
+    ///
+    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
+        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
+                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
+    }
+    IndexBuffer(vec<I> &) { }
 };
 
 template <typename U>
@@ -98,45 +122,62 @@ struct Uniform {
 ///
 struct Texture {
     protected:
-    void create(rgba *pixels, vec2i sz, VkFormat format, int mip_levels);
-    VkSampler create_sampler();
-    void      create_resources(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits numSamples,
-                               VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-                               VkMemoryPropertyFlags properties, VkImage *image, VkDeviceMemory *imageMemory, VkSampler *sampler);
+        void create(rgba *pixels);
+        void create_sampler();
+        void create_resources();
+        ///
     public:
-    Device        *device     = null;
-    VkImage        image      = VK_NULL_HANDLE;
-    VkImageView    view       = VK_NULL_HANDLE;
-    VkDeviceMemory memory     = VK_NULL_HANDLE;
-    VkSampler      sampler    = VK_NULL_HANDLE;
-    VkFormat       format;
-    vec2i          sz         = { 0, 0 };
-    int            mip_levels = 0;
-    void           destroy();
-    void           transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels);
-    ///
-    Texture(Device *device, vec2i size, rgba clr, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB, int mip_levels = -1);
-    Texture(Device *device, Image &im, int mip_levels = -1);
-    Texture(Device *device, vec2i sz, VkImage image, VkImageView view);
-    ///
-    operator VkDescriptorImageInfo() {
-        return { sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    }
-    ///
-    operator  bool();
-    bool operator!();
-    operator VkImage &();
-    operator VkImageView &();
-    operator VkDeviceMemory &();
+        Device                 *device     = null;
+        VkImage                 image      = VK_NULL_HANDLE;
+        VkImageView             view       = VK_NULL_HANDLE;
+        VkDeviceMemory          memory     = VK_NULL_HANDLE;
+        VkSampler               sampler    = VK_NULL_HANDLE;
+        VkFormat                format;
+        vec2i                   sz         = { 0, 0 };
+        int                     mip_levels = 0;
+        VkMemoryPropertyFlags   mprops     = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        VkImageUsageFlags       usage;
+        VkImageAspectFlags      aflags;
+        VkImageTiling           tiling;
+        VkSampleCountFlagBits   msaa;
+        ///
+        void destroy();
+        void transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels);
+        static VkImageView create_view(VkDevice, VkImage, VkFormat, VkImageAspectFlags, uint32_t mipLevels);
+    
+        ///
+        /// we need to create the color resources with texture as well, simplify flags if possible
+        /// int = mip levels
+        int get_mips(int mip_levels);
+        Texture(nullptr_t n = null) { }
+        Texture(Device *, vec2i, rgba,
+                VkImageUsageFlags, VkMemoryPropertyFlags, VkImageAspectFlags, VkSampleCountFlagBits,
+                VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1);
+        Texture(Device *device, Image &im,
+                VkImageUsageFlags, VkMemoryPropertyFlags, VkImageAspectFlags, VkSampleCountFlagBits,
+                VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1);
+        Texture(Device *device, vec2i sz, VkImage image, VkImageView view); /// dont use.
+        ///
+        operator VkDescriptorImageInfo() {
+            return { sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        }
+        ///
+        operator  bool();
+        bool operator!();
+        operator VkImage &();
+        operator VkImageView &();
+        operator VkDeviceMemory &();
 };
 
+/// What do you call this controller?
 struct Frame {
     Device                *device;
     Texture                tx; /// just image and view used; no sampler
     VkFramebuffer          framebuffer;
     UniformBuffer<Uniform> uniform;
+    map<str, VkCommandBuffer> render_commands;
     void destroy(VkDevice &device);
-    void create(vec<VkImageView> &attachments);
+    void create(vec<VkImageView> attachments);
     operator VkFramebuffer &() {
         return framebuffer;
     }
@@ -146,19 +187,27 @@ struct Frame {
 struct Descriptor {
     VkDescriptorSetLayout layout;
     VkDescriptorPool      pool;
-    operator VkDescriptorSetLayout &() {
-        return layout;
-    }
-    operator VkDescriptorPool &() {
-        return pool;
-    }
+    operator VkDescriptorSetLayout &() { return layout; }
+    operator VkDescriptorPool      &() { return pool;   }
+};
+
+struct PipelineData;
+struct Plumbing {
+protected:
+    Device *device;
+    std::map<std::string, PipelineData *> pipelines;
+public:
+    PipelineData &operator[](std::string n);
+    void update(Frame &frame);
 };
 
 struct Device {
-    void        create_swapchain();
-    void        create_command_buffers();
-    void        create_render_pass();
-    VkImageView create_iview(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+    void                  create_swapchain();
+    void                  create_command_buffers();
+    void                  create_render_pass();
+    VkImageView           create_iview(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+    void                  update();
+    
     VkSampleCountFlagBits msaa_samples;
     VkRenderPass          render_pass;
     Descriptor            desc;
@@ -173,6 +222,11 @@ struct Device {
     VkViewport            viewport;
     VkRect2D              sc;
     vec<Frame>            frames;
+    Texture               tx_color;
+    Texture               tx_depth;
+    Plumbing              plumbing;
+    
+    PipelineData &operator[](std::string n);
     ///
     void            initialize();
     void            destroy();
@@ -224,33 +278,45 @@ struct Vertex {
             { 2, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, uv)    }
         };
     }
-    static VkVertexInputBindingDescription bind() {
-        return { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
-    }
 };
 
-template <typename U, typename V>
-struct Pipeline {
-protected:
+struct PipelineData {
+    std::string                name;
     map<std::string, int>      ubo_ids; /// internal.
     Device                    *device;
     vec<VkDescriptorSet>       desc_sets;
     VkPipelineLayout           layout;
     VkPipeline                 pipeline;
-    ///
-public:
+    vec<VertexBufferData *>    vx;
+    vec<IndexBufferData *>     ix;
+    bool                       enabled;
     map<std::string, r32>      f32;
     map<std::string, vec2f>    v2;
     map<std::string, vec3f>    v3;
     map<std::string, vec4f>    v4;
-    map<std::string, Texture>  tx; /// this is great, and must be passed into uniform
+    map<std::string, Texture>  tx;
     ///
-    void create_descriptor_sets() {
+    operator bool () { return  enabled;  }
+    bool operator!() { return !enabled;  }
+    void enable(bool en) { enabled = en; }
+};
+
+/// we need high level abstraction to get to a vulkanized component model
+template <typename U, typename V>
+struct Pipeline:PipelineData {
+    void bind_descriptions() {
         Device         &device = *this->device;
+        auto          bindings = vec<VkDescriptorSetLayoutBinding> {
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
+            { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }};
+        VkDescriptorSetLayoutCreateInfo li = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr, 0, uint32_t(bindings.size()), bindings.data() };
+        assert(vkCreateDescriptorSetLayout(pipeline, &li, nullptr, &layout) == VK_SUCCESS);
+        ///
         const size_t  n_frames = device.frames.size();
         auto           layouts = std::vector<VkDescriptorSetLayout> (device.frames.size(), device); /// add to vec.
         auto                ai = VkDescriptorSetAllocateInfo {};
-        ///
         ai.sType               = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         ai.descriptorPool      = device;
         ai.descriptorSetCount  = n_frames;
@@ -269,36 +335,25 @@ public:
             vkUpdateDescriptorSets(device, uint32_t(w.size()), w, 0, nullptr);
         }
     }
-    
-    VkShaderModule shader_module(path_t path) {
-        VkShaderModule m;
-        str code = str::read_file(path);
-        auto  ci = VkShaderModuleCreateInfo {
-            VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, null, 0,
-            code.length(), (const uint32_t *)code.cstr()
-        };
-        assert (vkCreateShaderModule(pipeline, &ci, null, &m) == VK_SUCCESS);
-        return m;
-    }
-    
-    /// this can be a method on device as well, pipeline<shader, Vertex>
-    Pipeline(Device *dev, str name) : device(device) {
-        Device      &device = *dev;
+    ///
+    void create_shaders() {
+        Device      &device = *this->device;
         VkShaderModule vert = shader_module(str::format("shaders/{0}.vert.spv", {name}));
         VkShaderModule frag = shader_module(str::format("shaders/{0}.frag.spv", {name}));
 
         vec<VkPipelineShaderStageCreateInfo> stages {{
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
-            VK_SHADER_STAGE_VERTEX_BIT,   vert, name.cstr(), null
+            VK_SHADER_STAGE_VERTEX_BIT,   vert, name.c_str(), null
         }, {
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
-            VK_SHADER_STAGE_FRAGMENT_BIT, frag, name.cstr(), null
+            VK_SHADER_STAGE_FRAGMENT_BIT, frag, name.c_str(), null
         }};
-        
-        auto binding = V::bind();
+
+        auto binding = VkVertexInputBindingDescription {
+            0, sizeof(V), VK_VERTEX_INPUT_RATE_VERTEX
+        };
         auto attrs   = V::attrs();
 
-        VkVertexInputBindingDescription binding_desc = { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
         VkPipelineVertexInputStateCreateInfo vertex_info {};
         vertex_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertex_info.vertexBindingDescriptionCount   = 1;
@@ -311,7 +366,6 @@ public:
         topology.topology                           = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         topology.primitiveRestartEnable             = VK_FALSE;
         
-        /// #
         const std::vector<Vertex> vertices = {
             {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
             {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
@@ -321,7 +375,6 @@ public:
         const std::vector<uint16_t> indices = {
             0, 1, 2, 2, 3, 0
         };
-        
 
         /// viewport
         VkViewport viewport = device;
@@ -380,8 +433,6 @@ public:
         ///
         assert(vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline) == VK_SUCCESS);
         ///
-        /// Pipeline <Shader, Vertex>(device; Enum for DisplayType)
-        ///
         VkGraphicsPipelineCreateInfo pi {};
         pi.sType                                    = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pi.stageCount                               = stages.size();
@@ -404,18 +455,50 @@ public:
         vkDestroyShaderModule(device, vert, nullptr);
     }
     
-    void create_descriptor_set_layout() {
-        auto bindings = vec<VkDescriptorSetLayoutBinding> {
-            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
-            { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }
-        };
-        VkDescriptorSetLayoutCreateInfo li = {
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            nullptr, 0, uint32_t(bindings.size()), bindings.data()
-        };
-        assert(vkCreateDescriptorSetLayout(pipeline, &li, nullptr, &layout) == VK_SUCCESS);
+    /// throw things in a tube
+    void operator()(Frame &frame, VkCommandBuffer &rc) { ///
+        auto        &device = *this->device;
+        auto   clear_values = vec<VkClearValue> {
+            {        .color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
+            { .depthStencil = {1.0f, 0}}};
+        auto    render_info = VkRenderPassBeginInfo {
+            VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null, device, frame,
+            {{0,0}, device.extent}, uint32_t(clear_values.size()), clear_values };
+        vkCmdBeginRenderPass(rc, &render_info, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBindPipeline(rc, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            vec<VkBuffer> buffers = vec<VkBuffer>(vx.size());
+            /// iterate through VertexBufferData
+            for (auto &v: vx) /// this should be a pair, probably..
+                buffers += v;
+            VkDeviceSize   offsets[] = {0};
+            vkCmdBindVertexBuffers(rc, 0, buffers.size(), buffers, offsets);
+        
+            /// 32bit indexing seems like a basic default but it should support this param changed through template type I
+            /// ibo for creating primitives in reference to vbo
+            
+            vkCmdBindIndexBuffer(rc, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindDescriptorSets(rc, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &pipeline.desc_set[i], 0, nullptr);
+            vkCmdDrawIndexed(rc, uint32_t(indices.size()), 1, 0, 0, 0);
+        vkCmdEndRenderPass(rc);
     }
-
+    
+    /// produce VkShaderModule from source
+    VkShaderModule shader_module(path_t path) {
+        VkShaderModule m;
+        str code = str::read_file(path);
+        auto  ci = VkShaderModuleCreateInfo {
+            VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, null, 0,
+            code.length(), (const uint32_t *)code.cstr()
+        };
+        assert (vkCreateShaderModule(pipeline, &ci, null, &m) == VK_SUCCESS);
+        return m;
+    }
+    
+    /// this can be a method on device as well, pipeline<shader, Vertex>
+    Pipeline(Device *dev, str name) : device(device) {
+        bind_descriptions();
+        create_shaders();
+    }
 };
 
 
