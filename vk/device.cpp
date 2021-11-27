@@ -456,6 +456,10 @@ Device::operator VkDevice() {
     return device;
 }
 
+Device::operator VkRenderPass() {
+    return render_pass;
+}
+
 ///
 void Device::destroy() {
     for (auto &f: frames)

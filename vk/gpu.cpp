@@ -48,6 +48,10 @@ GPU::GPU(VkPhysicalDevice gpu, VkSurfaceKHR surface) : surface(surface), gpu(gpu
     }
 }
 
+GPU::operator VkPhysicalDevice() {
+    return gpu;
+}
+
 bool GPU::operator()(Capability caps) {
     bool g = gfx.t   == var::ui32;
     bool p = present == var::ui32;

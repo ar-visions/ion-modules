@@ -172,7 +172,7 @@ int Vulkan::main(FnRender fn, Composer *composer) {
 
         Composer &cmp = *composer;
         cmp(fn(args));
-        set_title(cmp.root->props.text.label);
+        w.set_title(cmp.root->props.text.label);
         if (!cmp.process())
             glfwWaitEventsTimeout(1.0);
         

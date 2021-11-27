@@ -403,9 +403,11 @@ map<str, str> Terminal::t_bg_colors_8 = {
     { "#ffffff",  "\u001b[47m" }};
 
 
+void ICanvasBackend::clear    (DrawState &st)  { }
+
 void ICanvasBackend::texture  (DrawState &st, Image *im)  {
     st.im = im;
-};
+}
 
 void ICanvasBackend::translate(DrawState &st, vec2  &tr)  { st.m = st.m.translate(tr); }
 void ICanvasBackend::    scale(DrawState &st, vec2  &sc)  { st.m = st.m.scale(sc); }
