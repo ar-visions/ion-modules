@@ -136,7 +136,7 @@ struct Composer {
     /// main update / render / draw function
     void operator()(Element base_render) {
         update(null, &root, base_render);
-        root->query([&](node *n) {
+        root->select([&](node *n) {
             if (n != root)
                 n->path = n->props.region(n, n->parent);
             return null;
@@ -144,7 +144,7 @@ struct Composer {
     }
     
     vec<node *> query(std::function<node *(node *)> fn) {
-        return root->query(fn);
+        return root->select(fn);
     }
     
     void draw() {

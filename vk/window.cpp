@@ -95,6 +95,15 @@ Window::Window(vec2i     sz) {
     glfwSetMouseButtonCallback    (handle, glfw_mbutton);
 }
 
+int Window::loop(std::function<void()> fn) {
+    /// render loop with node event processing
+    while (!glfwWindowShouldClose(handle)) {
+        fn();
+        glfwPollEvents();
+    }
+    return 0;
+}
+
 ///
 /// Window Destructor
 Window::~Window() {

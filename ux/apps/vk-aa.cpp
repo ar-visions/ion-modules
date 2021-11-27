@@ -1644,6 +1644,7 @@ private:
         }
     }
 
+    /// uniform should be set by lambda
     void updateUniformBuffer(uint32_t currentImage) {
         static auto startTime = std::chrono::high_resolution_clock::now();
 

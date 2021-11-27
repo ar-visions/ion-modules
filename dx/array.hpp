@@ -30,8 +30,8 @@ public:
             a += i;
         return a;
     }
-    void resize(size_t sz) {
-        a.resize(sz);
+    void resize(size_t sz, T v = T()) {
+        a.resize(sz, v);
     }
     int count(T v) {
         int ret = 0;
@@ -91,7 +91,7 @@ public:
     inline void reserve(size_t sz)  { a.reserve(sz);                     }
     inline size_t size() const      { return a.size();                   }
     inline size_t capacity() const  { return a.capacity();               }
-    inline var query_first(std::function<var(T &)> fn) const           {
+    inline var select_first(std::function<var(T &)> fn) const           {
         for (auto &i: a) {
             var r = fn(i);
             if (r)

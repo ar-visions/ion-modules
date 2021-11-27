@@ -6,6 +6,12 @@
 #include <media/canvas.hpp>
 #include <media/obj.hpp>
 
+
+struct Device;
+VkDevice         device_handle(Device *device);
+VkPhysicalDevice    gpu_handle(Device *device);
+uint32_t           memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags props);
+
 ///
 /// a good vulkan api will be fully accessible but minimally interfaced
 struct GPU {
@@ -25,13 +31,13 @@ public:
         vec<VkPresentModeKHR>    present_modes;
         bool                     ansio;
     };
-    
     Support          support;
     VkSurfaceKHR     surface;
     VkPhysicalDevice gpu;
     VkQueue          queues[2];
     ///
     GPU(VkPhysicalDevice, VkSurfaceKHR);
+    GPU(nullptr_t n = null) { }
     uint32_t                index(Capability);
     void                    destroy();
     operator                bool();
@@ -40,21 +46,63 @@ public:
     VkSampleCountFlagBits   max_sampling();
 };
 
-/// a good vulkan api must be fully accessible but minimally interfaced.
+VkDevice handle(Device *device);
+
 struct Device;
 struct Texture;
 struct Buffer {
+    ///
     Device        *device;
     VkDescriptorBufferInfo info;
     VkBuffer       buffer;
     VkDeviceMemory memory;
+    size_t         sz;
+    size_t         type_size;
     void           destroy();
     operator       VkBuffer();
     operator       VkDeviceMemory();
     ///
+    Buffer(nullptr_t n = null) : device(null) { }
     Buffer(Device *, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
-    void copy_to(Buffer &, size_t);
-    void copy_to(Texture *);
+    
+    template <typename T>
+    Buffer(Device *d, vec<T> &v, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprops): sz(v.size() * sizeof(T)) {
+        VkDevice device = handle(d);
+        VkBufferCreateInfo bi {};
+        bi.sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bi.size         = VkDeviceSize(sz);
+        bi.usage        = usage;
+        bi.sharingMode  = VK_SHARING_MODE_EXCLUSIVE;
+
+        assert(vkCreateBuffer(device, &bi, nullptr, &buffer) == VK_SUCCESS);
+        VkMemoryRequirements req;
+        vkGetBufferMemoryRequirements(device, buffer, &req);
+        
+        /// allocate and bind
+        VkMemoryAllocateInfo alloc {};
+        alloc.sType             = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        alloc.allocationSize    = req.size;
+        VkPhysicalDevice gpu    = gpu_handle(d);
+        alloc.memoryTypeIndex   = memory_type(gpu, req.memoryTypeBits, mprops);
+        assert(vkAllocateMemory(device, &alloc, nullptr, &memory) == VK_SUCCESS);
+        vkBindBufferMemory(device, buffer, memory, 0);
+        
+        /// transfer memory
+        assert(v.size() == sz / sizeof(T));
+        void* data;
+          vkMapMemory(device, memory, 0, sz, 0, &data);
+               memcpy(data,   v.data(),  sz);
+        vkUnmapMemory(device, memory);
+
+        info        = VkDescriptorBufferInfo {};
+        info.buffer = buffer;
+        info.offset = 0;
+        info.range  = sz; /// was:sizeof(UniformBufferObject)
+    }
+    
+    void  copy_to(Buffer &, size_t);
+    void  copy_to(Texture *);
+    ///
     inline operator VkDescriptorBufferInfo &() {
         return info;
     }
@@ -62,54 +110,78 @@ struct Buffer {
 
 struct IBufferData {
     Buffer          buffer;
-    operator VkBuffer() {
-        return buffer;
-    }
+    bool            short_index;
+    operator VkBuffer() { return buffer;    }
+    size_t       size() { return buffer.sz; }
 };
 
 struct VBufferData {
     Buffer          buffer;
-    operator VkBuffer() {
-        return buffer;
-    }
+    operator VkBuffer() { return buffer;    }
+    size_t       size() { return buffer.sz; }
 };
 
 /// its the stack, thats all.
 template <typename V>
 struct VertexBuffer:VBufferData {
-    VBufferData buffer;
     ///
     VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
         return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
-    VertexBuffer(vec<V> &) { }
+    VertexBuffer(VkDevice d, vec<V> &v) {
+        buffer = {
+            d, sizeof(V) * v.size(),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
+    }
+    size_t size() { return buffer.sz / sizeof(V); }
 };
 
 template <typename I>
-struct IndexBuffer:VBufferData {
-    VBufferData buffer;
+struct IndexBuffer:IBufferData {
     ///
     VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
         return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
-    IndexBuffer(vec<I> &) { }
+    IndexBuffer(VkDevice d, vec<I> &i) {
+        if constexpr (std::is_same_v<I, uint16_t>)
+            short_index = true;
+        else
+            short_index = false;
+        buffer = {
+            d, sizeof(I) * i.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
+    }
+    size_t size() { return buffer.sz / sizeof(I); }
+};
+
+struct UniformBufferData { /// UniformsData
+    Device *device;
+    Buffer  buffer;
+    void   *data; /// its good to fix the address memory, update it as part of the renderer, if the user goes away the UniformBuffer will as well.
+    
+    UniformBufferData(Device *device = null) { }
+    VkWriteDescriptorSet operator()(VkDescriptorSet &ds);
+    void destroy();
+    void transfer();
+    operator bool() {
+        return device != null;
+    }
+    bool operator!() {
+        return device == null;
+    }
 };
 
 template <typename U>
-struct UniformBuffer {
-    Buffer buffer;
-    ///
-    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
-        return {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &buffer
-        };
-    }
-    UniformBuffer(Device *device) {
-        buffer = Buffer { device, sizeof(U), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
+struct UniformBuffer:UniformBufferData { /// will be best to call it 'Uniforms'
+    UniformBuffer(Device *device = null, U *data = null) {
+        this->device = device;
+        this->data   = data;
+        if (device && data)
+            this->buffer = Buffer { device, sizeof(U), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
     }
 };
 
@@ -171,13 +243,17 @@ struct Texture {
 
 /// What do you call this controller?
 struct Frame {
+    int                    index;
     Device                *device;
     Texture                tx; /// just image and view used; no sampler
     VkFramebuffer          framebuffer;
-    UniformBuffer<Uniform> uniform;
+    /// shader used by Render
+    UniformBuffer<Uniform> ubo; //
+    Uniform                uniform;
+    /// set uniforms by lambda service per pipeline instance
     map<str, VkCommandBuffer> render_commands;
-    void destroy(VkDevice &device);
-    void create(vec<VkImageView> attachments);
+    void destroy();
+    void  create(vec<VkImageView> attachments);
     operator VkFramebuffer &() {
         return framebuffer;
     }
@@ -185,10 +261,13 @@ struct Frame {
 
 /// worth having; rid ourselves of more terms =)
 struct Descriptor {
+    Device *device;
     VkDescriptorSetLayout layout;
     VkDescriptorPool      pool;
     operator VkDescriptorSetLayout &() { return layout; }
     operator VkDescriptorPool      &() { return pool;   }
+    void destroy();
+    Descriptor(Device *device = null) : device(device) { }
 };
 
 struct PipelineData;
@@ -199,6 +278,21 @@ protected:
 public:
     PipelineData &operator[](std::string n);
     void update(Frame &frame);
+    Plumbing(Device *device = null): device(device) { }
+};
+
+struct Render {
+    Device          *device;
+    std::queue<PipelineData *> sequence; /// sequences of identical pipeline data is purposeful for multiple render passes perhaps
+    vec<VkSemaphore> image_avail;        /// you are going to want ubo controller to update a lambda right before it transfers
+    vec<VkSemaphore> render_finish;      /// if we're lucky, that could adapt to compute model integration as well.
+    vec<VkFence>     fence_active;
+    vec<VkFence>     image_active;
+    int              cframe = 0;
+    bool             resized;
+    ///
+    Render(Device * = null);
+    void present();
 };
 
 struct Device {
@@ -206,13 +300,12 @@ struct Device {
     void                  create_command_buffers();
     void                  create_render_pass();
     VkImageView           create_iview(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
-    void                  update();
     
+    Render                render;
     VkSampleCountFlagBits msaa_samples;
     VkRenderPass          render_pass;
     Descriptor            desc;
-    vec<VkCommandBuffer>  command_buffers;
-    GPU                  &gpu;
+    GPU                   gpu;
     VkCommandPool         pool;
     VkDevice              device;
     VkQueue               queues[GPU::Complete];
@@ -222,6 +315,7 @@ struct Device {
     VkViewport            viewport;
     VkRect2D              sc;
     vec<Frame>            frames;
+    vec<VkImage>          swap_images;
     Texture               tx_color;
     Texture               tx_depth;
     Plumbing              plumbing;
@@ -229,6 +323,7 @@ struct Device {
     PipelineData &operator[](std::string n);
     ///
     void            initialize();
+    void            update();
     void            destroy();
     VkCommandBuffer begin();
     void            submit(VkCommandBuffer commandBuffer);
@@ -238,12 +333,11 @@ struct Device {
     operator        VkDevice();
     operator        VkCommandPool();
     operator        VkRenderPass();
-    Device(GPU *gpu, bool aa = false, bool val = false);
+    Device(GPU &gpu, bool aa = false);
     VkQueue &operator()(GPU::Capability cap);
     ///
-    operator VkViewport &() {
-        return viewport;
-    }
+    Device(nullptr_t n = null) { }
+    operator VkViewport &() { return viewport; }
     operator VkDescriptorSetLayout &() {
         return desc;
     }
@@ -280,25 +374,30 @@ struct Vertex {
     }
 };
 
+struct RenderPair {
+    VkCommandBuffer   cmd; /// call them this, for ease of understanding of purpose
+    UniformBufferData ubo; /// a uniform buffer object is always occupying a cmd of any sort when it comes to rendering
+    RenderPair() { }
+};
+
 struct PipelineData {
     std::string                name;
-    map<std::string, int>      ubo_ids; /// internal.
     Device                    *device;
+    vec<RenderPair>            pairs; /// pipeline are many and even across swap frame idents, and we need a ubo and cmd set for each
     vec<VkDescriptorSet>       desc_sets;
     VkPipelineLayout           layout;
     VkPipeline                 pipeline;
-    vec<VertexBufferData *>    vx;
-    vec<IndexBufferData *>     ix;
-    bool                       enabled;
-    map<std::string, r32>      f32;
-    map<std::string, vec2f>    v2;
-    map<std::string, vec3f>    v3;
-    map<std::string, vec4f>    v4;
-    map<std::string, Texture>  tx;
+    vec<UniformBufferData>     ubo;
+    VBufferData                vbo;      //
+    IBufferData                ibo;      //
+    bool                       enabled;  //
+    map<std::string, Texture>  tx;       // we may need this.
     ///
-    operator bool () { return  enabled;  }
-    bool operator!() { return !enabled;  }
-    void enable(bool en) { enabled = en; }
+    operator bool () { return  enabled; }
+    bool operator!() { return !enabled; }
+    void enable (bool en) { enabled = en; }
+    void update(Frame &frame, VkCommandBuffer &rc);
+    virtual void bind_descriptions() { }
 };
 
 /// we need high level abstraction to get to a vulkanized component model
@@ -315,7 +414,7 @@ struct Pipeline:PipelineData {
         assert(vkCreateDescriptorSetLayout(pipeline, &li, nullptr, &layout) == VK_SUCCESS);
         ///
         const size_t  n_frames = device.frames.size();
-        auto           layouts = std::vector<VkDescriptorSetLayout> (device.frames.size(), device); /// add to vec.
+        auto           layouts = std::vector<VkDescriptorSetLayout>(n_frames, device); /// add to vec.
         auto                ai = VkDescriptorSetAllocateInfo {};
         ai.sType               = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         ai.descriptorPool      = device;
@@ -378,8 +477,6 @@ struct Pipeline:PipelineData {
 
         /// viewport
         VkViewport viewport = device;
-        
-        /// indicates a multi-viewport
         VkRect2D sc {};
         sc.offset                                   = {0, 0};
         sc.extent                                   = device.extent;
@@ -431,7 +528,7 @@ struct Pipeline:PipelineData {
         blending.blendConstants[3]                  = 0.0f;
         VkPipelineLayoutCreateInfo layout_info      = device;
         ///
-        assert(vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline) == VK_SUCCESS);
+        assert(vkCreatePipelineLayout(device, &layout_info, nullptr, &layout) == VK_SUCCESS);
         ///
         VkGraphicsPipelineCreateInfo pi {};
         pi.sType                                    = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -455,65 +552,25 @@ struct Pipeline:PipelineData {
         vkDestroyShaderModule(device, vert, nullptr);
     }
     
-    /// throw things in a tube
-    void operator()(Frame &frame, VkCommandBuffer &rc) { ///
-        auto        &device = *this->device;
-        auto   clear_values = vec<VkClearValue> {
-            {        .color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
-            { .depthStencil = {1.0f, 0}}};
-        auto    render_info = VkRenderPassBeginInfo {
-            VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null, device, frame,
-            {{0,0}, device.extent}, uint32_t(clear_values.size()), clear_values };
-        vkCmdBeginRenderPass(rc, &render_info, VK_SUBPASS_CONTENTS_INLINE);
-            vkCmdBindPipeline(rc, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-            vec<VkBuffer> buffers = vec<VkBuffer>(vx.size());
-            /// iterate through VertexBufferData
-            for (auto &v: vx) /// this should be a pair, probably..
-                buffers += v;
-            VkDeviceSize   offsets[] = {0};
-            vkCmdBindVertexBuffers(rc, 0, buffers.size(), buffers, offsets);
-        
-            /// 32bit indexing seems like a basic default but it should support this param changed through template type I
-            /// ibo for creating primitives in reference to vbo
-            
-            vkCmdBindIndexBuffer(rc, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-            vkCmdBindDescriptorSets(rc, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &pipeline.desc_set[i], 0, nullptr);
-            vkCmdDrawIndexed(rc, uint32_t(indices.size()), 1, 0, 0, 0);
-        vkCmdEndRenderPass(rc);
-    }
-    
     /// produce VkShaderModule from source
-    VkShaderModule shader_module(path_t path) {
-        VkShaderModule m;
-        str code = str::read_file(path);
-        auto  ci = VkShaderModuleCreateInfo {
-            VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, null, 0,
-            code.length(), (const uint32_t *)code.cstr()
-        };
-        assert (vkCreateShaderModule(pipeline, &ci, null, &m) == VK_SUCCESS);
-        return m;
-    }
-    
-    /// this can be a method on device as well, pipeline<shader, Vertex>
-    Pipeline(Device *dev, str name) : device(device) {
-        bind_descriptions();
-        create_shaders();
-    }
+    VkShaderModule shader_module(path_t path);
+    Pipeline(Device *dev, str name);
 };
 
-
+struct Composer;
 struct Vulkan {
     static void             init();
     static VkInstance       instance();
     static Device          &device();
-    static GPU             &gpu();
+    static VkPhysicalDevice gpu();
     static VkQueue          queue();
     static VkSurfaceKHR     surface();
-    static VkSwapchainKHR   swapchain();
     static VkImage          image();
     static uint32_t         queue_index();
     static uint32_t         version();
-    static Canvas           canvas(vec2i sz);
-    static void             set_title(str s);
-    static int              main(FnRender fn);
+    static Canvas           canvas(vec2i);
+    static void             set_title(str);
+    static int              main(FnRender, Composer *);
+    static Texture          texture(vec2i);
+    static void             draw_frame();
 };

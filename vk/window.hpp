@@ -27,6 +27,7 @@ public:
     void        set_clipboard(str);
     void        show();
     void        hide();
+    int         loop(std::function<void()> fn);
     
     static Window *first;
     

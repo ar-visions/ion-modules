@@ -168,8 +168,8 @@ struct node {
     bool            processing();
     bool            process();
     node           *find(std::string n);
-    node           *query_first(std::function<node *(node *)> fn);
-    vec<node *>     query(std::function<node *(node *)> fn);
+    node           *select_first(std::function<node *(node *)> fn);
+    vec<node *>     select(std::function<node *(node *)> fn);
     virtual rectd   calculate_rect(node *child);
     
     inline size_t count(std::string n) {

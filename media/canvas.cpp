@@ -80,12 +80,12 @@ struct Context2D:ICanvasBackend {
     SkCanvas      *sk_canvas = null;
     vec2i                 sz = { 0, 0 };
     VkImage         vk_image = null;
+    Texture               tx = null;
     
     struct State {
         SkPaint ps;
     };
     
-    // the cost, of voids.. yes.
     void *copy_bstate(void *bs) {
         if (!bs)
             return null;
@@ -94,26 +94,15 @@ struct Context2D:ICanvasBackend {
     }
     
     Context2D(vec2i sz) {
-      //Vulkan::init();
-      //Vulkan::resize(sz.x, sz.y);
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        texture = sz;
-        
+        tx                      = Vulkan::texture(sz);
         GrDirectContext *ctx    = Skia::Context()->sk_context.get();
         auto imi                = GrVkImageInfo { };
-        imi.fImage              = Vulkan::image();
+        imi.fImage              = tx.image; /// hope skia doesnt a view already allocated for this; would it matter?
         imi.fImageTiling        = VK_IMAGE_TILING_OPTIMAL;
         imi.fImageLayout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imi.fFormat             = VK_FORMAT_R8G8B8A8_UNORM;
-      //imi.fImageUsageFlags    = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        // this is new but it makes sense to me to pass along. these are the usage flags
+        imi.fImageUsageFlags    = VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT;//VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // i dont think so.
         imi.fSampleCount        = 1;
         imi.fLevelCount         = 1;
         imi.fCurrentQueueFamily = Vulkan::queue_index(); //VK_QUEUE_FAMILY_IGNORED;
@@ -121,9 +110,8 @@ struct Context2D:ICanvasBackend {
         imi.fSharingMode        = VK_SHARING_MODE_EXCLUSIVE;
         vk_image                = imi.fImage;
         auto rt                 = GrBackendRenderTarget { sz.x, sz.y, imi };
-        sk_surf                 = SkSurface::MakeFromBackendRenderTarget(
-                                       ctx, rt, kBottomLeft_GrSurfaceOrigin,
-                                       kRGBA_8888_SkColorType, null, null);
+        sk_surf                 = SkSurface::MakeFromBackendRenderTarget(ctx, rt,
+                                      kBottomLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, null, null);
         sk_canvas               = sk_surf->getCanvas();
         set_size(sz);
     }
@@ -427,6 +415,7 @@ void ICanvasBackend:: gaussian(DrawState &st, vec2  &sz, rectd cr)  { st.blur  =
 
 Canvas::Canvas(nullptr_t n) : type(Undefined) { }
 
+/// transition to shared ptr for backend
 Canvas::Canvas(vec2i sz, Canvas::Type type, var *result) : type(type),
                backend(type == Terminal ? (ICanvasBackend *)new ::Terminal(sz) :
                                           (ICanvasBackend *)new ::Context2D(sz)) {

@@ -24,7 +24,7 @@ Element Element::each(var &d, FnFilterMap f) {
     return Element(d, f);
 }
 
-node *node::query_first(std::function<node *(node *)> fn) {
+node *node::select_first(std::function<node *(node *)> fn) {
     std::function<node *(node *)> recur;
     recur = [&](node* n) -> node* {
         node* r = fn(n);
@@ -39,7 +39,7 @@ node *node::query_first(std::function<node *(node *)> fn) {
     return recur(this);
 }
 
-vec<node *> node::query(std::function<node *(node *)> fn) {
+vec<node *> node::select(std::function<node *(node *)> fn) {
     vec<node *> result;
     std::function<node *(node *)> recur;
     recur = [&](node* n) -> node* {
@@ -64,7 +64,7 @@ Element node::render() {
 }
 
 bool node::processing() {
-    return !!query_first([&](node *n) { return n->queue.size() ? n : null; });
+    return !!select_first([&](node *n) { return n->queue.size() ? n : null; });
 }
 
 bool node::process() {
@@ -74,7 +74,7 @@ bool node::process() {
     for (auto &[id, n]:mounts) {
         if (!n)
             continue;
-        n->query([&](node *n) {
+        n->select([&](node *n) {
             auto c = n->queue.size();
             while (c--) {
                 n->queue.front()(zero);
@@ -116,7 +116,7 @@ void node::input(str v) {
         node *sel = null;
         int target_index = props.tab_index;
         int lowest_diff  = -1;
-        query([&](node *n) {
+        select([&](node *n) {
             if (n != this && n->props.tab_index >= 0) {
                 int diff = n->props.tab_index - target_index;
                 if (lowest_diff == -1 || lowest_diff > diff) {

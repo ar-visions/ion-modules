@@ -5,26 +5,97 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-Pipeline &Plumbing::operator[](std::string n) {
+
+VkWriteDescriptorSet UniformBufferData::operator()(VkDescriptorSet &ds) {
+    return {
+        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, null, ds, 0, 0,
+        1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, null, &buffer.info, null
+    };
+}
+
+void UniformBufferData::destroy() {
+    buffer.destroy();
+}
+
+/// called by Pipeline, called by the Render
+void UniformBufferData::transfer() {
+    void* gpu;
+      vkMapMemory(*device, buffer, 0, buffer.sz, 0, &gpu);
+           memcpy( gpu,    data,      buffer.sz);
+    vkUnmapMemory(*device, buffer);
+}
+
+void PipelineData::update(Frame &frame, VkCommandBuffer &rc) {
+    Device &device = *this->device;
+    auto ai = VkCommandBufferAllocateInfo {
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
+    assert(vkAllocateCommandBuffers(device, &ai, &rc) == VK_SUCCESS);
+    ///
+    auto   clear_values = vec<VkClearValue> {
+        {        .color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
+        { .depthStencil = {1.0f, 0}}};
+    auto    render_info = VkRenderPassBeginInfo {
+        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null, device, frame,
+        {{0,0}, device.extent}, uint32_t(clear_values.size()), clear_values };
+    ///
+    vkCmdBeginRenderPass(rc, &render_info, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(rc, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vec<VkBuffer>    a_vbo   = { vbo };
+    VkDeviceSize   offsets[] = {0};
+    vkCmdBindVertexBuffers(rc, 0, 1, a_vbo.data(), offsets);
+    vkCmdBindIndexBuffer(rc, ibo, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindDescriptorSets(rc, VK_PIPELINE_BIND_POINT_GRAPHICS,  layout, 0, 1, desc_sets, 0, nullptr);
+    vkCmdDrawIndexed(rc, uint32_t(ibo.size()), 1, 0, 0, 0);
+    vkCmdEndRenderPass(rc);
+}
+
+VkDevice device_handle(Device *device) {
+    return device->device;
+}
+
+VkPhysicalDevice gpu_handle(Device *device) {
+    return device->gpu;
+}
+
+uint32_t memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags props) {
+   VkPhysicalDeviceMemoryProperties mprops;
+   vkGetPhysicalDeviceMemoryProperties(gpu, &mprops);
+   ///
+   for (uint32_t i = 0; i < mprops.memoryTypeCount; i++)
+       if ((types & (1 << i)) && (mprops.memoryTypes[i].propertyFlags & props) == props)
+           return i;
+   /// no flags match
+   assert(false);
+   return 0;
+};
+
+PipelineData &Plumbing::operator[](std::string n) {
     return *pipelines[n];
 }
 
-Pipeline &Device::operator[](std::string n) {
+PipelineData &Device::operator[](std::string n) {
     return plumbing[n];
 }
 
+/// frames and plumbing need a bit of integration
 void Plumbing::update(Frame &frame) {
     Device &device = *this->device;
+    ///
     for (auto &[n, p]: pipelines) {
-        if (frame.render_commands.count(n))
-            vkFreeCommandBuffers(device, pool, 1, &frame.render_commands[n]);
+        PipelineData &pipeline = *p;
+        if (!pipeline.pairs)
+             pipeline.pairs.resize(device.frames.size());
+        RenderPair &pair = pipeline.pairs[frame.index];
+        ///
+        /// release and allocate command buffer (1)
+        if (pair.cmd)
+            vkFreeCommandBuffers(device, device.pool, 1, &pair.cmd);
         auto ai = VkCommandBufferAllocateInfo {
             VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            null, pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
-        assert(vkAllocateCommandBuffers(device, &ai, &frame.render_commands[n]) == VK_SUCCESS);
-        Pipeline  &pipeline = plumbing[n];
-        VkCommandBuffer &rc = frame.render_commands[n];
-        pipeline.update(rc);
+            null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
+        assert(vkAllocateCommandBuffers(device, &ai, &pair.cmd) == VK_SUCCESS);
+        pipeline.update(frame, pair.cmd);
     }
 }
 
@@ -53,7 +124,7 @@ uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
     return 0;
 };
 
-Device::Device(GPU *p_gpu, bool aa, bool val) : gpu(*p_gpu) {
+Device::Device(GPU &p_gpu, bool aa) : render(this), desc(this), gpu(p_gpu), plumbing(this) {
     vec<VkDeviceQueueCreateInfo> vq;
     vec<uint32_t> families = {
         gpu.index(GPU::Graphics),
@@ -74,29 +145,24 @@ Device::Device(GPU *p_gpu, bool aa, bool val) : gpu(*p_gpu) {
     feat.samplerAnisotropy     = aa ? VK_TRUE : VK_FALSE;
     ///
     uint32_t  esz;
-    auto glfw_ext = (const char **)glfwGetRequiredInstanceExtensions(&esz);
-    auto      ext = vec<const char *>(esz);
-    for (int    i = 0; i < esz; i++)
-        ext      += glfw_ext[i];
-    ///
-    if (val)
-        ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-    ///
+    
+    vec<const char *> ext = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    };
+    
     VkDeviceCreateInfo ci {};
+#ifndef NDEBUG
+    ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    static const char *debug   = "VK_LAYER_KHRONOS_validation";
+    ci.enabledLayerCount       = 1;
+    ci.ppEnabledLayerNames     = &debug;
+#endif
     ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     ci.queueCreateInfoCount    = uint32_t(vq.size());
     ci.pQueueCreateInfos       = vq;
     ci.pEnabledFeatures        = &feat;
     ci.enabledExtensionCount   = uint32_t(ext.size());
     ci.ppEnabledExtensionNames = ext;
-
-#ifndef NDEBUG
-    if (val) {
-        static const char *debug   = "VK_LAYER_KHRONOS_validation";
-        ci.enabledLayerCount       = 1;
-        ci.ppEnabledLayerNames     = &debug;
-    }
-#endif
 
     assert(vkCreateDevice(gpu, &ci, nullptr, &device) == VK_SUCCESS);
     vkGetDeviceQueue(device, gpu.index(GPU::Graphics), 0, &queues[GPU::Graphics]);
@@ -105,7 +171,6 @@ Device::Device(GPU *p_gpu, bool aa, bool val) : gpu(*p_gpu) {
 
 /// essentially a series of tubes...
 void Device::update() {
-    Pipeline &pipeline = *p;
     uint32_t  frame_count = frames.size();
     ///
     /// create VkCommandBuffer for pipelines across all frames
@@ -114,52 +179,25 @@ void Device::update() {
         VkImage     image = swap_images[i];
         VkImageView  view = Texture::create_view(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
         Frame      &frame = frames[i];
-        if (frame.tx)
+        if (frame.index >= 0)
             frame.tx.destroy();
+        frame.index       = i;
         frame.tx          = Texture { this, { int(extent.width), int(extent.height) }, image, view };
-        if (frame.uniform)
-            frame.uniform.destroy();
-        frame.uniform     = UniformBuffer<Uniform>(this);
+        if (!frame.ubo)
+             frame.ubo    = UniformBuffer<Uniform>(this, &frame.uniform); /// this uniform is part of the frame display
         frame.create({ tx_color, tx_depth, frame.tx });
+        
         plumbing.update(frame);
     }
 }
 
-/// a series of tubes...
-void Device::plumb() {
-    Pipeline &pipeline    = *p;
-    uint32_t  frame_count = frames.size();
-    ///
-    /// create VkCommandBuffer for pipelines across all frames
-    /// create view, uniform buffer, render command
-    for (size_t i = 0; i < frame_count; i++) {
-        VkImage       image = swap_images[i];
-        VkImageView    view = Texture::create_view(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-        Frame        &frame = frames[i];
-        frame.tx            = Texture { this, { int(extent.width), int(extent.height) }, image, view };
-        frame.uniform       = UniformBuffer<Uniform>(this);
-        frame.create({ tx_color, tx_depth, frame.tx });
-        frame.pipeline      = &pipeline; /// will need to be a vector or map
-        ///
-        VkCommandBuffer &rc = frame.render_command;
-        vkFreeCommandBuffers(device, pool, 1, &rc);
-        /// needs to delete previous tubing
-        auto     alloc_info = VkCommandBufferAllocateInfo {
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, null, pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
-        assert(vkAllocateCommandBuffers(device, &alloc_info, &rc) == VK_SUCCESS);
-        ///
-        auto     begin_info = VkCommandBufferBeginInfo {
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-        assert(vkBeginCommandBuffer(rc, &begin_info) == VK_SUCCESS);
-        /// consecutive ones intra frame would have an alpha as 0 but its a bit simpleton right now
-        /// this needs to be called when a pipeline is initializing
-        pipeline(frame, rc);
-        assert (vkEndCommandBuffer(rc) == VK_SUCCESS);
-    }
-}
-
-void Device::initialize_swap(Pipeline &pipeline) {
-    plumbing = Plumbing { this };
+void Device::initialize() {
+    /// create command pool (i think the pooling should be on each Frame)
+    VkCommandPoolCreateInfo pi {};
+    pi.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pi.queueFamilyIndex = gpu.index(GPU::Graphics);
+    assert(vkCreateCommandPool(device, &pi, nullptr, &pool) == VK_SUCCESS);
+    
     vec2i sz = vec2i { int(extent.width), int(extent.height) };
     /// we really need implicit flagging on these if we can manage it.
     tx_color = Texture { this, sz, null,
@@ -242,27 +280,39 @@ void Device::initialize_swap(Pipeline &pipeline) {
     assert(vkCreateSwapchainKHR(device, &ci, nullptr, &swap_chain) == VK_SUCCESS);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, nullptr);
     frames.resize(frame_count);
-    ///
+    /// -- from here we know the majestic 'swap buffer count' and contain that in an abstract vec<Frame>
+    /// -- all pipeline is commanded to these Frame anchor points of sort
     /// get swap-chain images
-    vec<VkImage> swap_images;
     swap_images.resize(frame_count);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, swap_images.data());
     format                        = surface_format.format;
     this->extent                  = extent;
     viewport                      = { 0.0f, 0.0f, r32(extent.width), r32(extent.height), 0.0f, 1.0f };
     
-    uint32_t frame_count = frames.size();
     ///
     /// create descriptor pool
     std::array<VkDescriptorPoolSize, 2> ps {};
-    ps[0]                         = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frame_count };
-    ps[1]                         = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count };
-    VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
-                                      frame_count, uint32_t(ps.size()), ps.data() };
-    pi.poolSizeCount              = uint32_t(ps.size());
-    pi.pPoolSizes                 = ps.data();
-    pi.maxSets                    = frame_count;
-    assert(vkCreateDescriptorPool(device, &pi, nullptr, &desc.pool) == VK_SUCCESS);
+    ps[0]              = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frame_count };
+    ps[1]              = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count };
+    auto dpi           = VkDescriptorPoolCreateInfo {
+                            VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
+                            frame_count, uint32_t(ps.size()), ps.data() };
+    dpi.poolSizeCount  = uint32_t(ps.size());
+    dpi.pPoolSizes     = ps.data();
+    dpi.maxSets        = frame_count;
+    
+    assert(vkCreateDescriptorPool(device, &dpi, nullptr, &desc.pool) == VK_SUCCESS);
+    for (auto &f: frames)
+        f.index = -1;
+    
+    update();
+    
+}
+
+void Descriptor::destroy() {
+    auto &device = *this->device;
+    vkDestroyDescriptorPool(device, pool, nullptr);
+    vkDestroyDescriptorSetLayout(device, layout, nullptr);
 }
 
 VkFormat supported_format(VkPhysicalDevice gpu, vec<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
@@ -389,17 +439,6 @@ void Device::submit(VkCommandBuffer cb) {
     vkFreeCommandBuffers(device, pool, 1, &cb);
 }
 
-/// remember to call initialize after you select a device
-/// note that this requires explicit destroy afterwards
-void Device::initialize() {
-    VkCommandPoolCreateInfo pi {};
-    pi.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pi.queueFamilyIndex = gpu.indices(GPU::Graphics);
-    assert(vkCreateCommandPool(device, &pi, nullptr, &pool) == VK_SUCCESS);
-    
-
-}
-
 VkQueue &Device::operator()(GPU::Capability cap) {
     assert(cap != GPU::Complete);
     return queues[cap];
@@ -417,65 +456,36 @@ Device::operator VkDevice() {
     return device;
 }
 
-Device::operator VkDescriptorPool() {
-    return desc_pool;
-}
-
 ///
 void Device::destroy() {
-    ///
-    vkDestroyImageView (device, depthImageView,   nullptr);
-    vkDestroyImage     (device, depthImage,       nullptr);
-    vkFreeMemory       (device, depthImageMemory, nullptr);
-    vkDestroyImageView (device, colorImageView,   nullptr);
-    vkDestroyImage     (device, colorImage,       nullptr);
-    vkFreeMemory       (device, colorImageMemory, nullptr);
-    ///
-    for (auto framebuffer : swapChainFramebuffers)
-        vkDestroyFramebuffer(device, framebuffer, nullptr);
-
-    vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
-
-    vkDestroyPipeline(device,       graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    vkDestroyRenderPass(device,     renderPass, nullptr);
-
-    for (auto imageView : swapChainImageViews)
-        vkDestroyImageView(device, imageView, nullptr);
-
-    vkDestroySwapchainKHR(device, swapChain, nullptr);
-
-    for (size_t i = 0; i < swapChainImages.size(); i++) {
-        vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-        vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
-    }
-
-    vkDestroyDescriptorPool(device, desc_pool, nullptr);
+    for (auto &f: frames)
+        f.destroy();
+    vkDestroyRenderPass(device, render_pass, nullptr);
+    vkDestroySwapchainKHR(device, swap_chain, nullptr);
+    desc.destroy();
 }
 
 ///
-void Frame::destroy(VkDevice &device) {
-    for (auto &fb: frames) {
-        vkDestroyFramebuffer(device, fb.framebuffer, nullptr);
-        vkDestroyImageView  (device, fb.view,        nullptr);
-        vkDestroyImage      (device, fb.image,       nullptr); /// this may be free'd twice so watch it.
-    }
-
-    vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
-
-    vkDestroyPipeline(device,       graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    vkDestroyRenderPass(device,     renderPass, nullptr);
-
-    for (auto imageView : swapChainImageViews)
-        vkDestroyImageView(device, imageView, nullptr);
-
-    vkDestroySwapchainKHR(device, swapChain, nullptr);
-
-    for (size_t i = 0; i < swapChainImages.size(); i++) {
-        vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-        vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
-    }
-
-    ///vkDestroyDescriptorPool(device, desc_pool, nullptr);
+void Frame::destroy() {
+    auto &device = *this->device;
+    vkDestroyFramebuffer(device, framebuffer, nullptr);
+    tx.destroy();
 }
+
+
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != nullptr) {
+        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+    } else {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
+
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr) {
+        func(instance, debugMessenger, pAllocator);
+    }
+}
+

@@ -13,10 +13,10 @@
 #define  vk_load(inst, addr) PFN_##addr addr = (PFN_##addr)glfwGetInstanceProcAddress(inst, #addr);
 
 int App::UX::operator()(FnRender fn) {
-    return Vulkan::main(fn);
+    return Vulkan::main(fn, composer);
 }
 
-App::UX::UX(int c, const char *v[], Args &defaults) {
+App::UX::UX(int c, const char *v[], Args &defaults) : composer(new Composer(this)) {
     type = Interface::UX;
     args = var::args(c, v);
     for (auto &[k,v]: defaults) {

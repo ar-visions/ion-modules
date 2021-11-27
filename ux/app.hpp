@@ -44,9 +44,10 @@ struct App {
         int operator()(FnRender fn);
         void set_title(str t);
         str title;
+        Composer *composer;
     };
 
-    struct Server:Interface {
+    struct Server:Interface { /// may call this DX, or if its a simple HTTP server it could just be Https
         Async async;
         FnRender fn;
         struct ServerInternal* intern;
