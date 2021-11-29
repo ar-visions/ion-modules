@@ -6,7 +6,7 @@ static Args def = {
 
 struct Car:node {
     declare(Car);
-    
+    ///
     struct Model {
         enum Type {
             Venkman,
@@ -16,18 +16,17 @@ struct Car:node {
             Dayna,
             Zuul
         };
-        
         Type   type;
         str    name;
         float  max_speed;
         bool   active;
-        
+        ///
         static vec<Model> models;
-        
+        ///
         static void load() {
             if (models)
                 return;
-            
+            ///
             models  = vec<Model>(size_t(Zuul) + 1);
             models += Model { Venkman,  str("Venkman"), 1.0f, true };
             models += Model { Egon,     str("Egon"),    1.0f, true };
@@ -37,7 +36,7 @@ struct Car:node {
             models += Model { Zuul,     str("Zuul"),    1.0f, true };
         }
     };
-    
+    ///
     Model::Type type;
     float       health;
     vec3f       pos;

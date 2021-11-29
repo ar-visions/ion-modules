@@ -63,7 +63,6 @@ struct Skia {
                 return (dev == VK_NULL_HANDLE) ? vkGetInstanceProcAddr(inst, name) :
                                                  vkGetDeviceProcAddr  (dev,  name);
             };
-            
             sk_context = GrDirectContext::MakeVulkan(grc);
         #elif defined(SK_GL)
             sk_context = GrDirectContext::MakeGL(GrGLMakeNativeInterface());
@@ -93,16 +92,18 @@ struct Context2D:ICanvasBackend {
         return new State { s->ps };
     }
     
+    /// compare with vk-aa
     Context2D(vec2i sz) {
         tx                      = Vulkan::texture(sz);
         GrDirectContext *ctx    = Skia::Context()->sk_context.get();
         auto imi                = GrVkImageInfo { };
-        imi.fImage              = tx.image; /// hope skia doesnt a view already allocated for this; would it matter?
+        imi.fImage              = tx.image;
         imi.fImageTiling        = VK_IMAGE_TILING_OPTIMAL;
         imi.fImageLayout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imi.fFormat             = VK_FORMAT_R8G8B8A8_UNORM;
         // this is new but it makes sense to me to pass along. these are the usage flags
-        imi.fImageUsageFlags    = VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT;//VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // i dont think so.
+        // important to keep flags as 0 here. it may still require some flags set still
+     ///imi.fImageUsageFlags    = VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT;//VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // i dont think so.
         imi.fSampleCount        = 1;
         imi.fLevelCount         = 1;
         imi.fCurrentQueueFamily = Vulkan::queue_index(); //VK_QUEUE_FAMILY_IGNORED;
@@ -197,9 +198,8 @@ void DrawState::copy(const DrawState &r) {
     color      = r.color;
     clip       = r.clip;
     blur       = r.blur;
-    b_state    = r.host->copy_bstate(r.b_state);
+    b_state    = r.host ? r.host->copy_bstate(r.b_state) : null;
 }
-
 
 struct Terminal:ICanvasBackend {
     static map<str, str> t_text_colors_8;
@@ -434,12 +434,12 @@ void  Canvas::restore() {
 }
 
 void  Canvas::save()                    { states.push(state); backend->save(state); }
-void *Canvas::data()                    { return backend ? ((::Terminal *)backend)->data() : null; }
+void *Canvas::data()                    { return type ? ((::Terminal *)backend)->data() : null; }
 str   Canvas::get_char(int x, int y)    { return backend->get_char(state, x, y); }
 void  Canvas::defaults()                { state = {this, 1, 1, 1, m44(), "#000f", vec2 {0, 0}}; }
 void  Canvas::stroke_sz( double sz)     { state.stroke_sz = sz;                            }
 void  Canvas::font_scale(double sc)     { state.font_scale  = sc;                          }
-void *Canvas::copy_bstate(void *bs)     { return backend->copy_bstate(bs);                 }
+void *Canvas::copy_bstate(void *bs)     { return type ? backend->copy_bstate(bs) : null;   }
 vec2i Canvas::size()                    { return backend->size();                          }
 void  Canvas::scale(vec2 sc)            { state.m = state.m.scale(sc);                     }
 void  Canvas::rotate(double d)          { state.m = state.m.rotate_z(d);                   }

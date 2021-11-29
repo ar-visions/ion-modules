@@ -1,5 +1,8 @@
 #include <vk/vk.hpp>
 
+// attempt to get the verbose parts of vulkan marshalled into sanity with a reasonable Texture class
+// auto-view creation, automatic layout controls, attachment/descriptor operators
+
 static void
 generate_mipmaps(Device &device, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
     // Check if image format supports linear blitting
@@ -104,28 +107,32 @@ void Texture::create_sampler() {
     si.compareOp                 = VK_COMPARE_OP_ALWAYS;
     si.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     si.minLod                    = 0.0f;
-    si.maxLod                    = float(get_mips(mip_levels));
+    si.maxLod                    = float(get_mips(mip_levels, sz));
     si.mipLodBias                = 0.0f;
     ///
     VkResult r = vkCreateSampler(device, &si, nullptr, &sampler);
     assert  (r == VK_SUCCESS);
 }
 
+/// see how the texture is created elsewhere with msaa
 void Texture::create_resources() {
     Device &device = *this->device;
     VkImageCreateInfo imi {};
+    ///
+    layout                      = VK_IMAGE_LAYOUT_UNDEFINED;
+    ///
     imi.sType                   = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imi.imageType               = VK_IMAGE_TYPE_2D;
     imi.extent.width            = uint32_t(sz.x);
     imi.extent.height           = uint32_t(sz.y);
     imi.extent.depth            = 1;
-    imi.mipLevels               = get_mips(mip_levels);
+    imi.mipLevels               = get_mips(mip_levels, sz);
     imi.arrayLayers             = 1;
     imi.format                  = format;
     imi.tiling                  = tiling;
-    imi.initialLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+    imi.initialLayout           = layout;
     imi.usage                   = usage;
-    imi.samples                 = msaa;
+    imi.samples                 = VK_SAMPLE_COUNT_1_BIT; // msaa: todo
     imi.sharingMode             = VK_SHARING_MODE_EXCLUSIVE;
     ///
     assert(vkCreateImage(device, &imi, nullptr, &image) == VK_SUCCESS);
@@ -141,21 +148,26 @@ void Texture::create_resources() {
     ///
     if (msaa != VK_SAMPLE_COUNT_1_BIT)
         create_sampler();
+    set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 }
 
 struct LayoutMapping {
-    VkImageLayout           oldLayout;
-    VkImageLayout           newLayout;
+    VkImageLayout           from_layout;
+    VkImageLayout           to_layout;
     uint64_t                srcAccessMask;
     uint64_t                dstAccessMask;
     VkPipelineStageFlagBits srcStage;
     VkPipelineStageFlagBits dstStage;
 };
 
-void Texture::transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels)
+/// nvidia cares not about any of this
+void Texture::set_layout(VkImageLayout next_layout)
 {
-    Device &device = *this->device;
-    static vec<LayoutMapping> mappings = {
+    if (next_layout == layout)
+        return;
+    Device       &device = *this->device;
+    uint32_t        mips = get_mips(mip_levels, sz);
+    static auto mappings = vec<LayoutMapping> {
         LayoutMapping {
             VK_IMAGE_LAYOUT_UNDEFINED,                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             0,                                          VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -192,19 +204,19 @@ void Texture::transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout
     };
     ///
     for (LayoutMapping &t: mappings)
-        if (oldLayout == t.oldLayout && newLayout == t.newLayout) {
+        if (t.from_layout == layout && t.to_layout == next_layout) {
             VkCommandBuffer      cb                 = device.begin();
             ///
             VkImageMemoryBarrier barrier {};
             barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.oldLayout                       = oldLayout;
-            barrier.newLayout                       = newLayout;
+            barrier.oldLayout                       = layout;
+            barrier.newLayout                       = next_layout;
             barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
             barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
             barrier.image                           = image;
             barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
             barrier.subresourceRange.baseMipLevel   = 0;
-            barrier.subresourceRange.levelCount     = mip_levels;
+            barrier.subresourceRange.levelCount     = mips;
             barrier.subresourceRange.baseArrayLayer = 0;
             barrier.subresourceRange.layerCount     = 1;
             barrier.srcAccessMask                   = t.srcAccessMask;
@@ -218,6 +230,7 @@ void Texture::transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout
                 0, nullptr,
                 1, &barrier);
             device.submit(cb);
+            layout = next_layout;
             return;
         }
     ///
@@ -227,39 +240,70 @@ void Texture::transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout
 Texture::operator bool()  { return image != VK_NULL_HANDLE; }
 bool Texture::operator!() { return image == VK_NULL_HANDLE; }
 
-int Texture::get_mips(int mip_levels) {
-    return mip_levels == 0 ? (uint32_t(std::floor(std::log2(sz.max()))) + 1) : mip_levels;
+int Texture::get_mips(int mip_levels, vec2i sz) {
+    return mip_levels == 0 ? (uint32_t(std::floor(std::log2(sz.max()))) + 1) : std::max(1, mip_levels);
 }
 
-void Texture::create(rgba *pixels) {
+/// its fun hiding verbose parts of the api while keeping it dynamic
+Texture::operator VkAttachmentReference() {
+    assert(usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ||
+           usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    bool     is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    int         index = device->attachment_index(this);
+    VkAttachmentReference ref = {
+        .attachment = index,
+        .layout     = is_color ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+                                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    };
+}
+
+Texture::operator VkAttachmentDescription() {
+    assert(usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ||
+           usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    bool is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    VkAttachmentDescription ret = {
+        .format         = format,
+        .samples        = msaa,
+        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout    = is_color ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT :
+                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    };
+    return ret;
+}
+
+void Texture::create(rgba *pixels) { /// sz = 0, eh.
     Device &device = *this->device;
     auto    nbytes = VkDeviceSize(sz.x * sz.y * 4); /// adjust bytes if format isnt rgba; implement grayscale
-    auto    mip    = get_mips(mip_levels);
+    auto    mip    = get_mips(mip_levels, sz);
     assert(pixels);
     ///
     Buffer staging = Buffer(&device, nbytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT); /// make sure this is the same
     void* data = null;
     vkMapMemory(device, staging, 0, nbytes, 0, &data);
     memcpy(data, pixels, size_t(nbytes));
     vkUnmapMemory(device, staging);
     create_resources();
-    transition_layout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mip_levels);
     staging.copy_to(this);
     staging.destroy();
     ///
     if (mip > 0)
-        generate_mipmaps(device, image, VK_FORMAT_R8G8B8A8_SRGB, sz.x, sz.y, mip);
+        generate_mipmaps(device, image, format, sz.x, sz.y, mip);
 }
 
-VkImageView Texture::create_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
-    VkImageView view;
+VkImageView Texture::create_view(VkDevice device, vec2i &sz, VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t mip_levels) {
+    VkImageView  view;
+    uint32_t      mips = get_mips(mip_levels, sz);
     auto             v = VkImageViewCreateInfo {};
     v.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     v.image            = image;
     v.viewType         = VK_IMAGE_VIEW_TYPE_2D;
     v.format           = format;
-    v.subresourceRange = { aspectFlags, 0, mipLevels, 0, 1 };
+    v.subresourceRange = { aspect_flags, 0, mips, 0, 1 };
     assert (vkCreateImageView(device, &v, nullptr, &view) == VK_SUCCESS);
     return view;
 }
@@ -269,9 +313,12 @@ Texture::Texture(Device *device, vec2i sz, rgba clr,
                  VkImageUsageFlags  u, VkMemoryPropertyFlags m,
                  VkImageAspectFlags a, VkSampleCountFlagBits s,
                  VkFormat format, int mip_levels) :
-                    device(device), format(format),  mip_levels(mip_levels),
-                        sz(sz),     mprops(m), usage(u), aflags(a), msaa(s) {
+                    device(device), format(format), sz(sz),
+                    mip_levels(mip_levels), mprops(m), usage(u),
+                    aflags(a), msaa(s) {
     rgba *px = (rgba *)malloc(sz.x * sz.y * 4);
+    for (int i = 0; i < sz.x * sz.y; i++)
+        px[i] = clr;
     create(px);
     free(px);
 }
@@ -281,16 +328,20 @@ Texture::Texture(Device *device, Image &im,
                  VkImageUsageFlags  u, VkMemoryPropertyFlags m,
                  VkImageAspectFlags a, VkSampleCountFlagBits s,
                  VkFormat format, int mip_levels) :
-                    device(device), format(format), mip_levels(mip_levels), sz(im.size()), mprops(m), aflags(a), msaa(s)  {
+                    device(device), format(format), sz(im.size()), mip_levels(mip_levels), mprops(m), aflags(a), msaa(s)  {
     rgba *px = &im.pixel<rgba>(0, 0);
     create(px);
     free(px);
 }
 
-Texture::Texture(Device *device, vec2i sz, VkImage image, VkImageView view):
-                 device(device), sz(sz), image(image), view(view) { /* nothing needed to transfer from buffer */ }
+Texture::Texture(Device *device, vec2i sz, VkImage image, VkImageView view, VkImageUsageFlags u, VkMemoryPropertyFlags m,
+                 VkImageAspectFlags a, VkSampleCountFlagBits s, VkFormat format, int mip_levels):
+                    device(device), image(image), view(view), format(format), sz(sz),
+                    mip_levels(mip_levels), mprops(m), usage(u), aflags(a), msaa(s) { }
 
-Texture::operator VkImageView &() { // vulkan was clearly made with C++ in mind
+Texture::operator VkImageView &() {
+    if (!view)
+         view = create_view(*device, sz, image, format, aspect, mip_levels); /// hide away the views, only create when they are used
     return view;
 }
 
@@ -303,7 +354,10 @@ Texture::operator VkDeviceMemory &() {
 }
 
 void Texture::destroy() {
-    vkDestroyImageView(*device, view,   nullptr);
-    vkDestroyImage(*device,     image,  nullptr);
-    vkFreeMemory(*device,       memory, nullptr);
+    if (device) {
+        vkDestroyImageView(*device, view,   nullptr);
+        vkDestroyImage(*device,     image,  nullptr);
+        vkFreeMemory(*device,       memory, nullptr);
+    }
 }
+

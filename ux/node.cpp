@@ -144,7 +144,7 @@ var node::set_state(std::string n, var v) {
 }
 
 void node::draw(Canvas &canvas) {
-    auto p = Path(rectd {0, 0, 32, 24});
+    auto p = Path(rectd {0, 0, 32, 24}); // ?
     canvas.save();
     if (props.border.color && props.border.size > 0.0) {
         canvas.color(props.border.color);

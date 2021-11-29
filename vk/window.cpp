@@ -3,11 +3,9 @@
 #include <media/canvas.hpp>
 #define  GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <vk/vk.hpp>
 #include <vk/window.hpp>
 
-// all clipboard has to be pass-through to Vulkan which sucks.
-// has to be done, window must be hidden!... we dont use UX.
-// want to completely hide GLFW, and it is the case because Window is internal to Vulkan
 static void glfw_error  (int code, const char *cstr) {
     console.log("glfw error: {0}", {str(cstr)});
 }
@@ -59,6 +57,15 @@ void Window::set_clipboard(str text) {
     glfwSetClipboardString(handle, text.cstr());
 }
 
+Window::operator VkSurfaceKHR() {
+    if (!surface) {
+        auto   vk = Vulkan::instance();
+        auto code = glfwCreateWindowSurface(vk, handle, null, &surface);
+        assert(code == VK_SUCCESS);
+    }
+    return surface;
+}
+
 void Window::set_title(str s) {
     title = s;
     glfwSetWindowTitle(handle, title.cstr());
@@ -81,18 +88,18 @@ Window *Window::first = null; // ha!
 ///
 /// Window Constructors
 Window::Window(nullptr_t n) { }
-Window::Window(vec2i     sz) {
-    glfwInit();
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+Window::Window(vec2i     sz): size(sz) {
+    //glfwInit();
+    //glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     handle = glfwCreateWindow(sz.x, sz.y, title.cstr(), nullptr, nullptr);
     ///
-    glfwSetWindowUserPointer      (handle, this);
     glfwSetWindowUserPointer      (handle, this);
     glfwSetFramebufferSizeCallback(handle, glfw_resize);
     glfwSetKeyCallback            (handle, glfw_key);
     glfwSetCursorPosCallback      (handle, glfw_cursor);
     glfwSetCharCallback           (handle, glfw_char);
     glfwSetMouseButtonCallback    (handle, glfw_mbutton);
+    glfwSetErrorCallback          (glfw_error);
 }
 
 int Window::loop(std::function<void()> fn) {

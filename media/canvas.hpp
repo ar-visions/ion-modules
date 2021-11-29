@@ -86,8 +86,19 @@ struct DrawState {
     void import_data(var &d)       { }
     var  export_data()             { return null; }
     void        copy(const DrawState &r);
-
-    serializer(DrawState, true);
+    
+    /// serializer(DrawState, true);
+    DrawState(nullptr_t n) : DrawState() { }
+    DrawState(const DrawState &ref) { copy(ref);            }
+    DrawState(var &d)            { import_data(d);       }
+    operator var()               { return export_data(); }
+    operator bool()  const       { return true;          }
+    bool operator!() const       { return false;         }
+    DrawState &operator=(const DrawState &ref) {
+        if (this != &ref)
+            copy(ref);
+        return *this;
+    }
 };
 
 struct  Canvas;
@@ -125,17 +136,17 @@ struct ICanvasBackend {
 struct Canvas {
 public:
     enum  Type  { Undefined, Terminal, Context2D };
-    Type  type;
+    Type  type =  Undefined;
 
 protected:
     typedef std::stack<DrawState> Stack;
-    ICanvasBackend   *backend;
+    ICanvasBackend   *backend = null;
     Stack             states;
 
 public:
-    DrawState state;
-    Canvas(nullptr_t n = nullptr);
-    Canvas(vec2i sz, Type type, var *result = null);
+    DrawState state = {};
+              Canvas(nullptr_t n = nullptr);
+              Canvas(vec2i sz, Type type, var *result = null);
     bool  operator==(Canvas::Type t);
     vec2i         sz();
     void      stroke(Path  &path);
@@ -165,7 +176,6 @@ public:
     str     get_char(int x, int y);
     str   ansi_color(rgba c, bool text);
     Image   resample(vec2i size, double deg = 0.0f, rectd view = null, vec2 rc = null);
-    
     void *copy_bstate(void *bs);
     
     operator bool() {

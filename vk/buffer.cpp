@@ -2,13 +2,14 @@
 #include <vk/vk.hpp>
 #include <vk/buffer.hpp>
 
-Buffer::Buffer(Device *device, size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) : sz(size) {
+Buffer::Buffer(Device *device, size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) :
+        device(device), sz(size) {
     VkBufferCreateInfo bi {};
     bi.sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bi.size         = VkDeviceSize(size);
     bi.usage        = usage;
     bi.sharingMode  = VK_SHARING_MODE_EXCLUSIVE;
-
+    ///
     assert(vkCreateBuffer(*device, &bi, nullptr, &buffer) == VK_SUCCESS);
     ///
     /// fetch 'requirements'
@@ -22,7 +23,7 @@ Buffer::Buffer(Device *device, size_t size, VkBufferUsageFlags usage, VkMemoryPr
     alloc.memoryTypeIndex   = device->memory_type(req.memoryTypeBits, properties);
     assert(vkAllocateMemory(*device, &alloc, nullptr, &memory) == VK_SUCCESS);
     vkBindBufferMemory(*device, buffer, memory, 0);
-    
+    ///
     info = VkDescriptorBufferInfo {};
     info.buffer = buffer;
     info.offset = 0;

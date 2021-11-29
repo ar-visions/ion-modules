@@ -132,7 +132,7 @@ struct node {
     node          *parent = null;
     map<std::string, node *> mounts;
     Args           args;
-    var           data;
+    var            data;
     vec<Element>   elements;
     DefMap         defs;
     State          smap;
@@ -157,12 +157,12 @@ struct node {
             void    define_standard();
     virtual void    define();
     virtual void    mount();
-    virtual void   umount();
+    virtual void    umount();
     virtual void    changed(PropList props);
     virtual void    input(str k);
     virtual Element render();
-    var            get_state(std::string n);
-    var            set_state(std::string n, var v);
+    var             get_state(std::string n);
+    var             set_state(std::string n, var v);
     virtual void    draw(Canvas &canvas);
     virtual str     format_text();
     bool            processing();
@@ -179,7 +179,6 @@ struct node {
         }
         return 0;
     }
-    
     var &context(str field) {
         static var d_null;
         node *n = this;

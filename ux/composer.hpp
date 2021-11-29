@@ -1,13 +1,15 @@
 /// composer is the abstract for the manager of component instancing, propagation & rendition; 150  lines
 struct Composer {
     App::Interface *ux;
-    node      *root = null;
+    node *root = null;
+    Args args;
+    /// args need to make their way to vulkan so the window can be created in any default size
     
     bool process() {
         return root ? root->process() : true;
     }
 
-    Composer(App::Interface *ux) : ux(ux) { }
+    Composer(App::Interface *ux, Args &args) : ux(ux), args(args) { }
 
     std::string element_id(Element &e) {
         bool has_id = e.args.count("id");

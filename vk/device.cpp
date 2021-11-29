@@ -124,95 +124,92 @@ uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
     return 0;
 };
 
-Device::Device(GPU &p_gpu, bool aa) : render(this), desc(this), gpu(p_gpu), plumbing(this) {
-    vec<VkDeviceQueueCreateInfo> vq;
-    vec<uint32_t> families = {
-        gpu.index(GPU::Graphics),
-        gpu.index(GPU::Present)
-    };
-    
-    float priority = 1.0f;
-    for (uint32_t family: families) {
-        VkDeviceQueueCreateInfo q {};
-        q.sType                = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        q.queueFamilyIndex     = family;
-        q.queueCount           = 1;
-        q.pQueuePriorities     = &priority;
-        vq                    += q;
-    }
-
-    VkPhysicalDeviceFeatures feat {};
-    feat.samplerAnisotropy     = aa ? VK_TRUE : VK_FALSE;
-    ///
-    uint32_t  esz;
-    
+Device::Device(GPU &p_gpu, bool aa) {
+    auto qcreate        = vec<VkDeviceQueueCreateInfo>(2);
+    gpu                 = GPU(p_gpu);
+    sampling            = aa ? gpu.support.max_sampling : VK_SAMPLE_COUNT_1_BIT;
+    float priority      = 1.0f;
+    uint32_t i_gfx      = gpu.index(GPU::Graphics);
+    uint32_t i_present  = gpu.index(GPU::Present);
+    qcreate            += VkDeviceQueueCreateInfo  { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, null, 0, i_gfx,     1, &priority };
+    if (i_present != i_gfx)
+        qcreate        += VkDeviceQueueCreateInfo  { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, null, 0, i_present, 1, &priority };
+    auto features       = VkPhysicalDeviceFeatures { .samplerAnisotropy = aa ? VK_TRUE : VK_FALSE };
     vec<const char *> ext = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        "VK_KHR_portability_subset"
     };
-    
     VkDeviceCreateInfo ci {};
 #ifndef NDEBUG
-    ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    //ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME; # not supported on macOS with molten-vk
     static const char *debug   = "VK_LAYER_KHRONOS_validation";
     ci.enabledLayerCount       = 1;
     ci.ppEnabledLayerNames     = &debug;
 #endif
     ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    ci.queueCreateInfoCount    = uint32_t(vq.size());
-    ci.pQueueCreateInfos       = vq;
-    ci.pEnabledFeatures        = &feat;
+    ci.queueCreateInfoCount    = uint32_t(qcreate.size());
+    ci.pQueueCreateInfos       = qcreate;
+    ci.pEnabledFeatures        = &features;
     ci.enabledExtensionCount   = uint32_t(ext.size());
     ci.ppEnabledExtensionNames = ext;
 
-    assert(vkCreateDevice(gpu, &ci, nullptr, &device) == VK_SUCCESS);
-    vkGetDeviceQueue(device, gpu.index(GPU::Graphics), 0, &queues[GPU::Graphics]);
+    auto res = vkCreateDevice(gpu, &ci, nullptr, &device);
+    assert(res == VK_SUCCESS);
+    vkGetDeviceQueue(device, gpu.index(GPU::Graphics), 0, &queues[GPU::Graphics]); /// switch between like-queues if this is a hinderance
     vkGetDeviceQueue(device, gpu.index(GPU::Present),  0, &queues[GPU::Present]);
+    
+    /// create command pool (i think the pooling should be on each Frame)
+    auto pool_info = VkCommandPoolCreateInfo { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                        .queueFamilyIndex = gpu.index(GPU::Graphics) };
+    assert(vkCreateCommandPool(device, &pool_info, nullptr, &pool) == VK_SUCCESS);
+}
+
+void Device::start() {
+    render   = Render(this);
+    desc     = Descriptor(this);
+    plumbing = Plumbing(this);
 }
 
 /// essentially a series of tubes...
 void Device::update() {
     uint32_t  frame_count = frames.size();
-    ///
+
+    /// we really need implicit flagging on these if we can manage it.
+    /// one of each of these (color, depth)
+    tx_color = Texture { this, sz, null,
+        VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /// other: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT, msaa_samples, VK_FORMAT_B8G8R8A8_SRGB, 1 };
+    tx_depth  = Texture { this, sz, null,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT, msaa_samples, VK_FORMAT_D32_SFLOAT, 1 };
+
+    /// hide usage, memory, aspect, mips; can infer this from context
+    /// 
     /// create VkCommandBuffer for pipelines across all frames
     /// create view, uniform buffer, render command
     for (size_t i = 0; i < frame_count; i++) {
-        VkImage     image = swap_images[i];
-        VkImageView  view = Texture::create_view(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-        Frame      &frame = frames[i];
-        if (frame.index >= 0)
-            frame.tx.destroy();
-        frame.index       = i;
-        frame.tx          = Texture { this, { int(extent.width), int(extent.height) }, image, view };
+        auto      sz = vec2i { int(extent.width), int(extent.height) };
+        Frame &frame   = frames[i];
+        frame.index    = i;
+        frame.tx_color = tx_color; // copy first, thus creating a new view each time
+        frame.tx_depth = tx_depth; // ... [ look at all of the formats at work in vk-aa ]
+        frame.tx_swap  = Texture { this, sz, swap_images[i], null,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_B8G8R8A8_SRGB, 1 };
         if (!frame.ubo)
-             frame.ubo    = UniformBuffer<Uniform>(this, &frame.uniform); /// this uniform is part of the frame display
-        frame.create({ tx_color, tx_depth, frame.tx });
-        
+             frame.ubo  = UniformBuffer<Uniform>(this, &frame.uniform);
+        frame.create({ frame.tx_color, frame.tx_depth, frame.tx_swap });
         plumbing.update(frame);
     }
 }
 
-void Device::initialize() {
-    /// create command pool (i think the pooling should be on each Frame)
-    VkCommandPoolCreateInfo pi {};
-    pi.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pi.queueFamilyIndex = gpu.index(GPU::Graphics);
-    assert(vkCreateCommandPool(device, &pi, nullptr, &pool) == VK_SUCCESS);
-    
-    vec2i sz = vec2i { int(extent.width), int(extent.height) };
-    /// we really need implicit flagging on these if we can manage it.
-    tx_color = Texture { this, sz, null,
-        VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /// other: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        msaa_samples,
-        format, -1 };
-    ///
-    tx_depth = Texture { this, sz, null,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT,
-        msaa_samples,
-        format, -1 };
+/// why does it take me so long to make an interface?  just think of the basic params and do it.  i think
+/// programmers think about dependencies too much and that is a failing of build rules than something to burden the programmer with
+void Device::initialize(Window *window) {
+    vec2i sz = window->size;
     
     auto select_surface_format = [](vec<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR {
         for (const auto &f: formats)
@@ -256,7 +253,7 @@ void Device::initialize() {
     ///
     VkSwapchainCreateInfoKHR ci {};
     ci.sType                      = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    ci.surface                    = gpu.surface;
+    ci.surface                    = *window;
     ci.minImageCount              = frame_count;
     ci.imageFormat                = surface_format.format;
     ci.imageColorSpace            = surface_format.colorSpace;
@@ -329,6 +326,7 @@ VkFormat supported_format(VkPhysicalDevice gpu, vec<VkFormat> candidates, VkImag
     throw std::runtime_error("failed to find supported format!");
 }
 
+/// this must absolutely map to the framebuffer-related code.  its 1:1
 void Device::create_render_pass() {
     auto depth_format = [](VkPhysicalDevice gpu) -> VkFormat {
         return supported_format(gpu,
@@ -337,7 +335,7 @@ void Device::create_render_pass() {
         );
     };
     
-    VkAttachmentDescription color {};
+    VkAttachmentDescription color = tx_color;
     color.format                = format;
     color.samples               = msaa_samples;
     color.loadOp                = VK_ATTACHMENT_LOAD_OP_CLEAR;

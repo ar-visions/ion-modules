@@ -1,189 +1,22 @@
 #pragma once
 #include <vulkan/vulkan.hpp>
+
 #include <glm/glm.hpp>
-///
 #include <dx/dx.hpp>
 #include <media/canvas.hpp>
 #include <media/obj.hpp>
 
-
 struct Device;
+struct Texture;
+VkDevice                handle(Device *device);
 VkDevice         device_handle(Device *device);
 VkPhysicalDevice    gpu_handle(Device *device);
 uint32_t           memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags props);
 
-///
-/// a good vulkan api will be fully accessible but minimally interfaced
-struct GPU {
-protected:
-    var              gfx;
-    var              present;
-    
-public:
-    enum Capability {
-        Present,
-        Graphics,
-        Complete
-    };
-    struct Support {
-        VkSurfaceCapabilitiesKHR caps;
-        vec<VkSurfaceFormatKHR>  formats;
-        vec<VkPresentModeKHR>    present_modes;
-        bool                     ansio;
-    };
-    Support          support;
-    VkSurfaceKHR     surface;
-    VkPhysicalDevice gpu;
-    VkQueue          queues[2];
-    ///
-    GPU(VkPhysicalDevice, VkSurfaceKHR);
-    GPU(nullptr_t n = null) { }
-    uint32_t                index(Capability);
-    void                    destroy();
-    operator                bool();
-    operator                VkPhysicalDevice();
-    bool                    operator()(Capability);
-    VkSampleCountFlagBits   max_sampling();
-};
-
-VkDevice handle(Device *device);
-
-struct Device;
-struct Texture;
-struct Buffer {
-    ///
-    Device        *device;
-    VkDescriptorBufferInfo info;
-    VkBuffer       buffer;
-    VkDeviceMemory memory;
-    size_t         sz;
-    size_t         type_size;
-    void           destroy();
-    operator       VkBuffer();
-    operator       VkDeviceMemory();
-    ///
-    Buffer(nullptr_t n = null) : device(null) { }
-    Buffer(Device *, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
-    
-    template <typename T>
-    Buffer(Device *d, vec<T> &v, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprops): sz(v.size() * sizeof(T)) {
-        VkDevice device = handle(d);
-        VkBufferCreateInfo bi {};
-        bi.sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bi.size         = VkDeviceSize(sz);
-        bi.usage        = usage;
-        bi.sharingMode  = VK_SHARING_MODE_EXCLUSIVE;
-
-        assert(vkCreateBuffer(device, &bi, nullptr, &buffer) == VK_SUCCESS);
-        VkMemoryRequirements req;
-        vkGetBufferMemoryRequirements(device, buffer, &req);
-        
-        /// allocate and bind
-        VkMemoryAllocateInfo alloc {};
-        alloc.sType             = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        alloc.allocationSize    = req.size;
-        VkPhysicalDevice gpu    = gpu_handle(d);
-        alloc.memoryTypeIndex   = memory_type(gpu, req.memoryTypeBits, mprops);
-        assert(vkAllocateMemory(device, &alloc, nullptr, &memory) == VK_SUCCESS);
-        vkBindBufferMemory(device, buffer, memory, 0);
-        
-        /// transfer memory
-        assert(v.size() == sz / sizeof(T));
-        void* data;
-          vkMapMemory(device, memory, 0, sz, 0, &data);
-               memcpy(data,   v.data(),  sz);
-        vkUnmapMemory(device, memory);
-
-        info        = VkDescriptorBufferInfo {};
-        info.buffer = buffer;
-        info.offset = 0;
-        info.range  = sz; /// was:sizeof(UniformBufferObject)
-    }
-    
-    void  copy_to(Buffer &, size_t);
-    void  copy_to(Texture *);
-    ///
-    inline operator VkDescriptorBufferInfo &() {
-        return info;
-    }
-};
-
-struct IBufferData {
-    Buffer          buffer;
-    bool            short_index;
-    operator VkBuffer() { return buffer;    }
-    size_t       size() { return buffer.sz; }
-};
-
-struct VBufferData {
-    Buffer          buffer;
-    operator VkBuffer() { return buffer;    }
-    size_t       size() { return buffer.sz; }
-};
-
-/// its the stack, thats all.
-template <typename V>
-struct VertexBuffer:VBufferData {
-    ///
-    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
-        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
-                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
-    }
-    VertexBuffer(VkDevice d, vec<V> &v) {
-        buffer = {
-            d, sizeof(V) * v.size(),
-            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
-    }
-    size_t size() { return buffer.sz / sizeof(V); }
-};
-
-template <typename I>
-struct IndexBuffer:IBufferData {
-    ///
-    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
-        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
-                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
-    }
-    IndexBuffer(VkDevice d, vec<I> &i) {
-        if constexpr (std::is_same_v<I, uint16_t>)
-            short_index = true;
-        else
-            short_index = false;
-        buffer = {
-            d, sizeof(I) * i.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
-    }
-    size_t size() { return buffer.sz / sizeof(I); }
-};
-
-struct UniformBufferData { /// UniformsData
-    Device *device;
-    Buffer  buffer;
-    void   *data; /// its good to fix the address memory, update it as part of the renderer, if the user goes away the UniformBuffer will as well.
-    
-    UniformBufferData(Device *device = null) { }
-    VkWriteDescriptorSet operator()(VkDescriptorSet &ds);
-    void destroy();
-    void transfer();
-    operator bool() {
-        return device != null;
-    }
-    bool operator!() {
-        return device == null;
-    }
-};
-
-template <typename U>
-struct UniformBuffer:UniformBufferData { /// will be best to call it 'Uniforms'
-    UniformBuffer(Device *device = null, U *data = null) {
-        this->device = device;
-        this->data   = data;
-        if (device && data)
-            this->buffer = Buffer { device, sizeof(U), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
-    }
-};
+#include <vk/window.hpp>
+#include <vk/gpu.hpp>
+#include <vk/device.hpp>
+#include <vk/buffer.hpp> /// many buffers here. [tumbleweed near wooden sign]
 
 struct Uniform {
     alignas(16) glm::mat4 model;
@@ -211,16 +44,17 @@ struct Texture {
         VkImageUsageFlags       usage;
         VkImageAspectFlags      aflags;
         VkImageTiling           tiling;
-        VkSampleCountFlagBits   msaa;
+        VkImageLayout           layout     = VK_IMAGE_LAYOUT_UNDEFINED; // needless monkeywork
+        VkSampleCountFlagBits   msaa       = VK_SAMPLE_COUNT_1_BIT;
         ///
         void destroy();
-        void transition_layout(VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mip_levels);
-        static VkImageView create_view(VkDevice, VkImage, VkFormat, VkImageAspectFlags, uint32_t mipLevels);
+        void set_layout(VkImageLayout new_layout);
+        static VkImageView create_view(VkDevice, vec2i &, VkImage, VkFormat, VkImageAspectFlags, uint32_t mipLevels);
     
         ///
         /// we need to create the color resources with texture as well, simplify flags if possible
         /// int = mip levels
-        int get_mips(int mip_levels);
+        static int get_mips(int mip_levels, vec2i sz);
         Texture(nullptr_t n = null) { }
         Texture(Device *, vec2i, rgba,
                 VkImageUsageFlags, VkMemoryPropertyFlags, VkImageAspectFlags, VkSampleCountFlagBits,
@@ -228,7 +62,9 @@ struct Texture {
         Texture(Device *device, Image &im,
                 VkImageUsageFlags, VkMemoryPropertyFlags, VkImageAspectFlags, VkSampleCountFlagBits,
                 VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1);
-        Texture(Device *device, vec2i sz, VkImage image, VkImageView view); /// dont use.
+        Texture(Device *device, vec2i sz, VkImage image, VkImageView view,
+                VkImageUsageFlags, VkMemoryPropertyFlags, VkImageAspectFlags, VkSampleCountFlagBits,
+                VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1);
         ///
         operator VkDescriptorImageInfo() {
             return { sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
@@ -239,13 +75,15 @@ struct Texture {
         operator VkImage &();
         operator VkImageView &();
         operator VkDeviceMemory &();
+        operator VkAttachmentReference();
+        operator VkAttachmentDescription();
 };
 
 /// What do you call this controller?
 struct Frame {
     int                    index;
     Device                *device;
-    Texture                tx; /// just image and view used; no sampler
+    Texture                tx_color, tx_depth, tx_swap; // Textures can be references to others created elsewhere, with views of their own instancing
     VkFramebuffer          framebuffer;
     /// shader used by Render
     UniformBuffer<Uniform> ubo; //
@@ -295,11 +133,11 @@ struct Render {
     void present();
 };
 
+struct Window;
 struct Device {
     void                  create_swapchain();
     void                  create_command_buffers();
     void                  create_render_pass();
-    VkImageView           create_iview(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
     
     Render                render;
     VkSampleCountFlagBits msaa_samples;
@@ -316,14 +154,17 @@ struct Device {
     VkRect2D              sc;
     vec<Frame>            frames;
     vec<VkImage>          swap_images;
+    Plumbing              plumbing;
+    VkSampleCountFlagBits sampling;
     Texture               tx_color;
     Texture               tx_depth;
-    Plumbing              plumbing;
     
     PipelineData &operator[](std::string n);
     ///
-    void            initialize();
+    void            initialize(Window *);
+    /// todo: initialize for compute_only
     void            update();
+    void            start();
     void            destroy();
     VkCommandBuffer begin();
     void            submit(VkCommandBuffer commandBuffer);
@@ -564,7 +405,7 @@ struct Vulkan {
     static Device          &device();
     static VkPhysicalDevice gpu();
     static VkQueue          queue();
-    static VkSurfaceKHR     surface();
+    static VkSurfaceKHR     surface(vec2i &);
     static VkImage          image();
     static uint32_t         queue_index();
     static uint32_t         version();
@@ -573,4 +414,5 @@ struct Vulkan {
     static int              main(FnRender, Composer *);
     static Texture          texture(vec2i);
     static void             draw_frame();
+    static recti            startup_rect();
 };

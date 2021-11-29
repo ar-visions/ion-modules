@@ -12,8 +12,6 @@ static const int MAX_FRAMES_IN_FLIGHT = 2;
 
 void Render::present() {
     auto &device = *this->device;
-    /// simplify the indexing here.  i dont believe there needs to be two separate state variables
-    /// just get compiling for now.
     vkWaitForFences(device, 1, &fence_active[cframe], VK_TRUE, UINT64_MAX);
     
     uint32_t frame_index;
@@ -54,10 +52,9 @@ void Render::present() {
         vkResetFences(device, 1, &fence_active[cframe]);
         assert(vkQueueSubmit(device.queues[GPU::Graphics], 1, &submit_info, fence_active[cframe]) == VK_SUCCESS);
         
-        VkSwapchainKHR swap_chains[] = { device.swap_chain };
-        VkPresentInfoKHR   present   = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, null, 1,
+        VkPresentInfoKHR         present = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, null, 1,
             s_signal, 1, &device.swap_chain, &frame_index };
-        VkResult           presult   = vkQueuePresentKHR(device.queues[GPU::Present], &present);
+        VkResult                 presult = vkQueuePresentKHR(device.queues[GPU::Present], &present);
         
         if (presult == VK_ERROR_OUT_OF_DATE_KHR || presult == VK_SUBOPTIMAL_KHR || resized) {
             resized = false;
@@ -71,24 +68,34 @@ void Render::present() {
 }
 
 Render::Render(Device *device): device(device) {
-    const int mx = MAX_FRAMES_IN_FLIGHT;
-    ///
-      image_avail.resize(mx);
-    render_finish.resize(mx);
-     fence_active.resize(mx);
-     image_active.resize(device->swap_images.size(), VK_NULL_HANDLE);
-
-    VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-    VkFenceCreateInfo     fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, null, VK_FENCE_CREATE_SIGNALED_BIT };
-    
-    for (size_t i = 0; i < mx; i++) {
-        VkSemaphore &ia =   image_avail[i];
-        VkSemaphore &rf = render_finish[i];
-        VkFence     &fa =  fence_active[i];
-        if (vkCreateSemaphore(*device, &si, null, &ia) != VK_SUCCESS ||
-            vkCreateSemaphore(*device, &si, null, &rf) != VK_SUCCESS ||
-                vkCreateFence(*device, &fi, null, &fa) != VK_SUCCESS) {
-            
+    if (device) {
+        const int n_swap = device->swap_images.size();
+        const int mx     = MAX_FRAMES_IN_FLIGHT;
+        image_avail   = vec<VkSemaphore>(mx);
+        render_finish = vec<VkSemaphore>(mx);
+        fence_active  = vec<VkFence>(mx);
+        image_active  = vec<VkFence>(n_swap);
+        
+          image_avail.resize(mx);
+        render_finish.resize(mx);
+         fence_active.resize(mx);
+         image_active.resize(n_swap, VK_NULL_HANDLE); /// thar be the problem!!
+        
+        vec<VkSemaphore> image_avail;        /// you are going to want ubo controller to update a lambda right before it transfers
+        vec<VkSemaphore> render_finish;      /// if we're lucky, that could adapt to compute model integration as well.
+        vec<VkFence>     fence_active;
+        vec<VkFence>     image_active;
+        
+        VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+        VkFenceCreateInfo     fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, null, VK_FENCE_CREATE_SIGNALED_BIT };
+        
+        for (size_t i = 0; i < mx; i++) {
+            VkSemaphore &ia =   image_avail[i];
+            VkSemaphore &rf = render_finish[i];
+            VkFence     &fa =  fence_active[i];
+            assert (vkCreateSemaphore(*device, &si, null, &ia) == VK_SUCCESS ||
+                    vkCreateSemaphore(*device, &si, null, &rf) == VK_SUCCESS ||
+                    vkCreateFence(    *device, &fi, null, &fa) == VK_SUCCESS);
         }
     }
 }

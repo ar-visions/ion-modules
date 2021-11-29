@@ -16,20 +16,13 @@ int App::UX::operator()(FnRender fn) {
     return Vulkan::main(fn, composer);
 }
 
-App::UX::UX(int c, const char *v[], Args &defaults) : composer(new Composer(this)) {
+App::UX::UX(int c, const char *v[], Args &defaults) {
     type = Interface::UX;
     args = var::args(c, v);
-    for (auto &[k,v]: defaults) {
+    for (auto &[k,v]: defaults)
         if (args.count(k) == 0)
             args[k] = v;
-    }
-    /// init a valid size, the view does not dictate this but it could end up saving a persistent arg
-    sz = {args["window-width"],
-          args["window-height"]};
-    if (sz.x == 0 || sz.y == 0)
-        sz = {800, 800};
-    args.erase("window-width");
-    args.erase("window-height");
+    composer = new Composer(this, args);
 }
 
 App::Server::Server(int c, const char *v[], Args &defaults) {
@@ -59,7 +52,7 @@ Web::Message App::Server::query(Web::Message &m, Args &a, var &p) {
         return {400, "bad request"};
     
     /// route/to/data#id
-    Composer cc = Composer((Interface *)this);
+    Composer cc = Composer((Interface *)this, a);
     
     /// instantiate components -- this may be in session cache
     cc(fn(a));
@@ -98,8 +91,9 @@ char getch_() {
 #endif
 
 int App::Console::operator()(FnRender fn) {
+    Args args;
     assert(g_this);
-    Composer cc         = Composer((Interface *)this);
+    Composer cc         = Composer((Interface *)this, args);
 #if defined(UNIX)
     struct termios t = {};
     tcgetattr(0, &t);

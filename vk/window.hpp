@@ -1,11 +1,13 @@
 #pragma once
 #include <functional>
 #include <dx/dx.hpp>
+#include <vulkan/vulkan.hpp>
 
 struct GLFWwindow;
 struct Window {
 protected:
-    GLFWwindow *handle;
+    GLFWwindow  *handle    = null;
+    VkSurfaceKHR surface   = VK_NULL_HANDLE;
 public:
     var          mouse     = Args {};
     str          title     = "";
@@ -35,4 +37,5 @@ public:
    ~Window();
     Window(nullptr_t = null);
     operator GLFWwindow *();
+    operator VkSurfaceKHR();
 };

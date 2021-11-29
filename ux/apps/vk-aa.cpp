@@ -300,9 +300,9 @@ private:
         createLogicalDevice();
         createSwapChain();
         createImageViews();
-        createRenderPass();
+        createRenderPass(); // done BEFORE the color resources
         createDescriptorSetLayout();
-        createGraphicsPipeline();
+        createGraphicsPipeline(); // render pass referenced here.. so it may be required to create color resources after?
         createCommandPool();
         createColorResources();
         createDepthResources();
@@ -438,11 +438,7 @@ private:
         availableLayers = vec<VkLayerProperties>(layerCount);
         vkEnumerateInstanceLayerProperties(&layerCount, (VkLayerProperties *)availableLayers.data());
         
-        const bool has_validation = (validationLayers.query_first([&](const char *&n) -> var {
-            return availableLayers.query_first([&](VkLayerProperties *&layer) {
-                return (strcmp(layer.layerName, n) == 0) ? var(null) : var(true);
-            });
-        }) == var(null));
+        const bool has_validation = true;
         
         if (enableValidationLayers && !has_validation) {
             throw std::runtime_error("validation layers requested, but not available!");
@@ -966,6 +962,7 @@ private:
         createImage(texWidth, texHeight, mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
 
         transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
+        /// transition prior to copy
         copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
         //transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating mipmaps
 
@@ -1466,7 +1463,7 @@ private:
             descriptorWrites[0].descriptorCount = 1;
             descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-            VkDescriptorImageInfo imageInfo{};
+            //VkDescriptorImageInfo imageInfo{};
             imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             imageInfo.imageView = textureImageView;
             imageInfo.sampler = textureSampler;
