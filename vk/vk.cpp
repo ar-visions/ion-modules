@@ -44,7 +44,7 @@ struct Internal {
     Device   device;
     GPU      gpu;
     Device   instance;
-    Texture  tx;
+    Texture  tx_skia;
     bool     resize;
     vec<VkFence> fence;
     vec<VkFence> image_fence;
@@ -93,26 +93,22 @@ Internal &Internal::bootstrap() {
     for (int i = 0; i < n_ext; i++)
         instance_ext += glfw_ext[i];
     instance_ext += "VK_KHR_get_physical_device_properties2";
-    ///
     #if !defined(NDEBUG)
-        instance_ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-        ci.enabledLayerCount = uint32_t(validation_layers.size());
+        instance_ext          += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+        ci.enabledLayerCount   = uint32_t(validation_layers.size());
         ci.ppEnabledLayerNames = (const char* const*)validation_layers.data();
-        ///
-        dbg.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        dbg.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        dbg.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        dbg.pfnUserCallback = vk_debug;
-        ///
-        ci.pNext = (VkDebugUtilsMessengerCreateInfoEXT *) &dbg;
+        dbg.sType              = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        dbg.messageSeverity    = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        dbg.messageType        = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        dbg.pfnUserCallback    = vk_debug;
+        ci.pNext               = (VkDebugUtilsMessengerCreateInfoEXT *) &dbg;
     #else
-        ci.enabledLayerCount = 0;
-        ci.pNext = nullptr;
+        ci.enabledLayerCount   = 0;
+        ci.pNext               = nullptr;
     #endif
-    ///
     ci.enabledExtensionCount   = static_cast<uint32_t>(instance_ext.size());
     ci.ppEnabledExtensionNames = instance_ext;
-    auto res = vkCreateInstance(&ci, nullptr, &vk);
+    auto res                   = vkCreateInstance(&ci, nullptr, &vk);
     assert(res == VK_SUCCESS);
     
     gpu    = GPU::select();
@@ -126,15 +122,16 @@ void Vulkan::init() {
 
 Texture Vulkan::texture(vec2i size) {
     auto &i = Internal::handle();
-    i.tx.destroy();
+    //i.tx_skia.destroy();
+    // lets call this something descriptive
     
     // VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
-    i.tx = Texture { &i.device, size, rgba { 1.0, 0.0, 0.0, 1.0 }, /// lets hope we see red soon.
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
+    i.tx_skia = Texture { &i.device, size, rgba { 1.0, 0.0, 0.0, 1.0 }, /// lets hope we see red soon.
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT, // aspect? what is this on vk-aa
-        VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, -1 }; // force sample count to 1 bit
+        false, VK_FORMAT_R8G8B8A8_UNORM, -1 }; // force sample count to 1 bit
     
-    return i.tx;
+    return i.tx_skia;
 }
 
 static recti s_rect;
@@ -142,88 +139,6 @@ static recti s_rect;
 recti Vulkan::startup_rect() {
     assert(s_rect);
     return s_rect;
-}
-
-void transitionImageLayout(Device *device, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
-    VkCommandBuffer      commandBuffer      = device->begin();
-    VkImageMemoryBarrier barrier {};
-    barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout                       = oldLayout;
-    barrier.newLayout                       = newLayout;
-    barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image                           = image;
-    barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel   = 0;
-    barrier.subresourceRange.levelCount     = mipLevels;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount     = 1;
-
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
-
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-    {
-        barrier.srcAccessMask   = 0;
-        barrier.dstAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT;
-        sourceStage             = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage        = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        
-    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-               newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
-        barrier.srcAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask   = VK_ACCESS_SHADER_READ_BIT;
-        sourceStage             = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage        = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    
-    } else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
-               newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-    {
-        barrier.srcAccessMask   = VK_ACCESS_SHADER_READ_BIT;
-        barrier.dstAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT;
-        sourceStage             = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        destinationStage        = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    
-    } else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL &&
-               newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
-        barrier.srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier.dstAccessMask   = VK_ACCESS_SHADER_READ_BIT;
-        sourceStage             = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        destinationStage        = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        
-    } else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
-               newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-    {
-         barrier.srcAccessMask   = VK_ACCESS_SHADER_READ_BIT;
-         barrier.dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-         sourceStage             = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-         destinationStage        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    
-    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-              newLayout  == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-    {
-        barrier.srcAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        sourceStage             = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-           
-    } else {
-        throw std::invalid_argument("unsupported layout transition!");
-    }
-
-    vkCmdPipelineBarrier(
-        commandBuffer,
-        sourceStage, destinationStage,
-        0,
-        0, nullptr,
-        0, nullptr,
-        1, &barrier
-    );
-
-    device->submit(commandBuffer);
 }
 
 ///
@@ -236,37 +151,53 @@ int Vulkan::main(FnRender fn, Composer *composer) {
     s_rect         = recti { 0, 0, sz.x, sz.y };
     Internal    &i = Internal::handle();
     Window      &w = *i.window;
+    Device &device = i.device;
     Canvas  canvas = Canvas(sz, Canvas::Context2D);
     ///
     i.device.initialize(&w);
-    i.device.start(); // may do the trick.
     w.show();
     ///
+    vec<Vertex> vertices = {
+        {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+        {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+    };
+    vec<uint16_t> indices = { 0, 1, 2, 2, 3, 0 };
+    ///
+    Uniform uniform;
+    auto    vbo = VertexBuffer<Vertex>(device, vertices);
+    auto    ibo = IndexBuffer<uint16_t>(device, indices);
+    auto    uni = UniformBuffer<Uniform>(device, uniform);
+    ///
+    Pipeline<Vertex> pl = {
+        device, uni, vbo, ibo, std::string("main")
+    };
+    /// uniforms are meant to be managed by the app, passed into pipelines.
     w.loop([&]() {
+        static bool init = false;
+        if (!init) {
+            glfwInit();
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+            init = true;
+        }
         rectd box   = {   0,   0, 320, 240 };
         rgba  color = { 255, 255,   0, 255 };
-
-        i.tx.set_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        // skia is not written right; i think it will make sense to ignore the majority of the vulkan messages
-        // unless they have a graphical impact.  clumsy actors at play
+        //i.tx_skia.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         canvas.color(color);
-        canvas.clear(); /// todo: like the idea of fill() with a color just being a clear color.  thats a simpler api. the path is a param that can be null
-      //canvas.fill(box);
-        canvas.flush();
-        i.tx.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        
-        i.device.render.present();
+        canvas.clear();            /// todo: like the idea of fill() with a color just being a clear color.
+        /*canvas.fill(box);*/      /// thats a simpler api. the path is a param that can be null
+        canvas.flush();            ///
+        //i.tx_skia.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        i.device.render.execute(); /// execute all graphic (render) pipelines [ on the current frame ]
+        i.device.render.present(); /// present
 
-        Composer &cmp = *composer;
-        cmp(fn(args));
-        w.set_title(cmp.root->props.text.label);
-        if (!cmp.process())
-            glfwWaitEventsTimeout(1.0);
+        //Composer &cmp = *composer;
+        //cmp(fn(args));
+        //w.set_title(cmp.root->props.text.label);
         
-        usleep(100000);
-        //Vulkan::swap(sz);
-        // glfw might just manage swapping? but lets remove it for now
-        //glfwSwapBuffers(intern->glfw);
+        //if (!cmp.process())
+            glfwWaitEventsTimeout(1.0);
     });
     return 0;
 }

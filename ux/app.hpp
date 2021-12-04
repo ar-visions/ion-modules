@@ -73,8 +73,7 @@ struct App {
             
             /// update on resize, and update these buffers
             if (update_cache) {
-                cache = vec<ColoredGlyph>(buf->size());
-                cache.fill(null);
+                cache = vec<ColoredGlyph>(buf->size(), null);
                 //for (size_t i = 0; i < sz.y; i++)
                 //    fprintf(stdout, "\n");
             }

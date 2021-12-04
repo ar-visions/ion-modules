@@ -89,8 +89,6 @@ Window *Window::first = null; // ha!
 /// Window Constructors
 Window::Window(nullptr_t n) { }
 Window::Window(vec2i     sz): size(sz) {
-    //glfwInit();
-    //glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     handle = glfwCreateWindow(sz.x, sz.y, title.cstr(), nullptr, nullptr);
     ///
     glfwSetWindowUserPointer      (handle, this);

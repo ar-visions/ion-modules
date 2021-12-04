@@ -6,27 +6,47 @@
 #include <GLFW/glfw3.h>
 
 
-VkWriteDescriptorSet UniformBufferData::operator()(VkDescriptorSet &ds) {
+static Device d_null;
+Device &Device::null_device() {
+    return d_null;
+}
+
+VkWriteDescriptorSet UniformData::write_desc(size_t frame_index, VkDescriptorSet &ds) {
+    auto &device = *this->device;
     return {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, null, ds, 0, 0,
-        1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, null, &buffer.info, null
+        1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, null, &buffers[frame_index].info, null // buffer.info offset and range appear corrupt
     };
 }
 
-void UniformBufferData::destroy() {
-    buffer.destroy();
+void UniformData::initialize(size_t buffer_sz) {
+    auto    &device = *this->device;
+    size_t n_frames = device.frames.size();
+    buffers         = vec<Buffer>(n_frames);
+    for (int i = 0; i < n_frames; i++)
+        buffers += Buffer { &device, uint32_t(buffer_sz), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
+}
+
+void UniformData::destroy() {
+    auto    &device = *this->device;
+    size_t n_frames = device.frames.size();
+    for (int i = 0; i < n_frames; i++)
+        buffers[i].destroy();
 }
 
 /// called by Pipeline, called by the Render
-void UniformBufferData::transfer() {
+void UniformData::transfer() {
+    auto &device = *this->device;
+    const int  c = device.render.cframe;
     void* gpu;
-      vkMapMemory(*device, buffer, 0, buffer.sz, 0, &gpu);
-           memcpy( gpu,    data,      buffer.sz);
-    vkUnmapMemory(*device, buffer);
+      vkMapMemory(device, buffers[c], 0, buffers[c].sz, 0, &gpu);
+           memcpy( gpu,   data,          buffers[c].sz);
+    vkUnmapMemory(device, buffers[c]);
 }
 
 void PipelineData::update(Frame &frame, VkCommandBuffer &rc) {
-    Device &device = *this->device;
+    auto &device = *this->device;
     auto ai = VkCommandBufferAllocateInfo {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
@@ -45,7 +65,8 @@ void PipelineData::update(Frame &frame, VkCommandBuffer &rc) {
     VkDeviceSize   offsets[] = {0};
     vkCmdBindVertexBuffers(rc, 0, 1, a_vbo.data(), offsets);
     vkCmdBindIndexBuffer(rc, ibo, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdBindDescriptorSets(rc, VK_PIPELINE_BIND_POINT_GRAPHICS,  layout, 0, 1, desc_sets, 0, nullptr);
+    vkCmdBindDescriptorSets(rc, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            pipeline_layout, 0, 1, desc_sets, 0, nullptr);
     vkCmdDrawIndexed(rc, uint32_t(ibo.size()), 1, 0, 0, 0);
     vkCmdEndRenderPass(rc);
 }
@@ -70,47 +91,25 @@ uint32_t memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags
    return 0;
 };
 
-PipelineData &Plumbing::operator[](std::string n) {
-    return *pipelines[n];
+VkShaderModule Device::module(std::filesystem::path p, Module type) {
+    str key = p.string();
+    assert(type != Compute);
+    auto &m = type == Vertex ? v_modules : f_modules;
+    if (!m.count(key)) {
+        auto mc     = VkShaderModuleCreateInfo { };
+        str code    = str::read_file(p);
+        mc.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        mc.codeSize = code.length();
+        mc.pCode    = reinterpret_cast<const uint32_t *>(code.cstr());
+        assert (vkCreateShaderModule(device, &mc, nullptr, &m[key]) == VK_SUCCESS);
+    }
+    return m[key];
 }
 
 PipelineData &Device::operator[](std::string n) {
-    return plumbing[n];
+    return render[n];
 }
 
-/// frames and plumbing need a bit of integration
-void Plumbing::update(Frame &frame) {
-    Device &device = *this->device;
-    ///
-    for (auto &[n, p]: pipelines) {
-        PipelineData &pipeline = *p;
-        if (!pipeline.pairs)
-             pipeline.pairs.resize(device.frames.size());
-        RenderPair &pair = pipeline.pairs[frame.index];
-        ///
-        /// release and allocate command buffer (1)
-        if (pair.cmd)
-            vkFreeCommandBuffers(device, device.pool, 1, &pair.cmd);
-        auto ai = VkCommandBufferAllocateInfo {
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
-        assert(vkAllocateCommandBuffers(device, &ai, &pair.cmd) == VK_SUCCESS);
-        pipeline.update(frame, pair.cmd);
-    }
-}
-
-void Frame::create(vec<VkImageView> attachments) {
-    auto &device = *this->device;
-    VkFramebufferCreateInfo ci {};
-    ci.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    ci.renderPass      = device.render_pass;
-    ci.attachmentCount = static_cast<uint32_t>(attachments.size());
-    ci.pAttachments    = attachments.data();
-    ci.width           = device.extent.width;
-    ci.height          = device.extent.height;
-    ci.layers          = 1;
-    assert (vkCreateFramebuffer(device, &ci, nullptr, &framebuffer) == VK_SUCCESS);
-}
 
 uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
     VkPhysicalDeviceMemoryProperties mprops;
@@ -127,7 +126,7 @@ uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
 Device::Device(GPU &p_gpu, bool aa) {
     auto qcreate        = vec<VkDeviceQueueCreateInfo>(2);
     gpu                 = GPU(p_gpu);
-    sampling            = aa ? gpu.support.max_sampling : VK_SAMPLE_COUNT_1_BIT;
+    sampling            = VK_SAMPLE_COUNT_8_BIT; //aa ? gpu.support.max_sampling : VK_SAMPLE_COUNT_1_BIT;
     float priority      = 1.0f;
     uint32_t i_gfx      = gpu.index(GPU::Graphics);
     uint32_t i_present  = gpu.index(GPU::Present);
@@ -164,53 +163,72 @@ Device::Device(GPU &p_gpu, bool aa) {
     assert(vkCreateCommandPool(device, &pool_info, nullptr, &pool) == VK_SUCCESS);
 }
 
-void Device::start() {
-    render   = Render(this);
-    desc     = Descriptor(this);
-    plumbing = Plumbing(this);
+/// this is to avoid doing explicit monkey-work, and keep code size down as well as find misbound texture
+uint32_t Device::attachment_index(Texture *tx) {
+    auto is_referencing = [&](Texture *a, Texture *b) {
+        if (a->image && a->image == b->image)
+            return true;
+        if (a->view && a->view == b->view)
+            return true;
+        return false;
+    };
+    for (auto &f: frames)
+        for (int i = 0; i < f.attachments.size(); i++)
+            if (is_referencing(tx, &f.attachments[i]))
+                return i;
+    assert(false);
+    return 0;
 }
 
-/// essentially a series of tubes...
+/// this is an initialize as well, and its also called when things change (resize or pipeline changes)
+/// recreate pipeline may be a better name
 void Device::update() {
-    uint32_t  frame_count = frames.size();
+    auto sz = vec2i { int(extent.width), int(extent.height) };
+    uint32_t frame_count = frames.size();
 
     /// we really need implicit flagging on these if we can manage it.
-    /// one of each of these (color, depth)
+    /// one of each of these (color, depth) # i think we can infer all usage, perhaps.....
     tx_color = Texture { this, sz, null,
-        VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /// other: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /// other: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT, msaa_samples, VK_FORMAT_B8G8R8A8_SRGB, 1 };
+        VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_SRGB, 1 };
     tx_depth  = Texture { this, sz, null,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT, msaa_samples, VK_FORMAT_D32_SFLOAT, 1 };
-
+        VK_IMAGE_ASPECT_DEPTH_BIT, true, VK_FORMAT_D32_SFLOAT, 1 };
+    
     /// hide usage, memory, aspect, mips; can infer this from context
-    /// 
     /// create VkCommandBuffer for pipelines across all frames
     /// create view, uniform buffer, render command
     for (size_t i = 0; i < frame_count; i++) {
-        auto      sz = vec2i { int(extent.width), int(extent.height) };
         Frame &frame   = frames[i];
         frame.index    = i;
-        frame.tx_color = tx_color; // copy first, thus creating a new view each time
-        frame.tx_depth = tx_depth; // ... [ look at all of the formats at work in vk-aa ]
-        frame.tx_swap  = Texture { this, sz, swap_images[i], null,
+        auto   tx_swap = Texture {
+            this, sz, swap_images[i], null,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_B8G8R8A8_SRGB, 1 };
-        if (!frame.ubo)
-             frame.ubo  = UniformBuffer<Uniform>(this, &frame.uniform);
-        frame.create({ frame.tx_color, frame.tx_depth, frame.tx_swap });
-        plumbing.update(frame);
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            false, VK_FORMAT_B8G8R8A8_SRGB, 1 };
+        frame.attachments = vec<Texture> {
+            tx_color, // a copy without the view is set on each one of these frames, when the view operator is called it creates the view
+            tx_depth, // this may be actually creating it once.. darnit. test that.
+            tx_swap
+        };
+        //if (!frame.ubo)
+        //     frame.ubo = UniformBuffer<Uniform>(this, &frame.uniform);
     }
+    ///
+    create_render_pass();
+    ///
+    for (size_t i = 0; i < frame_count; i++) {
+        Frame &frame   = frames[i];
+        frame.update(); // r
+    }
+    /// render needs to update
+    /// render.update();
 }
 
-/// why does it take me so long to make an interface?  just think of the basic params and do it.  i think
-/// programmers think about dependencies too much and that is a failing of build rules than something to burden the programmer with
 void Device::initialize(Window *window) {
-    vec2i sz = window->size;
-    
     auto select_surface_format = [](vec<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR {
         for (const auto &f: formats)
             if (f.format     == VK_FORMAT_B8G8R8A8_SRGB &&
@@ -272,13 +290,12 @@ void Device::initialize(Window *window) {
     ci.compositeAlpha             = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     ci.presentMode                = surface_present;
     ci.clipped                    = VK_TRUE;
-    ///
+    
     /// create swap-chain
     assert(vkCreateSwapchainKHR(device, &ci, nullptr, &swap_chain) == VK_SUCCESS);
-    vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, nullptr);
-    frames.resize(frame_count);
-    /// -- from here we know the majestic 'swap buffer count' and contain that in an abstract vec<Frame>
-    /// -- all pipeline is commanded to these Frame anchor points of sort
+    vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, nullptr); /// the dreaded frame_count (2) vs image_count (3) is real.
+    frames = vec<Frame>(frame_count, this); /// its a vector. its a size. its a value.
+    
     /// get swap-chain images
     swap_images.resize(frame_count);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, swap_images.data());
@@ -286,7 +303,6 @@ void Device::initialize(Window *window) {
     this->extent                  = extent;
     viewport                      = { 0.0f, 0.0f, r32(extent.width), r32(extent.height), 0.0f, 1.0f };
     
-    ///
     /// create descriptor pool
     std::array<VkDescriptorPoolSize, 2> ps {};
     ps[0]              = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frame_count };
@@ -297,21 +313,21 @@ void Device::initialize(Window *window) {
     dpi.poolSizeCount  = uint32_t(ps.size());
     dpi.pPoolSizes     = ps.data();
     dpi.maxSets        = frame_count;
-    
+    render             = Render(this);
+    desc               = Descriptor(this);
+    ///
     assert(vkCreateDescriptorPool(device, &dpi, nullptr, &desc.pool) == VK_SUCCESS);
     for (auto &f: frames)
         f.index = -1;
-    
     update();
-    
 }
 
 void Descriptor::destroy() {
     auto &device = *this->device;
     vkDestroyDescriptorPool(device, pool, nullptr);
-    vkDestroyDescriptorSetLayout(device, layout, nullptr);
 }
 
+#if 0
 VkFormat supported_format(VkPhysicalDevice gpu, vec<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
     for (VkFormat format: candidates) {
         VkFormatProperties props;
@@ -326,81 +342,40 @@ VkFormat supported_format(VkPhysicalDevice gpu, vec<VkFormat> candidates, VkImag
     throw std::runtime_error("failed to find supported format!");
 }
 
-/// this must absolutely map to the framebuffer-related code.  its 1:1
+static VkFormat get_depth_format(VkPhysicalDevice gpu) {
+    return supported_format(gpu,
+        {VK_FORMAT_D32_SFLOAT,    VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+         VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+    );
+};
+#endif
+
 void Device::create_render_pass() {
-    auto depth_format = [](VkPhysicalDevice gpu) -> VkFormat {
-        return supported_format(gpu,
-            {VK_FORMAT_D32_SFLOAT,    VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-             VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-        );
-    };
-    
-    VkAttachmentDescription color = tx_color;
-    color.format                = format;
-    color.samples               = msaa_samples;
-    color.loadOp                = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color.storeOp               = VK_ATTACHMENT_STORE_OP_STORE;
-    color.stencilLoadOp         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color.stencilStoreOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color.initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED;
-    color.finalLayout           = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    Frame &f0                     = frames[0];
+    Texture &tx_ref               = f0.attachments[Frame::SwapView]; /// has msaa set to 1bit
+    assert(f0.attachments.size() == 3);
+    VkAttachmentReference    cref = tx_color;
+    VkAttachmentReference    dref = tx_depth;
+    VkAttachmentReference    rref = tx_ref;
+    VkSubpassDescription     sp   = { 0, VK_PIPELINE_BIND_POINT_GRAPHICS, 0, null, 1, &cref, &rref, &dref };
 
-    VkAttachmentDescription depth {};
-    depth.format                = depth_format(gpu); /// simplify or store
-    depth.samples               = msaa_samples;
-    depth.loadOp                = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth.storeOp               = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth.stencilLoadOp         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depth.stencilStoreOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth.initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth.finalLayout           = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    VkSubpassDependency dep { };
+    dep.srcSubpass                = VK_SUBPASS_EXTERNAL;
+    dep.dstSubpass                = 0;
+    dep.srcStageMask              = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dep.srcAccessMask             = 0;
+    dep.dstStageMask              = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dep.dstAccessMask             = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    VkAttachmentDescription cres {};
-    cres.format                 = format;
-    cres.samples                = VK_SAMPLE_COUNT_1_BIT;
-    cres.loadOp                 = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    cres.storeOp                = VK_ATTACHMENT_STORE_OP_STORE;
-    cres.stencilLoadOp          = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    cres.stencilStoreOp         = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    cres.initialLayout          = VK_IMAGE_LAYOUT_UNDEFINED;
-    cres.finalLayout            = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference cref {};
-    cref.attachment             = 0;
-    cref.layout                 = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference dref {};
-    dref.attachment             = 1;
-    dref.layout                 = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference rref {};
-    rref.attachment             = 2;
-    rref.layout                 = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription sp {};
-    sp.pipelineBindPoint        = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    sp.colorAttachmentCount     = 1;
-    sp.pColorAttachments        = &cref;
-    sp.pDepthStencilAttachment  = &dref;
-    sp.pResolveAttachments      = &rref;
-
-    VkSubpassDependency dep {};
-    dep.srcSubpass              = VK_SUBPASS_EXTERNAL;
-    dep.dstSubpass              = 0;
-    dep.srcStageMask            = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep.srcAccessMask           = 0;
-    dep.dstStageMask            = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep.dstAccessMask           = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-    std::array<VkAttachmentDescription, 3> attachments = {color, depth, cres};
-    VkRenderPassCreateInfo rpi {};
-    rpi.sType                   = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    rpi.attachmentCount         = uint32_t(attachments.size());
-    rpi.pAttachments            = attachments.data();
-    rpi.subpassCount            = 1;
-    rpi.pSubpasses              = &sp;
-    rpi.dependencyCount         = 1;
-    rpi.pDependencies           = &dep;
+    std::array<VkAttachmentDescription, 3> attachments = {f0.attachments[0], f0.attachments[1], f0.attachments[2]};
+    VkRenderPassCreateInfo rpi { }; // VkAttachmentDescription needs to be 4, 4, 1
+    rpi.sType                     = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    rpi.attachmentCount           = uint32_t(attachments.size());
+    rpi.pAttachments              = attachments.data();
+    rpi.subpassCount              = 1;
+    rpi.pSubpasses                = &sp;
+    rpi.dependencyCount           = 1;
+    rpi.pDependencies             = &dep;
 
     assert(vkCreateRenderPass(device, &rpi, nullptr, &render_pass) == VK_SUCCESS);
 }
@@ -462,16 +437,13 @@ Device::operator VkRenderPass() {
 void Device::destroy() {
     for (auto &f: frames)
         f.destroy();
+    for (auto &[k,f]: f_modules)
+        vkDestroyShaderModule(device, f, nullptr);
+    for (auto &[k,v]: v_modules)
+        vkDestroyShaderModule(device, v, nullptr);
     vkDestroyRenderPass(device, render_pass, nullptr);
     vkDestroySwapchainKHR(device, swap_chain, nullptr);
     desc.destroy();
-}
-
-///
-void Frame::destroy() {
-    auto &device = *this->device;
-    vkDestroyFramebuffer(device, framebuffer, nullptr);
-    tx.destroy();
 }
 
 

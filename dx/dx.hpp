@@ -30,3 +30,6 @@ struct DX {
     virtual var lookup(var &view, int64_t primary_key) = 0;
     virtual bool reset(var &view) = 0;
 };
+
+
+

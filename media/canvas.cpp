@@ -99,7 +99,7 @@ struct Context2D:ICanvasBackend {
         auto imi                = GrVkImageInfo { };
         imi.fImage              = tx.image;
         imi.fImageTiling        = VK_IMAGE_TILING_OPTIMAL;
-        imi.fImageLayout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        imi.fImageLayout        = VK_IMAGE_LAYOUT_UNDEFINED;//VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imi.fFormat             = VK_FORMAT_R8G8B8A8_UNORM;
         // this is new but it makes sense to me to pass along. these are the usage flags
         // important to keep flags as 0 here. it may still require some flags set still
@@ -115,6 +115,11 @@ struct Context2D:ICanvasBackend {
                                       kBottomLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, null, null);
         sk_canvas               = sk_surf->getCanvas();
         set_size(sz);
+        /// it was initializing with an invalid usage param before.  i am trying:
+        ///  usage: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT
+        ///  now i need to transition the layout to general perhaps..
+        ///  its easy to confuse usage and layout, and dont forget tiling.  none of those have anything to do with the words they chose.
+        ///  an important thing for the library to do is hide all of that as instantly as possible
     }
     
     void clear(DrawState &ds) {
@@ -230,12 +235,8 @@ struct Terminal:ICanvasBackend {
     }
 
     void set_size(vec2i sz_new) {
-        glyphs = null;
-        sz  = sz_new;
-        if (sz.x > 0 && sz.y > 0) {
-            glyphs = vec<ColoredGlyph>(sz.y * sz.x);
-            glyphs.fill(null);
-        }
+        sz     = sz_new;
+        glyphs = vec<ColoredGlyph>(sz.y * sz.x, null);
     }
 
     void set_char(DrawState &st, int x, int y, ColoredGlyph cg) {

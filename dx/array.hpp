@@ -17,6 +17,9 @@ public:
         for (auto &i: v)
             a.push_back(i);
     }
+    vec(size_t sz, T v) {
+        a.resize(sz, v);
+    }
     vec(nullptr_t n) { }
     /*
     vec(vec<var> &d) {
@@ -50,13 +53,6 @@ public:
         a.reserve(sz);
         for (size_t i = 0; i < sz; i++)
             a.push_back(d[i]);
-    }
-    inline vec<T> &fill(T v)           {
-        assert(a.size()    == 0);
-        assert(a.capacity() > 0);
-        for (size_t i = 0; i < capacity(); i++)
-            *this += v;
-        return *this;
     }
     operator var() {
         if constexpr (std::is_same_v<T,  int8_t> || std::is_same_v<T,  uint8_t> ||

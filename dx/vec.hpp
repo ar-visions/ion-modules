@@ -324,7 +324,7 @@ struct Edge {
 template <typename T>
 struct Rect: Vector<T> {
     alignas(T) T x, y, w, h;
-    Rect(nullptr_t n = nullptr) : x(std::numeric_limits<double>::quiet_NaN()) { }
+    Rect(nullptr_t n = nullptr) : x(std::numeric_limits<T>::quiet_NaN()) { }
     Rect(T x, T y, T w, T h) : x(x), y(y), w(w), h(h) { }
     Rect(Vec2<T> p, Vec2<T> s, bool c) {
         if (c)

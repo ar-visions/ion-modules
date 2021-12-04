@@ -35,7 +35,7 @@ void Buffer::copy_to(Texture *tx) {
     auto device = *this->device;
     auto cmd    = device.begin();
     auto reg    = VkBufferImageCopy {};
-    reg.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    reg.imageSubresource = { tx->aflags, 0, 0, 1 }; /// you moron.
     reg.imageExtent      = { uint32_t(tx->sz.x), uint32_t(tx->sz.y), 1 };
     vkCmdCopyBufferToImage(cmd, buffer, *tx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
     device.submit(cmd);

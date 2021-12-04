@@ -10,8 +10,6 @@
 #include <ux/ux.hpp>
 #include <web/web.hpp>
 
-#define  vk_load(inst, addr) PFN_##addr addr = (PFN_##addr)glfwGetInstanceProcAddress(inst, #addr);
-
 int App::UX::operator()(FnRender fn) {
     return Vulkan::main(fn, composer);
 }
@@ -34,7 +32,8 @@ App::Server::Server(int c, const char *v[], Args &defaults) {
     }
     args.erase("server-port");
     str uri = "https://0.0.0.0:443";
-    /// create new composer -- multiple roots should be used less we use the tree as a controller and filter only
+    /// create new composer -- multiple roots should be used
+    /// less we use the tree as a controller and filter only
     async = Web::server(uri, [&](Web::Message &m) -> Web::Message {
         /// figure out the args here
         Args a;
