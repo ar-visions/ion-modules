@@ -40,7 +40,6 @@ struct Device {
     static Device &null_device();
     
     VkShaderModule module(std::filesystem::path p, Module type);
-    PipelineData &operator[](std::string n);
     ///
     void            initialize(Window *);
     /// todo: initialize for compute_only

@@ -1,35 +1,42 @@
 #include <vk/vk.hpp>
 
-
-
 vec<VkVertexInputAttributeDescription> Vertex::attrs() {
     auto attrs = vec<VkVertexInputAttributeDescription> {
-        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex, pos)   },
-        { 1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex, color) },
-        { 2, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex, uv)    }
+        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex, pos) },
+        { 1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex, clr) },
+        { 2, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex, uv)  }
     };
     return attrs;
 }
 
-void PipelineData::destroy() {
-    vkDestroyDescriptorSetLayout(*device, set_layout, null);
+void PipelineData::Memory::destroy() {
+    auto  &device = *this->device;
+    vkDestroyDescriptorSetLayout(device, set_layout, null);
+    vkDestroyPipeline(device, pipeline, null);
+    vkDestroyPipelineLayout(device, pipeline_layout, null);
+    for (auto &cmd: frame_commands)
+        vkFreeCommandBuffers(device, device.pool, 1, &cmd);
+}
+///
+PipelineData::Memory::Memory(nullptr_t n) { }
+
+PipelineData::Memory::~Memory() {
+    destroy();
 }
 
-void PipelineData::initialize()        {
-    auto  &device = *this->device;
+/// constructor for pipeline memory; worth saying again.
+PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
+                                  vec<VkVertexInputAttributeDescription> attrs, size_t vsize, std::string name):
+        device(&device), name(name), ubo(ubo), vbo(vbo), ibo(ibo), attrs(attrs), vsize(vsize) {
     auto bindings = vec<VkDescriptorSetLayoutBinding> {
         { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
-            /// these are the same binding as whats given from Texture Sampler
-        
         { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }};
-            /// we need any and all image registration done at the pipeline
-            /// constructor or perhaps template given as an array param
     
-    VkDescriptorSetLayoutCreateInfo li = {
+    /// create descriptor set layout
+    auto desc_layout_info = VkDescriptorSetLayoutCreateInfo { /// far too many terms reused in vulkan. an api should not lead in ambiguity; vulkan is just a sea of nothing but
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         nullptr, 0, uint32_t(bindings.size()), bindings.data() };
-    
-    assert(vkCreateDescriptorSetLayout(device, &li, nullptr, &set_layout) == VK_SUCCESS);
+    assert(vkCreateDescriptorSetLayout(device, &desc_layout_info, null, &set_layout) == VK_SUCCESS);
     
     /// fairly certain we need to host this on Pipeline...
     ///
@@ -41,16 +48,22 @@ void PipelineData::initialize()        {
     ai.descriptorSetCount  = n_frames;
     ai.pSetLayouts         = layouts.data(); /// the struct is set_layout, the data is a set_layout (1) broadcast across the vector
     desc_sets.resize(n_frames);
-    ///
     assert (vkAllocateDescriptorSets(device, &ai, desc_sets.data()) == VK_SUCCESS);
-    ///
-    ///
+    
+    ubo.update(&device);
+    
     size_t i = 0;
     for (auto &f: device.frames) {
-        auto &ds = desc_sets[i];
-        auto &uu = f.attachments[Frame::Color]; /// need to figure out if we need have separate uniform space per swap frame
-        auto   w = vec<VkWriteDescriptorSet> { ubo.write_desc(i, ds), uu(ds) }; // we are to use OUR uniform.  we delete this frame uni thingy now.
-        vkUpdateDescriptorSets(device, uint32_t(w.size()), w, 0, nullptr);
+        auto &desc_set = desc_sets[i];
+        auto       &tx = f.attachments[Frame::Color]; /// figure out if separate uniform space is needed per swap frame (certainly looks to be.. certain)
+        auto  v_writes = vec<VkWriteDescriptorSet> {
+            ubo.write_desc(i, desc_set),
+             tx.write_desc(desc_set)
+        };
+        VkDevice dev = device;
+        size_t    sz = v_writes.size();
+        VkWriteDescriptorSet *ptr = v_writes.data();
+        vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
         i++;
     }
 
@@ -102,7 +115,7 @@ void PipelineData::initialize()        {
     rs.cullMode                                 = VK_CULL_MODE_BACK_BIT;
     rs.frontFace                                = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rs.depthBiasEnable                          = VK_FALSE;
-
+    ///
     VkPipelineMultisampleStateCreateInfo ms {};
     ms.sType                                    = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     ms.sampleShadingEnable                      = VK_FALSE;
@@ -130,7 +143,7 @@ void PipelineData::initialize()        {
     blending.blendConstants[1]                  = 0.0f; // they should be called params not constants; its as 'constant' as a pipeline is
     blending.blendConstants[2]                  = 0.0f;
     blending.blendConstants[3]                  = 0.0f;
-    VkPipelineLayoutCreateInfo layout_info      = {
+    auto layout_info    = VkPipelineLayoutCreateInfo {
         .sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
         .pSetLayouts    = &set_layout
@@ -155,4 +168,38 @@ void PipelineData::initialize()        {
     pi.basePipelineHandle                       = VK_NULL_HANDLE;
     ///
     assert (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &pipeline) == VK_SUCCESS);
+}
+/// create graphic pipeline
+void PipelineData::Memory::update(size_t frame_id) {
+    auto &device = *this->device;
+    Frame &frame = device.frames[frame_id];
+    VkCommandBuffer &cmd = frame_commands[frame_id];
+    vkFreeCommandBuffers(device, device.pool, 1, &cmd);
+    ///
+    auto alloc_info = VkCommandBufferAllocateInfo {
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
+    assert(vkAllocateCommandBuffers(device, &alloc_info, &cmd) == VK_SUCCESS);
+    ///
+    /// begin command
+    auto begin_info = VkCommandBufferBeginInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    assert(vkBeginCommandBuffer(cmd, &begin_info) == VK_SUCCESS);
+    /// set clear values for top 2 images per swap instance
+    auto   clear_values = vec<VkClearValue> {
+        {        .color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
+        { .depthStencil = {1.0f, 0}}};
+    auto    render_info = VkRenderPassBeginInfo {
+        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null, device, frame,
+        {{0,0}, device.extent}, uint32_t(clear_values.size()), clear_values };
+    ///
+    vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vec<VkBuffer>    a_vbo   = { vbo };
+    VkDeviceSize   offsets[] = {0};
+    vkCmdBindVertexBuffers(cmd, 0, 1, a_vbo.data(), offsets);
+    vkCmdBindIndexBuffer(cmd, ibo, 0, ibo.buffer.type_size == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, desc_sets, 0, nullptr);
+    vkCmdDrawIndexed(cmd, uint32_t(ibo.size()), 1, 0, 0, 0); /// ibo size = number of indices (like a vector)
+    vkCmdEndRenderPass(cmd);
 }

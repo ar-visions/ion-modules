@@ -12,63 +12,48 @@ Device &Device::null_device() {
 }
 
 VkWriteDescriptorSet UniformData::write_desc(size_t frame_index, VkDescriptorSet &ds) {
-    auto &device = *this->device;
+    auto &m = *this->m;
     return {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, null, ds, 0, 0,
-        1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, null, &buffers[frame_index].info, null // buffer.info offset and range appear corrupt
+        1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, null, &m.buffers[frame_index].info, null
     };
 }
 
-void UniformData::initialize(size_t buffer_sz) {
-    auto    &device = *this->device;
-    size_t n_frames = device.frames.size();
-    buffers         = vec<Buffer>(n_frames);
+/// lazy initialization of Uniforms make the component tree work a bit better
+void UniformData::update(Device *device) {
+    auto &m = *this->m;
+    for (auto &b: m.buffers)
+        b.destroy();
+    m.device = device;
+    size_t n_frames = device->frames.size();
+    m.buffers = vec<Buffer>(n_frames);
     for (int i = 0; i < n_frames; i++)
-        buffers += Buffer { &device, uint32_t(buffer_sz), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
+        m.buffers += Buffer {
+            device, uint32_t(m.struct_sz), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        };
 }
 
 void UniformData::destroy() {
-    auto    &device = *this->device;
-    size_t n_frames = device.frames.size();
+    auto &m = *this->m;
+    size_t n_frames = m.device->frames.size();
     for (int i = 0; i < n_frames; i++)
-        buffers[i].destroy();
+        m.buffers[i].destroy();
 }
 
-/// called by Pipeline, called by the Render
-void UniformData::transfer() {
-    auto &device = *this->device;
-    const int  c = device.render.cframe;
+/// called by the Render
+void UniformData::transfer(size_t frame_id) {
+    auto        &m = *this->m;
+    auto   &device = *m.device;
+    Buffer &buffer = m.buffers[frame_id]; /// todo -- UniformData never initialized (problem, that is)
+    size_t      sz = buffer.sz;
+    const char *data[2048];
     void* gpu;
-      vkMapMemory(device, buffers[c], 0, buffers[c].sz, 0, &gpu);
-           memcpy( gpu,   data,          buffers[c].sz);
-    vkUnmapMemory(device, buffers[c]);
-}
-
-void PipelineData::update(Frame &frame, VkCommandBuffer &rc) {
-    auto &device = *this->device;
-    auto ai = VkCommandBufferAllocateInfo {
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
-    assert(vkAllocateCommandBuffers(device, &ai, &rc) == VK_SUCCESS);
-    ///
-    auto   clear_values = vec<VkClearValue> {
-        {        .color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
-        { .depthStencil = {1.0f, 0}}};
-    auto    render_info = VkRenderPassBeginInfo {
-        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null, device, frame,
-        {{0,0}, device.extent}, uint32_t(clear_values.size()), clear_values };
-    ///
-    vkCmdBeginRenderPass(rc, &render_info, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(rc, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vec<VkBuffer>    a_vbo   = { vbo };
-    VkDeviceSize   offsets[] = {0};
-    vkCmdBindVertexBuffers(rc, 0, 1, a_vbo.data(), offsets);
-    vkCmdBindIndexBuffer(rc, ibo, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdBindDescriptorSets(rc, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipeline_layout, 0, 1, desc_sets, 0, nullptr);
-    vkCmdDrawIndexed(rc, uint32_t(ibo.size()), 1, 0, 0, 0);
-    vkCmdEndRenderPass(rc);
+    memset(data, 0, sizeof(data));
+    m.fn(data);
+    vkMapMemory(device, buffer, 0, sz, 0, &gpu);
+    memcpy(gpu, data, sz);
+    vkUnmapMemory(device, buffer);
 }
 
 VkDevice device_handle(Device *device) {
@@ -105,11 +90,6 @@ VkShaderModule Device::module(std::filesystem::path p, Module type) {
     }
     return m[key];
 }
-
-PipelineData &Device::operator[](std::string n) {
-    return render[n];
-}
-
 
 uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
     VkPhysicalDeviceMemoryProperties mprops;
@@ -158,8 +138,10 @@ Device::Device(GPU &p_gpu, bool aa) {
     vkGetDeviceQueue(device, gpu.index(GPU::Present),  0, &queues[GPU::Present]);
     
     /// create command pool (i think the pooling should be on each Frame)
-    auto pool_info = VkCommandPoolCreateInfo { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-                        .queueFamilyIndex = gpu.index(GPU::Graphics) };
+    auto pool_info = VkCommandPoolCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .queueFamilyIndex = gpu.index(GPU::Graphics)
+    };
     assert(vkCreateCommandPool(device, &pool_info, nullptr, &pool) == VK_SUCCESS);
 }
 
@@ -185,6 +167,7 @@ uint32_t Device::attachment_index(Texture *tx) {
 void Device::update() {
     auto sz = vec2i { int(extent.width), int(extent.height) };
     uint32_t frame_count = frames.size();
+    render.sync++;
 
     /// we really need implicit flagging on these if we can manage it.
     /// one of each of these (color, depth) # i think we can infer all usage, perhaps.....
@@ -192,11 +175,55 @@ void Device::update() {
         VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /// other: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_SRGB, 1 };
-    tx_depth  = Texture { this, sz, null,
+    tx_depth = Texture { this, sz, null,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT, true, VK_FORMAT_D32_SFLOAT, 1 };
     
+    /*
+    LayoutMapping {
+        VK_IMAGE_LAYOUT_UNDEFINED,                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        0,                                          VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,          VK_PIPELINE_STAGE_TRANSFER_BIT
+    },
+    LayoutMapping {
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_ACCESS_TRANSFER_WRITE_BIT,               VK_ACCESS_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+    },
+    LayoutMapping {
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_TRANSFER_BIT
+    },
+    LayoutMapping {
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_ACCESS_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+    },
+    LayoutMapping {
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    },
+    LayoutMapping {
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    */
+        
+    /// thank god for asserts.
+    ///
+    tx_color.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    tx_color.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    tx_color.set_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    ///
+    tx_depth.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    tx_depth.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    tx_depth.set_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    
+    ///
     /// hide usage, memory, aspect, mips; can infer this from context
     /// create VkCommandBuffer for pipelines across all frames
     /// create view, uniform buffer, render command
@@ -209,13 +236,22 @@ void Device::update() {
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             false, VK_FORMAT_B8G8R8A8_SRGB, 1 };
+        
+        
+        //VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        
+        //tx_swap.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        //tx_swap.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        //tx_swap.set_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        
+        // look for attachments and verify its the same identity
         frame.attachments = vec<Texture> {
             tx_color, // a copy without the view is set on each one of these frames, when the view operator is called it creates the view
             tx_depth, // this may be actually creating it once.. darnit. test that.
             tx_swap
         };
         //if (!frame.ubo)
-        //     frame.ubo = UniformBuffer<Uniform>(this, &frame.uniform);
+        //     frame.ubo = UniformBuffer<MVP>(this, &frame.uniform);
     }
     ///
     create_render_pass();
@@ -354,8 +390,8 @@ void Device::create_render_pass() {
     Frame &f0                     = frames[0];
     Texture &tx_ref               = f0.attachments[Frame::SwapView]; /// has msaa set to 1bit
     assert(f0.attachments.size() == 3);
-    VkAttachmentReference    cref = tx_color;
-    VkAttachmentReference    dref = tx_depth;
+    VkAttachmentReference    cref = tx_color; // VK_IMAGE_LAYOUT_UNDEFINED
+    VkAttachmentReference    dref = tx_depth; // VK_IMAGE_LAYOUT_UNDEFINED
     VkAttachmentReference    rref = tx_ref;
     VkSubpassDescription     sp   = { 0, VK_PIPELINE_BIND_POINT_GRAPHICS, 0, null, 1, &cref, &rref, &dref };
 
@@ -367,7 +403,11 @@ void Device::create_render_pass() {
     dep.dstStageMask              = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dep.dstAccessMask             = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    std::array<VkAttachmentDescription, 3> attachments = {f0.attachments[0], f0.attachments[1], f0.attachments[2]};
+    VkAttachmentDescription adesc_clr_image  = f0.attachments[0];
+    VkAttachmentDescription adesc_dep_image  = f0.attachments[1];
+    VkAttachmentDescription adesc_swap_image = f0.attachments[2];
+    
+    std::array<VkAttachmentDescription, 3> attachments = {adesc_clr_image, adesc_dep_image, adesc_swap_image};
     VkRenderPassCreateInfo rpi { }; // VkAttachmentDescription needs to be 4, 4, 1
     rpi.sType                     = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     rpi.attachmentCount           = uint32_t(attachments.size());
@@ -378,6 +418,8 @@ void Device::create_render_pass() {
     rpi.pDependencies             = &dep;
 
     assert(vkCreateRenderPass(device, &rpi, nullptr, &render_pass) == VK_SUCCESS);
+    int test = 0;
+    test++;
 }
 
 VkCommandBuffer Device::begin() {

@@ -79,6 +79,12 @@ struct LayoutMapping {
 };
 
 /// nvidia cares not about any of this
+/// make access params, if needed.. it would be nice to
+/// tuck anything access-related into implicit behaviours
+/// this is actual vulkan hell at the moment.
+/// i need to find some specs for what is transferrable to what,
+/// then get rid of explicit steps to get there from user code.
+///
 void Texture::set_layout(VkImageLayout next_layout)
 {
     if (next_layout == layout)
@@ -113,8 +119,23 @@ void Texture::set_layout(VkImageLayout next_layout)
             VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
         },
+        
+        LayoutMapping {
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+        },
+        
+        
+        
         LayoutMapping {
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_ACCESS_TRANSFER_WRITE_BIT,               VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+        },
+        
+        LayoutMapping {
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
             VK_ACCESS_TRANSFER_WRITE_BIT,               VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT,             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
         }
@@ -165,12 +186,15 @@ int Texture::auto_mips(uint32_t mips, vec2i sz) {
 Texture::operator VkAttachmentReference() {
     assert(usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ||
            usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-    bool     is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    //bool     is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     uint32_t    index = device->attachment_index(this);
+    
+    ///
+    /// why oh why dont we just read from the layout direct here?
     auto   attach_ref = VkAttachmentReference {
-        .attachment = index,
-        .layout     = is_color ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-                                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        .attachment = index,  // trying this, step through it.
+        .layout     = layout  //is_color ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+                              //   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
     };
     return attach_ref;
 }
@@ -182,8 +206,10 @@ Texture::operator VkAttachmentDescription() {
     auto     desc = VkAttachmentDescription {
         .format         = format,
         .samples        = ms ? device->sampling : VK_SAMPLE_COUNT_1_BIT,
-        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+        .loadOp         = image_ref ? VK_ATTACHMENT_LOAD_OP_DONT_CARE :
+                                      VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp        = is_color ?  VK_ATTACHMENT_STORE_OP_STORE :
+                                      VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,

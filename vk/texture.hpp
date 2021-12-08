@@ -32,7 +32,7 @@ struct Texture {
         return info;
     }
 
-    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
+    VkWriteDescriptorSet write_desc(VkDescriptorSet &ds) {
         VkDescriptorImageInfo &info = *this;
         return {
             .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

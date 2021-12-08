@@ -203,7 +203,6 @@ public:
     
     template <typename T>
     var(Type c, std::shared_ptr<T> d, size_t sz) {
-        T *ptr = d.get();
         this->t = Array;
         this->c = c; //data_type(ptr);
         this->d = std::static_pointer_cast<uint8_t>(d);
@@ -254,6 +253,15 @@ public:
         else if (v == Lambda)
             fn(d);
         return res;
+    }
+    
+    template <typename T>
+    T convert() {
+        var &v = var::resolve(*this);
+        assert(v == Type::ui8);
+        assert(d != null);
+        assert(size() == sizeof(T)); /// C3PO: that isn't very reassuring.
+        return T(*(T *)d.get());
     }
     
     template <typename T>
@@ -326,14 +334,14 @@ public:
         for (auto d: sh)
             sz *= d;
         d = std::shared_ptr<uint8_t>((uint8_t *)new T[sz]);
-        memcopy(d.get(), (uint8_t *)v, sz * sizeof(T));
+        memcopy(d.get(), (uint8_t *)v, sz * sizeof(T)); // in bytes
         flags = Compact;
     }
     
     template <typename T>
     var(T *v, size_t sz) : t(Array), c(data_type(v)), sh({ int(sz) }) {
         d = std::shared_ptr<uint8_t>((uint8_t *)new T[sz]);
-        memcopy(d.get(), (uint8_t *)v, sz * sizeof(T));
+        memcopy(d.get(), (uint8_t *)v, sz * sizeof(T)); // in bytes
         flags = Compact;
     }
     

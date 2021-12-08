@@ -4,18 +4,19 @@
 struct PipelineData;
 struct Render {
     Device          *device;
-    std::queue<PipelineData *> sequence; /// sequences of identical pipeline data is purposeful for multiple render passes perhaps
+    std::queue<PipelineData *> sequence; /// sequences of identical pipeline data is purposeful for multiple render passes
     vec<VkSemaphore> image_avail;        /// you are going to want ubo controller to update a lambda right before it transfers
     vec<VkSemaphore> render_finish;      /// if we're lucky, that could adapt to compute model integration as well.
     vec<VkFence>     fence_active;
     vec<VkFence>     image_active;
     int              cframe = 0;
-    bool             resized;
-    ///
-    std::map<std::string, PipelineData *> pipelines;
-    PipelineData &operator[](std::string n);
+    int              sync = 0;
+    
+    inline void push(PipelineData &pd) {
+        sequence.push(&pd);
+    }
     ///
     Render(Device * = null);
     void present();
-    void execute();
+    void update();
 };

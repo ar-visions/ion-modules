@@ -141,6 +141,15 @@ recti Vulkan::startup_rect() {
     return s_rect;
 }
 
+static vec<Vertex> v_square() {
+    return vec<Vertex> {
+        Vertex {{-0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 0.0}, {1.0, 0.0, 0.0, 1.0}},
+        Vertex {{ 0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0}, {0.0, 1.0, 0.0, 1.0}},
+        Vertex {{ 0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
+        Vertex {{-0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
+    };
+}
+
 ///
 /// allocate composer, the class which takes rendered elements and manages instances
 /// allocate window internal (glfw subsystem) and canvas (which initializes a Device for usage on skia?)
@@ -157,22 +166,21 @@ int Vulkan::main(FnRender fn, Composer *composer) {
     i.device.initialize(&w);
     w.show();
     ///
-    vec<Vertex> vertices = {
-        {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
-        {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
-    };
-    vec<uint16_t> indices = { 0, 1, 2, 2, 3, 0 };
-    ///
-    Uniform uniform;
-    auto    vbo = VertexBuffer<Vertex>(device, vertices);
-    auto    ibo = IndexBuffer<uint16_t>(device, indices);
-    auto    uni = UniformBuffer<Uniform>(device, uniform);
-    ///
-    Pipeline<Vertex> pl = {
-        device, uni, vbo, ibo, std::string("main")
-    };
+    /// canvas polygon data (pos, norm, uv, color)
+    auto   vertices = v_square();
+    auto    indices = vec<uint16_t> { 0, 1, 2, 2, 3, 0 };
+    auto        vbo = VertexBuffer<Vertex>(device, vertices);
+    auto        ibo = IndexBuffer<uint16_t>(device, indices);
+    auto        uni = UniformBuffer<MVP>(device, 0, [&](MVP &mvp) {
+        /// pipelines should be compared with int ident
+        mvp = {
+            .model = glm::mat4(1.0f),
+            .view  = glm::mat4(1.0f),
+            .proj  = glm::mat4(1.0f)
+        };
+    });
+    auto        pl = Pipeline<Vertex> { device, uni, vbo, ibo, std::string("main") };
+    
     /// uniforms are meant to be managed by the app, passed into pipelines.
     w.loop([&]() {
         static bool init = false;
@@ -188,9 +196,9 @@ int Vulkan::main(FnRender fn, Composer *composer) {
         canvas.clear();            /// todo: like the idea of fill() with a color just being a clear color.
         /*canvas.fill(box);*/      /// thats a simpler api. the path is a param that can be null
         canvas.flush();            ///
-        //i.tx_skia.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        i.device.render.execute(); /// execute all graphic (render) pipelines [ on the current frame ]
-        i.device.render.present(); /// present
+        /// i.tx_skia.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        device.render.push(pl);
+        device.render.present(); /// execute all graphic (render) pipelines [ on the current frame ], and present
 
         //Composer &cmp = *composer;
         //cmp(fn(args));

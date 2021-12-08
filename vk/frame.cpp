@@ -22,7 +22,7 @@ void Frame::update() {
     assert(vkCreateFramebuffer(device, &ci, nullptr, &framebuffer) == VK_SUCCESS);
 }
 
-///f
+///
 void Frame::destroy() {
     auto &device = *this->device;
     vkDestroyFramebuffer(device, framebuffer, nullptr);
