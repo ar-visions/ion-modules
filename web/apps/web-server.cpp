@@ -1,3 +1,5 @@
+// The idea here is to use the same Component reflection model to perform server-related tasks.  One form of reflection is used with UX, the other with 'DX'..
+
 #include <web/web.hpp>
 #include <ux/ux.hpp>
 
