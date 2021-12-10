@@ -25,20 +25,21 @@ PipelineData::Memory::~Memory() {
 }
 
 /// constructor for pipeline memory; worth saying again.
-PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-                                  vec<VkVertexInputAttributeDescription> attrs, size_t vsize, std::string name):
-        device(&device), name(name), ubo(ubo), vbo(vbo), ibo(ibo), attrs(attrs), vsize(vsize) {
+PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
+                             VertexData &vbo, IndexData &ibo,
+                             vec<VkVertexInputAttributeDescription> attrs,
+                             size_t vsize,    std::string shader):
+        device(&device),   shader(shader),  ubo(ubo),
+        vbo(vbo), ibo(ibo), attrs(attrs), vsize(vsize) {
+    /// obtain data via usage
     auto bindings = vec<VkDescriptorSetLayoutBinding> {
         { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
         { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }};
-    
     /// create descriptor set layout
     auto desc_layout_info = VkDescriptorSetLayoutCreateInfo { /// far too many terms reused in vulkan. an api should not lead in ambiguity; vulkan is just a sea of nothing but
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         nullptr, 0, uint32_t(bindings.size()), bindings.data() };
     assert(vkCreateDescriptorSetLayout(device, &desc_layout_info, null, &set_layout) == VK_SUCCESS);
-    
-    /// fairly certain we need to host this on Pipeline...
     ///
     const size_t  n_frames = device.frames.size();
     auto           layouts = std::vector<VkDescriptorSetLayout>(n_frames, set_layout); /// add to vec.
@@ -49,13 +50,13 @@ PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, 
     ai.pSetLayouts         = layouts.data(); /// the struct is set_layout, the data is a set_layout (1) broadcast across the vector
     desc_sets.resize(n_frames);
     assert (vkAllocateDescriptorSets(device, &ai, desc_sets.data()) == VK_SUCCESS);
-    
     ubo.update(&device);
-    
+    ///
+    /// write descriptor sets for all swap image instances
     size_t i = 0;
     for (auto &f: device.frames) {
         auto &desc_set = desc_sets[i];
-        auto       &tx = f.attachments[Frame::Color]; /// figure out if separate uniform space is needed per swap frame (certainly looks to be.. certain)
+        auto       &tx = f.attachments[Frame::Color];
         auto  v_writes = vec<VkWriteDescriptorSet> {
             ubo.write_desc(i, desc_set),
              tx.write_desc(desc_set)
@@ -66,38 +67,40 @@ PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, 
         vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
         i++;
     }
-
-    auto vert = device.module(str::format("shaders/{0}.vert.spv", {name}), Device::Vertex);
-    auto frag = device.module(str::format("shaders/{0}.frag.spv", {name}), Device::Fragment);
+    ///
+    auto vert = device.module(
+        str::format("shaders/{0}.vert.spv", {shader}), Device::Vertex);
+    auto frag = device.module(
+        str::format("shaders/{0}.frag.spv", {shader}), Device::Fragment);
+    ///
     vec<VkPipelineShaderStageCreateInfo> stages {{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
-        VK_SHADER_STAGE_VERTEX_BIT,   vert, name.c_str(), null
+        VK_SHADER_STAGE_VERTEX_BIT,   vert, shader.c_str(), null
     }, {
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
-        VK_SHADER_STAGE_FRAGMENT_BIT, frag, name.c_str(), null
+        VK_SHADER_STAGE_FRAGMENT_BIT, frag, shader.c_str(), null
     }};
+    ///
     auto binding = VkVertexInputBindingDescription {
         0, uint32_t(vsize), VK_VERTEX_INPUT_RATE_VERTEX
     };
-
+    ///
     VkPipelineVertexInputStateCreateInfo vertex_info {};
     vertex_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_info.vertexBindingDescriptionCount   = 1;
     vertex_info.vertexAttributeDescriptionCount = uint32_t(attrs.size());
     vertex_info.pVertexBindingDescriptions      = &binding;
     vertex_info.pVertexAttributeDescriptions    = attrs.data();
-
+    ///
     VkPipelineInputAssemblyStateCreateInfo topology {};
     topology.sType                              = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     topology.topology                           = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     topology.primitiveRestartEnable             = VK_FALSE;
-
     /// viewport
     VkViewport viewport = device;
     VkRect2D sc {};
     sc.offset                                   = {0, 0};
     sc.extent                                   = device.extent;
-
     /// vulkan type data should only be presented on IMAX screens
     VkPipelineViewportStateCreateInfo vs        = device;
     vs.sType                                    = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -105,7 +108,7 @@ PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, 
     vs.pViewports                               = &viewport;
     vs.scissorCount                             = 1;
     vs.pScissors                                = &sc;
-
+    ///
     VkPipelineRasterizationStateCreateInfo rs {};
     rs.sType                                    = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rs.depthClampEnable                         = VK_FALSE;
@@ -120,7 +123,7 @@ PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, 
     ms.sType                                    = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     ms.sampleShadingEnable                      = VK_FALSE;
     ms.rasterizationSamples                     = device.sampling;
-
+    ///
     VkPipelineDepthStencilStateCreateInfo ds {};
     ds.sType                                    = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     ds.depthTestEnable                          = VK_TRUE;
@@ -128,11 +131,11 @@ PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, 
     ds.depthCompareOp                           = VK_COMPARE_OP_LESS;
     ds.depthBoundsTestEnable                    = VK_FALSE;
     ds.stencilTestEnable                        = VK_FALSE;
-
+    ///
     VkPipelineColorBlendAttachmentState cba {};
     cba.colorWriteMask                          = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     cba.blendEnable                             = VK_FALSE;
-
+    ///
     VkPipelineColorBlendStateCreateInfo blending {};
     blending.sType                              = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blending.logicOpEnable                      = VK_FALSE;
@@ -169,6 +172,7 @@ PipelineData::Memory::Memory(Device &device, UniformData &ubo, VertexData &vbo, 
     ///
     assert (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &pipeline) == VK_SUCCESS);
 }
+
 /// create graphic pipeline
 void PipelineData::Memory::update(size_t frame_id) {
     auto &device = *this->device;

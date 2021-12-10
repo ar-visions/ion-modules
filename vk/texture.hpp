@@ -18,8 +18,50 @@ struct Texture {
     VkFormat                format;
     VkImageUsageFlags       usage;
     VkImageAspectFlags      aflags;
+    
+    /// this specific pattern should be replicated elsewhere.  Its a type, its an enum, its data associated.
+    /// the enum makes it ambiguous with null and that is a feature not a bug my good lad
+    /// constructed with Undefined (which is defined), single 1 unit in register form
+    struct Stage {
+        ///
+        enum Type {
+            Undefined,
+            Transfer,
+            Shader,
+            Color,
+            Depth
+        };
+        ///
+        struct Data {
+            enum Type               value;
+            VkImageLayout           layout;
+            uint64_t                access;
+            VkPipelineStageFlagBits stage;
+            inline bool operator==(Data &b) {
+                return layout == b.layout;
+            }
+        };
+        ///
+        static const Data types[5];
+        Data            & type;
+        ///
+        inline bool operator==(Stage &b)      { return type.value == b.type.value; }
+        inline bool operator!=(Stage &b)      { return type.value != b.type.value; }
+        inline bool operator==(Stage::Type b) { return type.value == b; }
+        inline bool operator!=(Stage::Type b) { return type.value != b; }
+        ///
+        Stage(      Type    type = Undefined);
+        Stage(const Stage & ref) : type(ref.type) { };
+        Stage(      Stage & ref) : type(ref.type) { };
+        ///
+        bool operator>(Stage &b) { return type.value > b.type.value; }
+        bool operator<(Stage &b) { return type.value < b.type.value; }
+        Stage &operator=(const Stage &ref);
+    };
+    Stage stage;
+    
     ///
-    void set_layout(VkImageLayout new_layout);
+    void set_stage(Stage new_layout);
     static int auto_mips(uint32_t, vec2i);
     static VkImageView create_view(VkDevice, vec2i &, VkImage, VkFormat, VkImageAspectFlags, uint32_t);
     ///
@@ -72,4 +114,20 @@ protected:
     void create_sampler();
     void create_resources();
     void destroy();
+};
+
+struct ColorTexture:Texture {
+    ColorTexture(Device *device, vec2i sz, rgba clr):
+        Texture(device, sz, clr,
+             VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+             VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_SRGB, 1) { }
+};
+
+struct DepthTexture:Texture {
+    DepthTexture(Device *device, vec2i sz, rgba clr):
+        Texture(device, sz, clr,
+             VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+             VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_SRGB, 1) { }
 };

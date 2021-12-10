@@ -172,14 +172,15 @@ int Vulkan::main(FnRender fn, Composer *composer) {
     auto        vbo = VertexBuffer<Vertex>(device, vertices);
     auto        ibo = IndexBuffer<uint16_t>(device, indices);
     auto        uni = UniformBuffer<MVP>(device, 0, [&](MVP &mvp) {
-        /// pipelines should be compared with int ident
-        mvp = {
-            .model = glm::mat4(1.0f),
-            .view  = glm::mat4(1.0f),
-            .proj  = glm::mat4(1.0f)
+        /// pipelines should be modelled on int ident
+        /// but maybe that is too flattening a concept.  who am i, Chronos Group... [fry stare]
+        mvp         = {
+             .model = glm::mat4(1.0f),
+             .view  = glm::mat4(1.0f),
+             .proj  = glm::mat4(1.0f)
         };
     });
-    auto        pl = Pipeline<Vertex> { device, uni, vbo, ibo, std::string("main") };
+    auto         pl = Pipeline<Vertex> { device, uni, vbo, ibo, std::string("main") };
     
     /// uniforms are meant to be managed by the app, passed into pipelines.
     w.loop([&]() {

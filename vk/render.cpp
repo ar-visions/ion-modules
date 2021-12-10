@@ -54,7 +54,7 @@ void Render::present() {
                 m.update(i); /// make singular, frame index param
         }
         /// transfer uniform struct; a lambda could be called here... for now its just copying the memory
-        m.ubo.transfer(image_index); // fairly, fairly certain this is the case, it was cframe which is not the same type of data
+        m.ubo.transfer(image_index); /// fairly, fairly certain this is the case, it was cframe which is not the same type of data
         ///
         image_active[image_index]        = fence_active[cframe];
         VkSubmitInfo submit_info         = { VK_STRUCTURE_TYPE_SUBMIT_INFO };

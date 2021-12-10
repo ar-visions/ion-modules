@@ -3,6 +3,22 @@
 // attempt to get the verbose parts of vulkan marshalled into sanity with a reasonable Texture class
 // auto-view creation, automatic layout controls, attachment/descriptor operators
 
+Texture::Stage::Stage(Stage::Type type) : type((Data &)types[size_t(type)]) { }
+
+const Texture::Stage::Data Texture::Stage::types[5] = {
+    { Texture::Stage::Undefined, VK_IMAGE_LAYOUT_UNDEFINED,                0,                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT },
+    { Texture::Stage::Transfer,  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,     VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT },
+    { Texture::Stage::Shader,    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT  },
+    { Texture::Stage::Color,     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT },
+    { Texture::Stage::Depth,     VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }
+};
+
+Texture::Stage &Texture::Stage::operator=(const Texture::Stage &ref) {
+    if (this != &ref)
+        *this = ref;
+    return *this;
+}
+
 void Texture::create_sampler() {
     Device &device = *this->device;
     VkPhysicalDeviceProperties props {};
@@ -69,110 +85,42 @@ void Texture::create_resources() {
     //set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); /// why?
 }
 
-struct LayoutMapping {
-    VkImageLayout           from_layout;
-    VkImageLayout           to_layout;
-    uint64_t                srcAccessMask;
-    uint64_t                dstAccessMask;
-    VkPipelineStageFlagBits srcStage;
-    VkPipelineStageFlagBits dstStage;
-};
-
-/// nvidia cares not about any of this
-/// make access params, if needed.. it would be nice to
-/// tuck anything access-related into implicit behaviours
-/// this is actual vulkan hell at the moment.
-/// i need to find some specs for what is transferrable to what,
-/// then get rid of explicit steps to get there from user code.
-///
-void Texture::set_layout(VkImageLayout next_layout)
-{
-    if (next_layout == layout)
+void Texture::set_stage(Stage next_stage) {
+    if (next_stage == stage)
         return;
-    Device       &device = *this->device;
-    static auto mappings = vec<LayoutMapping> {
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_UNDEFINED,                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            0,                                          VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,          VK_PIPELINE_STAGE_TRANSFER_BIT
-        },
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_ACCESS_TRANSFER_WRITE_BIT,               VK_ACCESS_SHADER_READ_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-        },
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_TRANSFER_BIT
-        },
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-        },
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-        },
-        
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-        },
-        
-        
-        
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_ACCESS_TRANSFER_WRITE_BIT,               VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-        },
-        
-        LayoutMapping {
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-            VK_ACCESS_TRANSFER_WRITE_BIT,               VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-        }
+    ///
+    Device             & device  = *this->device;
+    VkCommandBuffer      cb      = device.begin();
+    VkImageMemoryBarrier barrier = {
+        .sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .oldLayout                       = stage.type.layout,
+        .newLayout                       = next_stage.type.layout,
+        .srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED,
+        .image                           = image,
+        .subresourceRange.aspectMask     = aflags,
+        .subresourceRange.baseMipLevel   = 0,
+        .subresourceRange.levelCount     = uint32_t(mips),
+        .subresourceRange.baseArrayLayer = 0,
+        .subresourceRange.layerCount     = 1,
+        .srcAccessMask                   = VkAccessFlags(stage.type.access),
+        .dstAccessMask                   = VkAccessFlags(next_stage.type.access)
     };
     ///
-    for (LayoutMapping &t: mappings)
-        if (t.from_layout == layout && t.to_layout == next_layout) {
-            VkCommandBuffer      cb                 = device.begin();
-            ///
-            VkImageMemoryBarrier barrier {};
-            barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.oldLayout                       = layout;
-            barrier.newLayout                       = next_layout;
-            barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-            barrier.image                           = image;
-            barrier.subresourceRange.aspectMask     = aflags;//VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel   = 0;
-            barrier.subresourceRange.levelCount     = mips;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount     = 1;
-            barrier.srcAccessMask                   = t.srcAccessMask;
-            barrier.dstAccessMask                   = t.dstAccessMask;
-            ///
-            vkCmdPipelineBarrier( /// ! this must be the level at which the validation works, sort of a proxy in the command buffer stream
-                cb,
-                t.srcStage, t.dstStage,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &barrier);
-            device.submit(cb);
-            layout = next_layout;
-            return;
-        }
-    ///
-    assert(false);
+    Stage  cur  = stage;
+    while (cur != next_stage) {
+        /// skip over that color thing because this is quirky
+        do cur = Stage::Type(int(cur.type.value) + (next_stage > stage ? 1 : -1));
+        while (cur == Stage::Color && cur != next_stage);
+        /// transition through the image membrane, as if we were insane in-the
+        vkCmdPipelineBarrier(
+            cb, stage.type.stage, next_stage.type.stage,
+                0, 0, nullptr,
+                   0, nullptr, 1, &barrier);
+        ///
+        device.submit(cb);
+    }
+    stage = next_stage;
 }
 
 Texture::operator bool()  { return image != VK_NULL_HANDLE; }

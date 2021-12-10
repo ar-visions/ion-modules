@@ -169,60 +169,18 @@ void Device::update() {
     uint32_t frame_count = frames.size();
     render.sync++;
 
-    /// we really need implicit flagging on these if we can manage it.
-    /// one of each of these (color, depth) # i think we can infer all usage, perhaps.....
-    tx_color = Texture { this, sz, null,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /// other: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_SRGB, 1 };
-    tx_depth = Texture { this, sz, null,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT, true, VK_FORMAT_D32_SFLOAT, 1 };
-    
-    /*
-    LayoutMapping {
-        VK_IMAGE_LAYOUT_UNDEFINED,                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        0,                                          VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,          VK_PIPELINE_STAGE_TRANSFER_BIT
-    },
-    LayoutMapping {
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_ACCESS_TRANSFER_WRITE_BIT,               VK_ACCESS_SHADER_READ_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-    },
-    LayoutMapping {
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_TRANSFER_BIT
-    },
-    LayoutMapping {
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_SHADER_READ_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-    },
-    LayoutMapping {
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_ACCESS_SHADER_READ_BIT,                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-    },
-    LayoutMapping {
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    */
-        
+    tx_color = ColorTexture { this, sz, null };
+    tx_depth = DepthTexture { this, sz, null };
+    ///
     /// thank god for asserts.
+    /// stage should implicitly transition, we dont do this crap here:
+    tx_color.set_stage(Texture::Stage::Transfer);
+    tx_color.set_stage(Texture::Stage::Shader);
+    tx_color.set_stage(Texture::Stage::Color);
     ///
-    tx_color.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    tx_color.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    tx_color.set_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    ///
-    tx_depth.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    tx_depth.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    tx_depth.set_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-    
+    tx_depth.set_stage(Texture::Stage::Transfer);
+    tx_depth.set_stage(Texture::Stage::Shader);
+    tx_depth.set_stage(Texture::Stage::Color);
     ///
     /// hide usage, memory, aspect, mips; can infer this from context
     /// create VkCommandBuffer for pipelines across all frames
@@ -237,8 +195,11 @@ void Device::update() {
             VK_IMAGE_ASPECT_COLOR_BIT,
             false, VK_FORMAT_B8G8R8A8_SRGB, 1 };
         
-        
-        //VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        tx_swap.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        // bit non-sense, but i believe it needs this association because the swap references
+        // a layout without itsself being transitioned to this layout.  going with the flow for the now.
+        // 'transitioning' to this layout does not work per the validator.
+        // it simply needs an associative binding here.
         
         //tx_swap.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         //tx_swap.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -255,6 +216,10 @@ void Device::update() {
     }
     ///
     create_render_pass();
+    
+    tx_color.set_stage(Texture::Stage::Shader);
+    tx_depth.set_stage(Texture::Stage::Shader);
+    
     ///
     for (size_t i = 0; i < frame_count; i++) {
         Frame &frame   = frames[i];
@@ -392,7 +357,7 @@ void Device::create_render_pass() {
     assert(f0.attachments.size() == 3);
     VkAttachmentReference    cref = tx_color; // VK_IMAGE_LAYOUT_UNDEFINED
     VkAttachmentReference    dref = tx_depth; // VK_IMAGE_LAYOUT_UNDEFINED
-    VkAttachmentReference    rref = tx_ref;
+    VkAttachmentReference    rref = tx_ref;   // the odd thing is the associated COLOR_ATTACHMENT layout here;
     VkSubpassDescription     sp   = { 0, VK_PIPELINE_BIND_POINT_GRAPHICS, 0, null, 1, &cref, &rref, &dref };
 
     VkSubpassDependency dep { };
@@ -418,8 +383,6 @@ void Device::create_render_pass() {
     rpi.pDependencies             = &dep;
 
     assert(vkCreateRenderPass(device, &rpi, nullptr, &render_pass) == VK_SUCCESS);
-    int test = 0;
-    test++;
 }
 
 VkCommandBuffer Device::begin() {

@@ -5,7 +5,7 @@
 struct PipelineData {
     struct Memory {
         Device                    *device;
-        std::string                name;
+        std::string                shader;          /// name of the shader.  worth saying.
         vec<VkCommandBuffer>       frame_commands;  /// pipeline are many and even across swap frame idents, and we need a ubo and cmd set for each
         vec<VkDescriptorSet>       desc_sets;       /// needs to be in frame, i think.
         VkPipelineLayout           pipeline_layout; /// and what a layout
@@ -42,10 +42,10 @@ struct PipelineData {
     PipelineData(Device &device,
                  UniformData &ubo, VertexData &vbo, IndexData &ibo,
                  vec<VkVertexInputAttributeDescription> attrs,
-                 size_t vsize, std::string name) {
+                 size_t vsize, std::string shader) {
             /// allocate and set memory
             m = std::shared_ptr<Memory>(
-                new Memory { device, ubo, vbo, ibo, attrs, vsize, name }
+                new Memory { device, ubo, vbo, ibo, attrs, vsize, shader }
             );
         }
     /// general query engine for view construction and model definition to view creation
@@ -64,8 +64,8 @@ struct PipelineMap {
         map<std::string, PipelineData> groups;
     };
     std::shared_ptr<Data> data;
-    PipelineData &operator[](std::string name) {
-        return data->groups[name];
+    PipelineData &operator[](std::string group) {
+        return data->groups[group];
     }
     size_t  count (std::string n) { return data ? data->groups.count(n) : 0; }
     size_t   size () { return data ? data->groups.size() : 0; }
