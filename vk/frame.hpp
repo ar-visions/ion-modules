@@ -10,7 +10,6 @@ struct MVP {
     alignas(16) glm::mat4 proj;
 };
 
-/// What do you call this controller?
 struct Frame {
     enum Attachment {
         Color,
@@ -19,7 +18,7 @@ struct Frame {
     };
     int             index;
     Device         *device;
-    vec<Texture>    attachments; // Textures can be references to others created elsewhere, with views of their own instancing
+    vec<Texture>    attachments;
     VkFramebuffer   framebuffer = VK_NULL_HANDLE;
     map<str, VkCommandBuffer> render_commands;
     void destroy();

@@ -1249,6 +1249,12 @@ private:
             throw std::invalid_argument("unsupported layout transition!");
         }
 
+        // this memory should be set...
+        barrier.srcAccessMask   = 0;
+        barrier.dstAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT;
+        sourceStage             = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage        = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        
         vkCmdPipelineBarrier(
             commandBuffer,
             sourceStage, destinationStage,

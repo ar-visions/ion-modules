@@ -97,7 +97,7 @@ struct Context2D:ICanvasBackend {
         tx                      = Vulkan::texture(sz);
         GrDirectContext *ctx    = Skia::Context()->sk_context.get();
         auto imi                = GrVkImageInfo { };
-        imi.fImage              = tx.image;
+        imi.fImage              = VkImage(tx);
         imi.fImageTiling        = VK_IMAGE_TILING_OPTIMAL;
         imi.fImageLayout        = VK_IMAGE_LAYOUT_UNDEFINED;//VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imi.fFormat             = VK_FORMAT_R8G8B8A8_UNORM;

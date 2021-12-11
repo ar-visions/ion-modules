@@ -194,7 +194,8 @@ void PipelineData::Memory::update(size_t frame_id) {
         {        .color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
         { .depthStencil = {1.0f, 0}}};
     auto    render_info = VkRenderPassBeginInfo {
-        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null, device, frame,
+        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null,
+        VkRenderPass(device), VkFramebuffer(frame),
         {{0,0}, device.extent}, uint32_t(clear_values.size()), clear_values };
     ///
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);

@@ -198,9 +198,11 @@ int Vulkan::main(FnRender fn, Composer *composer) {
         /*canvas.fill(box);*/      /// thats a simpler api. the path is a param that can be null
         canvas.flush();            ///
         /// i.tx_skia.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        i.tx_skia.set_stage(Texture::Stage::Shader);
         device.render.push(pl);
         device.render.present(); /// execute all graphic (render) pipelines [ on the current frame ], and present
-
+        int test = 0;
+        test++;
         //Composer &cmp = *composer;
         //cmp(fn(args));
         //w.set_title(cmp.root->props.text.label);

@@ -16,7 +16,7 @@ struct Device {
     void                  create_swapchain();
     void                  create_command_buffers();
     void                  create_render_pass();
-    uint32_t              attachment_index(Texture *tx);
+    uint32_t              attachment_index(Texture::Data *tx);
     map<str, VkShaderModule> f_modules;
     map<str, VkShaderModule> v_modules;
     Render                render;

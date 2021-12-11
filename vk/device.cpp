@@ -146,11 +146,13 @@ Device::Device(GPU &p_gpu, bool aa) {
 }
 
 /// this is to avoid doing explicit monkey-work, and keep code size down as well as find misbound texture
-uint32_t Device::attachment_index(Texture *tx) {
-    auto is_referencing = [&](Texture *a, Texture *b) {
-        if (a->image && a->image == b->image)
+uint32_t Device::attachment_index(Texture::Data *tx) {
+    auto is_referencing = [&](Texture::Data *a_data, Texture *b) {
+        if (!a_data && !b->data)
+            return false;
+        if (a_data && b->data && a_data->image && a_data->image == b->data->image)
             return true;
-        if (a->view && a->view == b->view)
+        if (a_data && b->data && a_data->view  && a_data->view  == b->data->view)
             return true;
         return false;
     };
@@ -168,47 +170,17 @@ void Device::update() {
     auto sz = vec2i { int(extent.width), int(extent.height) };
     uint32_t frame_count = frames.size();
     render.sync++;
-
     tx_color = ColorTexture { this, sz, null };
     tx_depth = DepthTexture { this, sz, null };
-    ///
-    /// thank god for asserts.
-    /// stage should implicitly transition, we dont do this crap here:
-    tx_color.set_stage(Texture::Stage::Transfer);
-    tx_color.set_stage(Texture::Stage::Shader);
-    tx_color.set_stage(Texture::Stage::Color);
-    ///
-    tx_depth.set_stage(Texture::Stage::Transfer);
-    tx_depth.set_stage(Texture::Stage::Shader);
-    tx_depth.set_stage(Texture::Stage::Color);
-    ///
-    /// hide usage, memory, aspect, mips; can infer this from context
-    /// create VkCommandBuffer for pipelines across all frames
-    /// create view, uniform buffer, render command
+    /// should effectively perform: ( Undefined -> Transfer, Transfer -> Shader, Shader -> Color )
     for (size_t i = 0; i < frame_count; i++) {
         Frame &frame   = frames[i];
         frame.index    = i;
-        auto   tx_swap = Texture {
-            this, sz, swap_images[i], null,
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            false, VK_FORMAT_B8G8R8A8_SRGB, 1 };
-        
-        tx_swap.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        // bit non-sense, but i believe it needs this association because the swap references
-        // a layout without itsself being transitioned to this layout.  going with the flow for the now.
-        // 'transitioning' to this layout does not work per the validator.
-        // it simply needs an associative binding here.
-        
-        //tx_swap.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        //tx_swap.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        //tx_swap.set_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        
-        // look for attachments and verify its the same identity
+        auto   tx_swap = SwapImage { this, sz, swap_images[i] };
+        ///
         frame.attachments = vec<Texture> {
-            tx_color, // a copy without the view is set on each one of these frames, when the view operator is called it creates the view
-            tx_depth, // this may be actually creating it once.. darnit. test that.
+            tx_color,
+            tx_depth,
             tx_swap
         };
         //if (!frame.ubo)
@@ -369,7 +341,7 @@ void Device::create_render_pass() {
     dep.dstAccessMask             = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
     VkAttachmentDescription adesc_clr_image  = f0.attachments[0];
-    VkAttachmentDescription adesc_dep_image  = f0.attachments[1];
+    VkAttachmentDescription adesc_dep_image  = f0.attachments[1]; // format is wrong here, it should be the format of the tx
     VkAttachmentDescription adesc_swap_image = f0.attachments[2];
     
     std::array<VkAttachmentDescription, 3> attachments = {adesc_clr_image, adesc_dep_image, adesc_swap_image};
@@ -381,8 +353,12 @@ void Device::create_render_pass() {
     rpi.pSubpasses                = &sp;
     rpi.dependencyCount           = 1;
     rpi.pDependencies             = &dep;
-
+    ///
+    /// seems like tx_depth is not created with a 'depth' format, or improperly being associated to a color format
+    ///
     assert(vkCreateRenderPass(device, &rpi, nullptr, &render_pass) == VK_SUCCESS);
+    int test = 0;
+    test++;
 }
 
 VkCommandBuffer Device::begin() {
