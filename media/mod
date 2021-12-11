@@ -4,7 +4,7 @@ if(NOT WIN32)
     dep(pthread)
 endif()
 
-dep(skia-m95:skia==m95 data)
+dep(skia:skia==m95 data)
 
 if(APPLE)
     dep(Cocoa OpenGL IOKit CoreFoundation CoreVideo)
