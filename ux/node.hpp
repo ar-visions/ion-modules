@@ -8,7 +8,6 @@
 #define TO_STRING(x) STRINGIFY(x)
 
 struct node;
-struct Model;
 
 struct IProps {
     //void enumerate(std::function<void(String &, var::Type)> fn) {
@@ -44,9 +43,9 @@ struct Border {
     bool            dash  = false;
     Border()        { }
     void copy(const Border &b) {
-        size = b.size;
+        size  = b.size;
         color = b.color;
-        dash = b.dash;
+        dash  = b.dash;
     }
     void import_data(var &d) {
         size  = double(d["size"]);
@@ -132,6 +131,8 @@ const std::string &type_name() {
 // constraints on the pipeline view depending on what node is rendering it
 // vulkan makes that easy.  its all part of its giant gumbo called pipeline.
 
+typedef std::function<vec<Attrib>(str)> AttribFn;
+
 struct node {
     const char    *selector = "";
     const char    *class_name = "";
@@ -181,23 +182,29 @@ struct node {
     virtual rectd   calculate_rect(node *child);
     int             u_next_id = 0;
     
+    Device &device() {
+        return Vulkan::device();
+    }
+    
     template <typename U>
     UniformData uniform(int id, std::function<void(U &)> fn) {
-        return UniformBuffer<U>(Vulkan::device(), id, fn);
+        return UniformBuffer<U>(device(), id, fn);
     }
     
     template <typename T>
     VertexData vertices(vec<T> &v_vbo) {
-        return VertexBuffer<Vertex>(Vulkan::device(), v_vbo);
+        return VertexBuffer<Vertex>(device(), v_vbo);
     }
     
     template <typename I>
     IndexData polygons(vec<I> &v_ibo) {
-        return IndexBuffer<I>(Vulkan::device(), v_ibo);
+        return IndexBuffer<I>(device(), v_ibo);
     }
-    
+
     template <typename T>
-    PipelineMap obj(UniformData ubo, path_t path, ShaderMap shaders = {}) {
+    PipelineMap model(path_t       path, UniformData  ubo,
+                      vec<Attrib>  attr, ShaderMap    shaders = { })
+    {
         auto obj = Obj<T>(path, [&](auto &g, vec3 &p, vec2 &u, vec3 &n) -> T {
             return T(p, n, u);
         });
@@ -209,10 +216,21 @@ struct node {
             auto   sh = cn ? shaders[n]   :
                         ca ? shaders["*"] : str(n);
             auto  ibo = polygons<uint32_t>(group.ibo);
-            res[n]    = Pipeline<T> { *vbo.device, ubo, vbo, ibo, sh }; /// convert to use context for this, device is set on the main app controller
+            res[n]    = Pipeline<T> { *vbo.device, ubo, vbo, ibo, attr, sh };
             console.log("group: {0}, shader: {1}", {n, sh});
         }
         return res;
+    }
+    
+    /// simple texture output with ubo controller
+    Pipeline<Vertex> texture(Texture tx, UniformData ubo) {
+        auto v_sqr = Vertex::square();
+        auto i_sqr = vec<uint32_t> { 0, 1, 2, 2, 3, 0 };
+        auto   vbo = vertices(v_sqr);
+        auto   ibo = polygons(i_sqr);
+        return Pipeline<Vertex> {
+            device(), ubo, vbo, ibo,
+            { Position3f(), Normal3f(), Texture2f(tx), Color4f() }, "main" };
     }
     
     inline size_t count(std::string n) {

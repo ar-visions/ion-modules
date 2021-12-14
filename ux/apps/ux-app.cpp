@@ -3,11 +3,6 @@
 #include <media/obj.hpp>
 
 
-template <typename T>
-struct Type {
-    /// 
-};
-
 struct Sample:node {
     declare(Sample);
     

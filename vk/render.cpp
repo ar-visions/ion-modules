@@ -15,8 +15,9 @@ void Render::update() {
 }
 
 void Render::present() {
-    auto &device = *this->device;
+    Device &device = *this->device;
     vkWaitForFences(device, 1, &fence_active[cframe], VK_TRUE, UINT64_MAX);
+    
     uint32_t image_index; /// look at the ref here
     VkResult result = vkAcquireNextImageKHR(
         device, device.swap_chain, UINT64_MAX,
@@ -41,20 +42,22 @@ void Render::present() {
     while (sequence.size()) {
         auto &m = *sequence.front()->m;
         sequence.pop();
+        
         if (m.sync != sync) {
+            /// Device::update() calls change the sync (so initial and updates)
             sync_diff = true;
             m.sync    = sync;
-            /// pipeline pairs are a set of 1 command and 1 uniform for each of the swap frame contexts
-            /// if we have to have sampler resources and other context-based handles this will be where its initialized
             if (!m.frame_commands)
                  m.frame_commands = vec<VkCommandBuffer> (
                     device.frames.size(), VK_NULL_HANDLE
                  );
-            for (size_t i = 0; i < device.frames.size(); i++)
+            for (size_t i = 0; i < device.frames.size(); i++) //
                 m.update(i); /// make singular, frame index param
         }
-        /// transfer uniform struct; a lambda could be called here... for now its just copying the memory
-        m.ubo.transfer(image_index); /// fairly, fairly certain this is the case, it was cframe which is not the same type of data
+        
+        /// transfer uniform struct from lambda call. send us your uniforms!
+        m.ubo.transfer(image_index);
+        
         ///
         image_active[image_index]        = fence_active[cframe];
         VkSubmitInfo submit_info         = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
@@ -66,6 +69,8 @@ void Render::present() {
         submit_info.pCommandBuffers      = &m.frame_commands[image_index];
         submit_info.signalSemaphoreCount = 1;
         assert(vkQueueSubmit(device.queues[GPU::Graphics], 1, &submit_info, fence_active[cframe]) == VK_SUCCESS);
+        int test = 0;
+        test++;
     }
     ///
     VkPresentInfoKHR     present = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, null, 1,

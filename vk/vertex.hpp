@@ -13,14 +13,23 @@ struct Vertex {
            clr({clr.x,clr.y,clr.z,clr.w}) { }
     Vertex(vec3 &pos, vec3 &norm, vec2 &uv):
            pos({pos.x,pos.y,pos.z}), norm({norm.x,norm.y,norm.z}), uv({uv.x,uv.y}) { }
+    
+    static vec<Vertex> square() {
+        return vec<Vertex> {
+            Vertex {{-0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 0.0}, {1.0, 0.0, 0.0, 1.0}},
+            Vertex {{ 0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0}, {0.0, 1.0, 0.0, 1.0}},
+            Vertex {{ 0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
+            Vertex {{-0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
+        };
+    }
 };
 
 struct IndexData {
     Device         *device = null;
     Buffer          buffer;
-    operator VkBuffer() { return buffer;      }
-    size_t       size() { return buffer.sz;   }
-    IndexData(nullptr_t n = null)           { }
+    operator VkBuffer() { return buffer; }
+    size_t       size() { return buffer.sz / buffer.type_size; }
+    IndexData(nullptr_t n = null) { }
     IndexData(Device &device, Buffer buffer) : device(&device), buffer(buffer)  { }
     operator bool () { return device != null; }
     bool operator!() { return device == null; }
@@ -60,7 +69,6 @@ struct IndexBuffer:IndexData {
     IndexBuffer(Device &device, vec<I> &i) : IndexData(device, Buffer {
             &device, i, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) { }
-    size_t size() { return buffer.sz / sizeof(I); }
 };
 
 typedef map<str, str> ShaderMap;

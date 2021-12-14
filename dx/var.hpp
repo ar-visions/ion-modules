@@ -773,7 +773,7 @@ typedef map<str, var> ModelMap;
 /// All of the internals of var could be set in different ways to allow for lots of shapeless fun
 /// if you can effectively hide the smart pointer init that would be nice in my view.
 /// add to master todo.
-inline var Model(str name, Schema schema) {
+inline var ModelDef(str name, Schema schema) {
     var m   = schema;
         m.s = std::shared_ptr<std::string>(new std::string(name));
     return m;

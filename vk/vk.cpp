@@ -26,6 +26,10 @@
 
 #include <gpu/gl/GrGLInterface.h>
 
+VkDevice vk_device() {
+    return Vulkan::device();
+}
+
 const char *cstr_copy(const char *s) {
     int   len = strlen(s);
     char   *r = (char *)malloc(len + 1);
@@ -127,7 +131,11 @@ Texture Vulkan::texture(vec2i size) {
     
     // VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
     i.tx_skia = Texture { &i.device, size, rgba { 1.0, 0.0, 0.0, 1.0 }, /// lets hope we see red soon.
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_SAMPLED_BIT|
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT|
+        VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT, // aspect? what is this on vk-aa
         false, VK_FORMAT_R8G8B8A8_UNORM, -1 }; // force sample count to 1 bit
     
@@ -139,15 +147,6 @@ static recti s_rect;
 recti Vulkan::startup_rect() {
     assert(s_rect);
     return s_rect;
-}
-
-static vec<Vertex> v_square() {
-    return vec<Vertex> {
-        Vertex {{-0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 0.0}, {1.0, 0.0, 0.0, 1.0}},
-        Vertex {{ 0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0}, {0.0, 1.0, 0.0, 1.0}},
-        Vertex {{ 0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
-        Vertex {{-0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
-    };
 }
 
 ///
@@ -162,25 +161,27 @@ int Vulkan::main(FnRender fn, Composer *composer) {
     Window      &w = *i.window;
     Device &device = i.device;
     Canvas  canvas = Canvas(sz, Canvas::Context2D);
+    Texture &tx_canvas = i.tx_skia;
     ///
     i.device.initialize(&w);
     w.show();
-    ///
     /// canvas polygon data (pos, norm, uv, color)
-    auto   vertices = v_square();
+    auto   vertices = Vertex::square();
     auto    indices = vec<uint16_t> { 0, 1, 2, 2, 3, 0 };
     auto        vbo = VertexBuffer<Vertex>(device, vertices);
     auto        ibo = IndexBuffer<uint16_t>(device, indices);
     auto        uni = UniformBuffer<MVP>(device, 0, [&](MVP &mvp) {
-        /// pipelines should be modelled on int ident
-        /// but maybe that is too flattening a concept.  who am i, Chronos Group... [fry stare]
         mvp         = {
              .model = glm::mat4(1.0f),
              .view  = glm::mat4(1.0f),
              .proj  = glm::mat4(1.0f)
         };
     });
-    auto         pl = Pipeline<Vertex> { device, uni, vbo, ibo, std::string("main") };
+    auto         pl = Pipeline<Vertex> {
+        device, uni, vbo, ibo, {
+            Position3f(), Normal3f(), Texture2f(tx_canvas), Color4f()
+        }, std::string("main")
+    };
     
     /// uniforms are meant to be managed by the app, passed into pipelines.
     w.loop([&]() {
@@ -199,8 +200,15 @@ int Vulkan::main(FnRender fn, Composer *composer) {
         canvas.flush();            ///
         /// i.tx_skia.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         i.tx_skia.set_stage(Texture::Stage::Shader);
+        
+        device.tx_color.set_stage(Texture::Stage::Color);
+        device.tx_depth.set_stage(Texture::Stage::Depth);
+        
+        /// this needs to happen here...
         device.render.push(pl);
         device.render.present(); /// execute all graphic (render) pipelines [ on the current frame ], and present
+        
+        i.tx_skia.set_stage(Texture::Stage::Color);
         int test = 0;
         test++;
         //Composer &cmp = *composer;

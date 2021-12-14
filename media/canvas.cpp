@@ -91,18 +91,15 @@ struct Context2D:ICanvasBackend {
         State *s = (State *)bs;
         return new State { s->ps };
     }
-    
-    /// compare with vk-aa
+
     Context2D(vec2i sz) {
         tx                      = Vulkan::texture(sz);
         GrDirectContext *ctx    = Skia::Context()->sk_context.get();
         auto imi                = GrVkImageInfo { };
         imi.fImage              = VkImage(tx);
         imi.fImageTiling        = VK_IMAGE_TILING_OPTIMAL;
-        imi.fImageLayout        = VK_IMAGE_LAYOUT_UNDEFINED;//VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        imi.fImageLayout        = VK_IMAGE_LAYOUT_UNDEFINED;
         imi.fFormat             = VK_FORMAT_R8G8B8A8_UNORM;
-        // this is new but it makes sense to me to pass along. these are the usage flags
-        // important to keep flags as 0 here. it may still require some flags set still
      ///imi.fImageUsageFlags    = VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT;//VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // i dont think so.
         imi.fSampleCount        = 1;
         imi.fLevelCount         = 1;
@@ -115,11 +112,6 @@ struct Context2D:ICanvasBackend {
                                       kBottomLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, null, null);
         sk_canvas               = sk_surf->getCanvas();
         set_size(sz);
-        /// it was initializing with an invalid usage param before.  i am trying:
-        ///  usage: VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT
-        ///  now i need to transition the layout to general perhaps..
-        ///  its easy to confuse usage and layout, and dont forget tiling.  none of those have anything to do with the words they chose.
-        ///  an important thing for the library to do is hide all of that as instantly as possible
     }
     
     void clear(DrawState &ds) {

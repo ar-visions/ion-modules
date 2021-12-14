@@ -12,6 +12,7 @@ VkDevice                handle(Device *device);
 VkDevice         device_handle(Device *device);
 VkPhysicalDevice    gpu_handle(Device *device);
 uint32_t           memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags props);
+VkDevice             vk_device();
 
 #include <vk/window.hpp>
 #include <vk/gpu.hpp>

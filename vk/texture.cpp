@@ -169,8 +169,10 @@ void Texture::transfer_pixels(rgba *pixels) { /// sz = 0, eh.
 VkImageView Texture::Data::create_view(VkDevice device, vec2i &sz, VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t mip_levels) {
     VkImageView  view;
     uint32_t      mips = auto_mips(mip_levels, sz);
+    //auto         usage = VkImageViewUsageCreateInfo { VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO, null, VK_IMAGE_USAGE_SAMPLED_BIT };
     auto             v = VkImageViewCreateInfo {};
     v.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    //v.pNext            = &usage;
     v.image            = image;
     v.viewType         = VK_IMAGE_VIEW_TYPE_2D;
     v.format           = format;
@@ -225,19 +227,31 @@ Texture::Data::operator VkAttachmentDescription() {
 Texture::Data::operator VkAttachmentReference() {
     assert(usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ||
            usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-    //bool   is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    uint32_t    index = device->attachment_index(this);
+    //bool  is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    uint32_t   index = device->attachment_index(this);
     return VkAttachmentReference {
-        .attachment   = index,
-        .layout       = layout_override != VK_IMAGE_LAYOUT_UNDEFINED ? layout_override : stage.data().layout
+        .attachment  = index,
+        .layout      = layout_override != VK_IMAGE_LAYOUT_UNDEFINED ? layout_override : stage.data().layout
     };
 }
 
+VkImageView Texture::Data::image_view() {
+    if (!view)
+         view = create_view(*device, sz, image, format, aflags, mips);
+    return view;
+}
+
+VkSampler Texture::Data::image_sampler() {
+    if (!sampler)
+         create_sampler();
+    return sampler;
+}
+
 Texture::Data::operator VkDescriptorImageInfo &() {
-    info  = { //fix.
+    info  = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = view,
-        .sampler     = sampler
+        .imageView   = image_view(),
+        .sampler     = image_sampler()
     };
     return info;
 }

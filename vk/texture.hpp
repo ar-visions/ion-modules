@@ -70,16 +70,21 @@ struct Texture {
         static VkImageView create_view(VkDevice, vec2i &, VkImage, VkFormat, VkImageAspectFlags, uint32_t);
         ///
 
-        operator bool();
-        bool     operator!();
-        operator VkImage &();
-        operator VkImageView &();
-        operator VkDeviceMemory &();
-        operator VkAttachmentDescription();
-        operator VkAttachmentReference();
-        operator VkDescriptorImageInfo &();
-        void     destroy();
-
+        operator    bool();
+        bool        operator!();
+        operator    VkImage &();
+        operator    VkImageView &();
+        operator    VkDeviceMemory &();
+        operator    VkAttachmentDescription();
+        operator    VkAttachmentReference();
+        operator    VkDescriptorImageInfo &();
+        void        destroy();
+        VkImageView image_view();
+        VkSampler   image_sampler();
+        void        create_sampler();
+        void        create_resources();
+        VkWriteDescriptorSet write_desc(VkDescriptorSet &ds);
+        
         Data(nullptr_t n = null) { }
         Data(Device *, vec2i, rgba,
              VkImageUsageFlags, VkMemoryPropertyFlags, VkImageAspectFlags, bool,
@@ -90,10 +95,6 @@ struct Texture {
         Data(Device *device, vec2i sz, VkImage image, VkImageView view,
              VkImageUsageFlags, VkMemoryPropertyFlags, VkImageAspectFlags, bool,
              VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1);
-
-        void create_sampler();
-        void create_resources();
-        VkWriteDescriptorSet write_desc(VkDescriptorSet &ds);
     };
     ///
     std::shared_ptr<Data> data;
@@ -138,8 +139,8 @@ struct Texture {
     void set_stage(Stage n)            { return data->set_stage(n); }
     
     /// pass-through operators
-    operator  bool()                   { return   *data; }
-    bool operator!()                   { return  !*data; }
+    operator  bool()                   { return    data &&  *data; }
+    bool operator!()                   { return  !data  || !*data; }
     operator VkImage &()               { return   *data; }
     operator VkImageView &()           { return   *data; }
     operator VkDeviceMemory &()        { return   *data; }
@@ -190,6 +191,6 @@ struct SwapImage:Texture {
              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
              VK_IMAGE_ASPECT_COLOR_BIT, false, VK_FORMAT_B8G8R8A8_SRGB, 1) {
-            data->layout_override = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // i dont think this is it.
+            data->layout_override = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
 };

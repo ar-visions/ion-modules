@@ -24,13 +24,34 @@ PipelineData::Memory::~Memory() {
     destroy();
 }
 
+///
+/// Vertex describes basically everything, so every reference should spring from its Definition
+///
+/// VertexDef<Vertex>({
+///      VPos3f     {  },  /// type of 'use' (these are called Vertex Descriptor Types)
+///      VTexture2f {tx}  ///  why not use this?
+///      we can have asserts working behind the scenes to make sure the data types line up with their use types
+/// });
+///
+/// definitely got a point with consolidating these three types.  it makes some sense.
+/// vbo, ubo, and layout.  they are all made at the same time and they are deleted at the same time
+/// Vertex would have a templated method for creating
+/// its called bind.
+/// ---------------------------------------------
+/// we get rid of the method on Vertex for passing write descriptors.
+/// ---------------------------------------------
+/// Vertex.bind(vbo, ibo, vec<VAttrUsage> {{VPos3f {}, VTexture2f {tx}});
+///
+
 /// constructor for pipeline memory; worth saying again.
 PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
                              VertexData &vbo, IndexData &ibo,
-                             vec<VkVertexInputAttributeDescription> attrs,
+                             vec<Attrib> &attr,
                              size_t vsize,    std::string shader):
         device(&device),   shader(shader),  ubo(ubo),
-        vbo(vbo), ibo(ibo), attrs(attrs), vsize(vsize) {
+        vbo(vbo), ibo(ibo), attr(attr), vsize(vsize) {
+
+    /// layout!  i crown thee placement of horridness descriptor and non-effective 'layout'
     /// obtain data via usage
     auto bindings = vec<VkDescriptorSetLayoutBinding> {
         { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
@@ -52,20 +73,25 @@ PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
     assert (vkAllocateDescriptorSets(device, &ai, desc_sets.data()) == VK_SUCCESS);
     ubo.update(&device);
     ///
+    /// how do we get the Texture handle? yes it is referenced in the attribs but that is a hop and a jump to just look for the first
+    /// tx from attr (thats what we are doing now, though.. its wrong)
+    Texture tx;
+    for (size_t i = 0; i < attr.size(); i++)
+        if (attr[i].tx)
+            tx = attr[i].tx; // needs to be associated to sampler-based bindings
+    ///
     /// write descriptor sets for all swap image instances
-    size_t i = 0;
-    for (auto &f: device.frames) {
-        auto &desc_set = desc_sets[i];
-        auto       &tx = f.attachments[Frame::Color];
+    for (size_t i = 0; i < device.frames.size(); i++) {
+        auto &desc_set = desc_sets[i]; /// the pipeline takes in an array of textures, and their index is just the identifier 0 to c - 1
+      //auto       &tx = f.attachments[Frame::Color]; /// this is ht problem, we arent using this one we are using the skia texture.
         auto  v_writes = vec<VkWriteDescriptorSet> {
             ubo.write_desc(i, desc_set),
-             tx.write_desc(desc_set)
+             tx.write_desc(desc_set) /// use the pipeline texture sampler bound at [1]
         };
         VkDevice dev = device;
         size_t    sz = v_writes.size();
         VkWriteDescriptorSet *ptr = v_writes.data();
-        vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
-        i++;
+        vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr); // check when view is created, is it shader optimal layout at that point?
     }
     ///
     auto vert = device.module(
@@ -88,9 +114,11 @@ PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
     VkPipelineVertexInputStateCreateInfo vertex_info {};
     vertex_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_info.vertexBindingDescriptionCount   = 1;
-    vertex_info.vertexAttributeDescriptionCount = uint32_t(attrs.size());
+            
+    auto vk_attr = Attrib::vk(0, attr);
+    vertex_info.vertexAttributeDescriptionCount = uint32_t(vk_attr.size());
     vertex_info.pVertexBindingDescriptions      = &binding;
-    vertex_info.pVertexAttributeDescriptions    = attrs.data();
+    vertex_info.pVertexAttributeDescriptions    = vk_attr.data();
     ///
     VkPipelineInputAssemblyStateCreateInfo topology {};
     topology.sType                              = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -175,20 +203,22 @@ PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
 
 /// create graphic pipeline
 void PipelineData::Memory::update(size_t frame_id) {
-    auto &device = *this->device;
-    Frame &frame = device.frames[frame_id];
+    auto         &device = *this->device;
+    Frame         &frame = device.frames[frame_id];
     VkCommandBuffer &cmd = frame_commands[frame_id];
+    
+    /// reallocate command
     vkFreeCommandBuffers(device, device.pool, 1, &cmd);
-    ///
     auto alloc_info = VkCommandBufferAllocateInfo {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
     assert(vkAllocateCommandBuffers(device, &alloc_info, &cmd) == VK_SUCCESS);
-    ///
+    
     /// begin command
     auto begin_info = VkCommandBufferBeginInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     assert(vkBeginCommandBuffer(cmd, &begin_info) == VK_SUCCESS);
+    
     /// set clear values for top 2 images per swap instance
     auto   clear_values = vec<VkClearValue> {
         {        .color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
@@ -197,14 +227,21 @@ void PipelineData::Memory::update(size_t frame_id) {
         VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null,
         VkRenderPass(device), VkFramebuffer(frame),
         {{0,0}, device.extent}, uint32_t(clear_values.size()), clear_values };
-    ///
+    
+    /// gather some rendering ingredients
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    
+    /// toss together a VBO array
     vec<VkBuffer>    a_vbo   = { vbo };
     VkDeviceSize   offsets[] = {0};
     vkCmdBindVertexBuffers(cmd, 0, 1, a_vbo.data(), offsets);
     vkCmdBindIndexBuffer(cmd, ibo, 0, ibo.buffer.type_size == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, desc_sets, 0, nullptr);
-    vkCmdDrawIndexed(cmd, uint32_t(ibo.size()), 1, 0, 0, 0); /// ibo size = number of indices (like a vector)
-    vkCmdEndRenderPass(cmd);
+    
+    /// flip around an ibo and toss it in the oven
+    uint32_t sz_draw = ibo.size();
+    vkCmdDrawIndexed(cmd, sz_draw, 1, 0, 0, 0); /// ibo size = number of indices (like a vector)
+    vkCmdEndRenderPass(cmd); /// i think we are calling this at perhaps an odd time, at bare minimum i need to mimmic some ref code just so i can be on the same baseline
+    assert(vkEndCommandBuffer(cmd) == VK_SUCCESS);
 }

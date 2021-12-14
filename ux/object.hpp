@@ -4,7 +4,7 @@
 struct Object:node {
     declare(Object);
     enum Uniform { U_MVP };
-    PipelineMap pmap;
+    //PipelineMap pmap;
     
     struct Props:IProps {
         str         model;
@@ -25,17 +25,17 @@ struct Object:node {
                 shaders[group] = shader;
             ///
             assert(props.ubo);
-            pmap = obj<Vertex>(props.ubo, props.model, shaders);
+            //pmap = obj<Vertex>(props.ubo, props.model, shaders);
         } else {
-            pmap = PipelineMap { null };
+            //pmap = PipelineMap { null };
         }
     }
     
     Element render() {
         /// hit 88mph...
-        auto &device = Vulkan::device();
-        for (auto &[group, pipeline]: pmap.map())
-            device.render.push(pipeline);
+        //auto &device = Vulkan::device();
+        //for (auto &[group, pipeline]: pmap.map())
+        //    device.render.push(pipeline);
         /// and gone...
         return null;
     }

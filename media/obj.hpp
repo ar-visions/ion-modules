@@ -5,6 +5,10 @@ typedef size_t IPos;
 typedef size_t INormal;
 typedef size_t IUV;
 
+
+// material mapping is an important one
+// right now its all about simple shader to what, shader textfile.
+// 
 template <typename T>
 struct Obj {
     struct Group {
@@ -70,7 +74,7 @@ struct Obj {
                         int  iv  = sp[0].integer();
                         int  ivt = sp[1].integer();
                         int  ivn = sp[2].integer();
-                        vbo += fn(groups[g], iv  ?  v[ iv-1]:vec3::null(),
+                        vbo += fn(groups[g], iv ?  v[ iv-1]:vec3::null(),
                                             ivt ? vt[ivt-1]:vec2::null(),
                                             ivn ? vn[ivn-1]:vec3::null());
                     }

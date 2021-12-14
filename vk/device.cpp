@@ -5,7 +5,6 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-
 static Device d_null;
 Device &Device::null_device() {
     return d_null;
@@ -189,6 +188,8 @@ void Device::update() {
     ///
     create_render_pass();
     
+    // verify that these are transitioned, to me it makes no sense to do this but i saw it in reference
+    //
     tx_color.set_stage(Texture::Stage::Shader);
     tx_depth.set_stage(Texture::Stage::Shader);
     
