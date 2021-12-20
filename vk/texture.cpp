@@ -13,13 +13,16 @@ Texture::Data::Data(Device *device, vec2i sz, rgba clr,
 Texture::Data::Data(Device *device, Image &im,
                     VkImageUsageFlags  u, VkMemoryPropertyFlags m,
                     VkImageAspectFlags a, bool ms,
-                    VkFormat format, int mips) :
-                       device(device), sz(im.size()), mips(auto_mips(mips, sz)), mprops(m), ms(ms), format(format), aflags(a)  { }
+                    VkFormat           f, int  mips) :
+                       device(device), sz(im.size()), mips(auto_mips(mips, sz)),
+                       mprops(m),      ms(ms),        format(f),     aflags(a)  { }
 
 Texture::Data::Data(Device *device, vec2i sz, VkImage image, VkImageView view, VkImageUsageFlags u, VkMemoryPropertyFlags m,
                     VkImageAspectFlags a, bool ms, VkFormat format, int mips):
-                       device(device), image(image), view(view),
-                       sz(sz), mips(auto_mips(mips, sz)), mprops(m), ms(ms), image_ref(true), format(format), usage(u), aflags(a) { }
+                       device(device), image(image),              view(view),
+                       sz(sz),         mips(auto_mips(mips, sz)), mprops(m),
+                       ms(ms),         image_ref(true),           format(format),
+                       usage(u),       aflags(a) { }
 
 Texture::Stage::Stage(Stage::Type value) : value(value) { }
 
@@ -97,19 +100,22 @@ void Texture::Data::create_resources() {
     //set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); /// why?
 }
 
-/// must, get past, validator...
+void Texture::Data::pop_stage() {
+    assert(stage.size() >= 2);
+    /// kind of need to update it.
+    stage.pop();
+    set_stage(stage.top());
+}
+
 void Texture::Data::set_stage(Stage next_stage) {
-    if (next_stage == stage)
-        return;
-    ///
-    Device &device = *this->device;
-    Stage     cur  = stage;
+    Device  & device = *this->device;
+    Stage       cur  = prv_stage;
     while (cur != next_stage) {
         Stage  from  = cur;
         Stage  to    = cur;
         ///
         /// skip over that color thing because this is quirky
-        do to = Stage::Type(int(to) + ((next_stage > stage) ? 1 : -1));
+        do to = Stage::Type(int(to) + ((next_stage > prv_stage) ? 1 : -1));
         while (to == Stage::Color && to != next_stage);
         ///
         /// transition through the image membrane, as if we were insane in-the
@@ -130,19 +136,25 @@ void Texture::Data::set_stage(Stage next_stage) {
             .srcAccessMask                   = VkAccessFlags(     data.access),
             .dstAccessMask                   = VkAccessFlags(next_data.access)
         };
-        /// come on girdle, hold...
         VkCommandBuffer cb = device.begin();
         vkCmdPipelineBarrier(
-            cb, data.stage, next_data.stage,
-                0, 0, nullptr,
-                   0, nullptr, 1, &barrier);
-        ///
+            cb, data.stage, next_data.stage, 0, 0,
+            nullptr, 0, nullptr, 1, &barrier);
         device.submit(cb);
         cur = to;
     }
-    stage = next_stage;
+    prv_stage = next_stage;
 }
 
+void Texture::Data::push_stage(Stage next_stage) {
+    if (stage.size() == 0)
+        stage.push(Stage::Undefined); /// default stage, when pop'd
+    if (next_stage == stage.top())
+        return;
+    
+    set_stage(next_stage);
+    stage.push(next_stage);
+}
 
 void Texture::transfer_pixels(rgba *pixels) { /// sz = 0, eh.
     Data &d = *data;
@@ -152,14 +164,18 @@ void Texture::transfer_pixels(rgba *pixels) { /// sz = 0, eh.
     if (pixels) {
         auto    nbytes = VkDeviceSize(d.sz.x * d.sz.y * 4); /// adjust bytes if format isnt rgba; implement grayscale
         Buffer staging = Buffer(&device, nbytes,
-                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        ///
         void* mem = null;
         vkMapMemory(device, staging, 0, nbytes, 0, &mem);
         memcpy(mem, pixels, size_t(nbytes));
         vkUnmapMemory(device, staging);
         ///
+        push_stage(Stage::Transfer);
         staging.copy_to(this);
+        //pop_stage(); // ah ha!..
         staging.destroy();
     }
     ///if (mip > 0) # skipping this for now
@@ -172,7 +188,7 @@ VkImageView Texture::Data::create_view(VkDevice device, vec2i &sz, VkImage image
     //auto         usage = VkImageViewUsageCreateInfo { VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO, null, VK_IMAGE_USAGE_SAMPLED_BIT };
     auto             v = VkImageViewCreateInfo {};
     v.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    //v.pNext            = &usage;
+  //v.pNext            = &usage;
     v.image            = image;
     v.viewType         = VK_IMAGE_VIEW_TYPE_2D;
     v.format           = format;
@@ -227,11 +243,12 @@ Texture::Data::operator VkAttachmentDescription() {
 Texture::Data::operator VkAttachmentReference() {
     assert(usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ||
            usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-    //bool  is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    uint32_t   index = device->attachment_index(this);
+  //bool  is_color = usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    uint32_t index = device->attachment_index(this);
     return VkAttachmentReference {
         .attachment  = index,
-        .layout      = layout_override != VK_IMAGE_LAYOUT_UNDEFINED ? layout_override : stage.data().layout
+        .layout      = (layout_override != VK_IMAGE_LAYOUT_UNDEFINED) ? layout_override :
+                       (stage.size() ? stage.top().data().layout : VK_IMAGE_LAYOUT_UNDEFINED)
     };
 }
 

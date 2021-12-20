@@ -1,21 +1,24 @@
 #pragma once
 #include <ux/ux.hpp>
 
+template <typename V>
 struct Object:node {
     declare(Object);
     enum Uniform { U_MVP };
-    //PipelineMap pmap;
+    PipelineMap m;
     
     struct Props:IProps {
         str         model;
         var         shaders;
         UniformData ubo;
+        vec<Attrib> attr;
     } props;
     
     void define() {
-        Define <str>         { this, "model",   &props.model,   "this had better change." };
-        Define <var>         { this, "shaders", &props.shaders,  Args {{"*", "main"}}     };
-        Define <UniformData> { this, "uniform", &props.ubo,      UniformData {null}       };
+        //Define <UniformData> { this, "uniform", &props.ubo,      UniformData {null}       };
+        //Define <str>         { this, "model",   &props.model,   "this had better change." };
+        //Define <var>         { this, "shaders", &props.shaders,  Args {{"*", "main"}}     };
+        //ArrayOf <Attrib>     { this, "attr",    &props.attr,     vec<Attrib> { Position3f() }};
     }
     
     void changed(PropList list) {
@@ -25,18 +28,18 @@ struct Object:node {
                 shaders[group] = shader;
             ///
             assert(props.ubo);
-            //pmap = obj<Vertex>(props.ubo, props.model, shaders);
+            m = model<Vertex>(props.model, props.ubo, props.attr, shaders);
         } else {
             //pmap = PipelineMap { null };
         }
     }
     
     Element render() {
-        /// hit 88mph...
-        //auto &device = Vulkan::device();
-        //for (auto &[group, pipeline]: pmap.map())
-        //    device.render.push(pipeline);
-        /// and gone...
+        /*
+        auto &device = Vulkan::device();
+        for (auto &[group, pipeline]: m)
+            device.render.push(pipeline);
+        */
         return null;
     }
 };

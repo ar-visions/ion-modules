@@ -37,9 +37,11 @@ void Buffer::copy_to(Texture *tx) {
     auto reg    = VkBufferImageCopy {};
     auto &td    = *tx->data;
     reg.imageSubresource = { td.aflags, 0, 0, 1 };
-    reg.imageExtent      = { uint32_t(td.sz.x), uint32_t(td.sz.y), 1 };
+    reg.imageExtent      = { uint32_t(td.sz.x), uint32_t(td.sz.y), 1 }; /// somehow the initial texture buffer is not the correct size.
     vkCmdCopyBufferToImage(cmd, buffer, *tx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
     device.submit(cmd);
+    int test = 0;
+    test++;
 }
 
 void Buffer::copy_to(Buffer &dst, size_t size) {

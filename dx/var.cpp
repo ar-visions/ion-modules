@@ -618,6 +618,7 @@ var::var(size_t v)           : t(ui64) {
     *((uint64_t *)n) = uint64_t(v);
 }
 
+/// merge these two use cases into VoidRef, Ref, singular Ref struct (likely quite usable for data Modeling as well)
 var::var(void* v)            : t(Ref) { n = (u *)v;    }
 var::var(VoidRef vr)         : t(Ref) { n = (u *)vr.v; }
 var::var(std::string str)    : t(Str), s(new std::string(str)) { }

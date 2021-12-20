@@ -11,31 +11,33 @@ static void glfw_error  (int code, const char *cstr) {
 }
 
 Window &Window::ref(GLFWwindow *h) {
-    return *(Window *)glfwGetWindowUserPointer(h);
+    Window *w = (Window *)glfwGetWindowUserPointer(h);
+    return *w;
 }
 
 static void glfw_key    (GLFWwindow *h, int key, int scancode, int action, int mods) {
-    auto win = Window::ref(h);
+    auto &win = Window::ref(h);
     if (win.fn_key)
         win.fn_key(key, scancode, action, mods);
 }
 
 static void glfw_char   (GLFWwindow *h, uint32_t code) {
-    auto win = Window::ref(h);
+    auto &win = Window::ref(h);
     if (win.fn_char)
         win.fn_char(code);
 }
 
 static void glfw_mbutton(GLFWwindow *h, int button, int action, int mods) {
-    auto win = Window::ref(h);
+    auto &win = Window::ref(h);
     if (win.fn_mbutton)
         win.fn_mbutton(button, action, mods);
 }
 
 static void glfw_cursor (GLFWwindow *handle, double x, double y) {
-    auto win = Window::ref(handle);
-    if (win.fn_cursor)
+    auto &win = Window::ref(handle);
+    if (win.fn_cursor) {
         win.fn_cursor(x, y);
+    }
 }
 
 static void glfw_resize (GLFWwindow *handle, int32_t w, int32_t h) {
@@ -71,21 +73,16 @@ void Window::set_title(str s) {
     glfwSetWindowTitle(handle, title.cstr());
 }
 
-///
-/// This is the show window method
 void Window::show() {
     glfwShowWindow(handle);
 }
 
-///
-/// This is the hide window method
 void Window::hide() {
     glfwHideWindow(handle);
 }
 
-Window *Window::first = null; // ha!
+Window *Window::first = null;
 
-///
 /// Window Constructors
 Window::Window(nullptr_t n) { }
 Window::Window(vec2i     sz): size(sz) {

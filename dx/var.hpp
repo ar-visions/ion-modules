@@ -764,15 +764,11 @@ enum KeyCode {
     Meta        = 91
 };
 
-typedef map<str, var> Schema; // We're giving out names
+typedef map<str, var> Schema;
 typedef map<str, var> Map;
 typedef vec<var>      Table;
 typedef map<str, var> ModelMap;
 
-/// It's just a map with a string field set
-/// All of the internals of var could be set in different ways to allow for lots of shapeless fun
-/// if you can effectively hide the smart pointer init that would be nice in my view.
-/// add to master todo.
 inline var ModelDef(str name, Schema schema) {
     var m   = schema;
         m.s = std::shared_ptr<std::string>(new std::string(name));

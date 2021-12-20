@@ -182,22 +182,18 @@ void Device::update() {
             tx_depth,
             tx_swap
         };
-        //if (!frame.ubo)
-        //     frame.ubo = UniformBuffer<MVP>(this, &frame.uniform);
     }
     ///
     create_render_pass();
-    
-    // verify that these are transitioned, to me it makes no sense to do this but i saw it in reference
-    //
-    tx_color.set_stage(Texture::Stage::Shader);
-    tx_depth.set_stage(Texture::Stage::Shader);
-    
+    tx_color.push_stage(Texture::Stage::Shader);
+    tx_depth.push_stage(Texture::Stage::Shader);
     ///
     for (size_t i = 0; i < frame_count; i++) {
         Frame &frame   = frames[i];
-        frame.update(); // r
+        frame.update();
     }
+    tx_color.pop_stage();
+    tx_depth.pop_stage();
     /// render needs to update
     /// render.update();
 }

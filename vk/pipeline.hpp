@@ -13,7 +13,15 @@ struct Attrib {
     VkFormat format;
     Texture  tx;
     Attrib(Type t, VkFormat f, Texture tx): type(t), format(f), tx(tx) { }
-    
+    // texture data needs to be a ref pass-through of the data, cast will suffice
+    Attrib(var &v) {
+    }
+    operator var() {
+        return Args {
+            {"type", int(type)},
+            {"tx",   VoidRef((void *)tx.get_data())}
+        };
+    }
     static vec<VkVertexInputAttributeDescription> vk(uint32_t binding, vec<Attrib> &ax) {
         uint32_t location = 0;
         uint32_t offset   = 0;
@@ -41,12 +49,29 @@ struct Normal3f   : Attrib { Normal3f  ()           : Attrib(Attrib::Normal3f,  
 struct Texture2f  : Attrib { Texture2f (Texture tx) : Attrib(Attrib::Texture2f,  VK_FORMAT_R32G32_SFLOAT,       tx)   { }};
 struct Color4f    : Attrib { Color4f   ()           : Attrib(Attrib::Color4f,    VK_FORMAT_R32G32B32A32_SFLOAT, null) { }};
 
+/// just a solid, slab of state.  fresh out of the fires of Vulkan
+/// Will be initialized by the general pipeline code, then optionally passed into lambda where it is altered
+struct vkState {
+    VkPipelineVertexInputStateCreateInfo    vertex_info {};
+    VkPipelineInputAssemblyStateCreateInfo  topology    {};
+    VkPipelineViewportStateCreateInfo       vs          {};
+    VkPipelineRasterizationStateCreateInfo  rs          {};
+    VkPipelineMultisampleStateCreateInfo    ms          {};
+    VkPipelineDepthStencilStateCreateInfo   ds          {};
+    VkPipelineColorBlendAttachmentState     cba         {};
+    VkPipelineColorBlendStateCreateInfo     blending    {};
+};
+
+typedef std::function<void(vkState &)> VkStateFn;
+
 ///
 /// makes a bit of sense that Model is the interface into Vertex, its Attribs and Pipeline, correct?
 ///
 /// explicit use of the implicit constructor with this comment
 struct PipelineData {
     struct Memory {
+        ///
+        /// properties [read only, set on initialization]
         Device                    *device;
         std::string                shader;          /// name of the shader.  worth saying.
         vec<VkCommandBuffer>       frame_commands;  /// pipeline are many and even across swap frame idents, and we need a ubo and cmd set for each
@@ -61,7 +86,11 @@ struct PipelineData {
         bool                       enabled = true;
         map<std::string, Texture>  tx;
         size_t                     vsize;
+        rgba                       clr;
+        ///
+        /// state vars
         int                        sync = -1;
+        ///
         operator bool ();
         bool operator!();
         void enable (bool en);
@@ -71,7 +100,7 @@ struct PipelineData {
                UniformData &ubo,
                VertexData  &vbo,
                IndexData   &ibo,
-               vec<Attrib> &attr, size_t vsize, std::string name);
+               vec<Attrib> &attr, size_t vsize, rgba clr, std::string name, VkStateFn vk_state);
         void destroy();
         void initialize();
         ~Memory();
@@ -85,12 +114,11 @@ struct PipelineData {
     PipelineData(nullptr_t n = null) { }
     void update(size_t frame_id);
     ///
-    PipelineData(Device &device,
-                 UniformData &ubo, VertexData &vbo, IndexData &ibo,
-                 vec<Attrib> attr,
-                 size_t vsize, std::string shader) {
+    PipelineData(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
+                 vec<Attrib> attr, size_t vsize, rgba clr, std::string shader,
+                 VkStateFn vk_state = null) {
             m = std::shared_ptr<Memory>(
-                new Memory { device, ubo, vbo, ibo, attr, vsize, shader }
+                new Memory { device, ubo, vbo, ibo, attr, vsize, clr, shader, vk_state }
             );
         }
     /// general query engine for view construction and model definition to view creation
@@ -100,11 +128,11 @@ struct PipelineData {
 template <typename V>
 struct Pipeline:PipelineData {
     Pipeline(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-             vec<Attrib> attr, std::string name):
-        PipelineData(device, ubo, vbo, ibo, attr, sizeof(V), name) { }
+             vec<Attrib> attr, rgba clr, std::string name):
+        PipelineData(device, ubo, vbo, ibo, attr, sizeof(V), clr, name) { }
 };
 
-/// eventually different textures for the different parts..
+/// eventually different texture vectors for the different parts..  shared uv across
 struct PipelineMap {
     struct Data {
         Device      *device  = null;
@@ -113,8 +141,6 @@ struct PipelineMap {
         vec<Attrib>  attr    = {};
         map<str, PipelineData> part;
     };
-    // beautiful.
-    // # think about use for ux here, can very well be part of the define()
     std::shared_ptr<Data> data;
 };
 

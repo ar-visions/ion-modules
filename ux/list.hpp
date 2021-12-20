@@ -69,12 +69,14 @@ struct List:node {
     } props;
     
     void define() {
+        /*
         Define  <rgba>   {this, "cell-fg",    &props.cell.fg,   rgba {null}};
         Define  <rgba>   {this, "cell-bg",    &props.cell.bg,   rgba {null}};
         Define  <rgba>   {this, "odd-bg",     &props.odd_bg,    rgba {null}};
         Define  <rgba>   {this, "column-fg",  &props.column.fg, rgba {"#0f0"}};
         Define  <rgba>   {this, "column-bg",  &props.column.bg, rgba {"#00f"}};
         ArrayOf <Column> {this, "column-ids", &props.column.ids, {}};
+        */
     }
     
     void update_columns() {

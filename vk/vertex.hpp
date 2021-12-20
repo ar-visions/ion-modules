@@ -14,12 +14,13 @@ struct Vertex {
     Vertex(vec3 &pos, vec3 &norm, vec2 &uv):
            pos({pos.x,pos.y,pos.z}), norm({norm.x,norm.y,norm.z}), uv({uv.x,uv.y}) { }
     
-    static vec<Vertex> square() {
+    /// very special function.
+    static vec<Vertex> square(rgba clr = {1.0, 1.0, 1.0, 1.0}) {
         return vec<Vertex> {
-            Vertex {{-0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 0.0}, {1.0, 0.0, 0.0, 1.0}},
-            Vertex {{ 0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0}, {0.0, 1.0, 0.0, 1.0}},
-            Vertex {{ 0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
-            Vertex {{-0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
+            Vertex {{-0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0}, clr},
+            Vertex {{ 0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 0.0}, clr},
+            Vertex {{ 0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 1.0}, clr},
+            Vertex {{-0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 1.0}, clr}
         };
     }
 };

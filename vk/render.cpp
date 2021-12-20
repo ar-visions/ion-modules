@@ -14,6 +14,10 @@ void Render::update() {
     assert (cframe == frame.index);
 }
 
+/// could be in Vulkan::main
+/// could be in Render::present
+/// could be in canvas (invalid context creation?) (no flush?)
+
 void Render::present() {
     Device &device = *this->device;
     vkWaitForFences(device, 1, &fence_active[cframe], VK_TRUE, UINT64_MAX);
@@ -57,7 +61,6 @@ void Render::present() {
         
         /// transfer uniform struct from lambda call. send us your uniforms!
         m.ubo.transfer(image_index);
-        
         ///
         image_active[image_index]        = fence_active[cframe];
         VkSubmitInfo submit_info         = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
@@ -69,14 +72,12 @@ void Render::present() {
         submit_info.pCommandBuffers      = &m.frame_commands[image_index];
         submit_info.signalSemaphoreCount = 1;
         assert(vkQueueSubmit(device.queues[GPU::Graphics], 1, &submit_info, fence_active[cframe]) == VK_SUCCESS);
-        int test = 0;
-        test++;
     }
-    ///
+    
     VkPresentInfoKHR     present = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, null, 1,
         s_signal, 1, &device.swap_chain, &image_index };
     VkResult             presult = vkQueuePresentKHR(device.queues[GPU::Present], &present);
-    ///
+    
     if ((presult == VK_ERROR_OUT_OF_DATE_KHR || presult == VK_SUBOPTIMAL_KHR) && !sync_diff) {
         device.update(); /// cframe needs to be valid at its current value
     } else
@@ -93,7 +94,7 @@ Render::Render(Device *device): device(device) {
         render_finish = vec<VkSemaphore>(mx, VK_NULL_HANDLE);
         fence_active  = vec<VkFence>    (mx, VK_NULL_HANDLE);
         image_active  = vec<VkFence>    (ns, VK_NULL_HANDLE);
-        
+        ///
         VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
         VkFenceCreateInfo     fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, null, VK_FENCE_CREATE_SIGNALED_BIT };
         

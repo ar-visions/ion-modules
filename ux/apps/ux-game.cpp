@@ -40,12 +40,10 @@ struct Car:node {
     Model::Type type;
     float       health;
     vec3f       pos;
-    
 };
 
 struct Entity {
     void draw(Canvas &c) {
-        
     }
 };
 
@@ -55,7 +53,7 @@ struct Platform:Entity {
             {"*", {{"model", "platform.obj"}}}
         };
     }
-}
+};
 
 struct CarSelection:View {
     struct Props:IProps {

@@ -10,6 +10,7 @@
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -68,16 +69,25 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug(
     return VK_FALSE;
 }
 
+/// we wont even call it window manager-related nonsense. its a subsystem, not even a system. this will be a no-op some day.
+void vk_subsystem_init() {
+    static std::atomic<bool> init;
+    if (!init) {
+        init = true;
+        glfwInit();
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    }
+}
+
 Internal &Internal::handle() { return _.vk ? _ : _.bootstrap(); }
 Internal &Internal::bootstrap() {
-    glfwInit();
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    vk_subsystem_init();
     
     uint32_t count;
     vkEnumerateInstanceLayerProperties(&count, nullptr);
     layers.resize(count);
     vkEnumerateInstanceLayerProperties(&count, layers);
-    
+    ///
     VkApplicationInfo appInfo {};
     appInfo.sType               = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName    = "ion";
@@ -85,18 +95,18 @@ Internal &Internal::bootstrap() {
     appInfo.pEngineName         = "ion";
     appInfo.engineVersion       = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion          = VK_API_VERSION_1_0;
-
+    ///
     VkInstanceCreateInfo ci {};
     ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     ci.pApplicationInfo = &appInfo;
-    
+    ///
     uint32_t    n_ext;
     auto          dbg = VkDebugUtilsMessengerCreateInfoEXT {};
     auto     glfw_ext = (const char **)glfwGetRequiredInstanceExtensions(&n_ext); /// this is ONLY for instance; must be moved.
     auto instance_ext = vec<const char *>(n_ext + 1);
     for (int i = 0; i < n_ext; i++)
         instance_ext += glfw_ext[i];
-    instance_ext += "VK_KHR_get_physical_device_properties2";
+    instance_ext     += "VK_KHR_get_physical_device_properties2";
     #if !defined(NDEBUG)
         instance_ext          += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
         ci.enabledLayerCount   = uint32_t(validation_layers.size());
@@ -114,7 +124,7 @@ Internal &Internal::bootstrap() {
     ci.ppEnabledExtensionNames = instance_ext;
     auto res                   = vkCreateInstance(&ci, nullptr, &vk);
     assert(res == VK_SUCCESS);
-    
+    ///
     gpu    = GPU::select();
     device = Device(gpu, true);
     return *this;
@@ -124,21 +134,16 @@ void Vulkan::init() {
     Internal::handle();
 }
 
+/// fix the anti-pattern implementation here
 Texture Vulkan::texture(vec2i size) {
     auto &i = Internal::handle();
-    //i.tx_skia.destroy();
-    // lets call this something descriptive
-    
-    // VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
-    i.tx_skia = Texture { &i.device, size, rgba { 1.0, 0.0, 0.0, 1.0 }, /// lets hope we see red soon.
-        VK_IMAGE_USAGE_SAMPLED_BIT|
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT|
-        VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT, // aspect? what is this on vk-aa
-        false, VK_FORMAT_R8G8B8A8_UNORM, -1 }; // force sample count to 1 bit
-    
+    i.tx_skia.destroy();
+    i.tx_skia = Texture { &i.device, size, rgba { 1.0, 0.0, 1.0, 1.0 },
+        VK_IMAGE_USAGE_SAMPLED_BIT          | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT     | VK_IMAGE_USAGE_TRANSFER_DST_BIT     |
+        VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
+        false, VK_FORMAT_R8G8B8A8_UNORM, -1 };
+    i.tx_skia.push_stage(Texture::Stage::Color);
     return i.tx_skia;
 }
 
@@ -171,52 +176,48 @@ int Vulkan::main(FnRender fn, Composer *composer) {
     auto        vbo = VertexBuffer<Vertex>(device, vertices);
     auto        ibo = IndexBuffer<uint16_t>(device, indices);
     auto        uni = UniformBuffer<MVP>(device, 0, [&](MVP &mvp) {
+        /// consider this UniformData, it just creates a sub lambda in its utility template
         mvp         = {
              .model = glm::mat4(1.0f),
              .view  = glm::mat4(1.0f),
-             .proj  = glm::mat4(1.0f)
+             .proj  = glm::ortho( 0.5, -0.5,
+                                  0.5, -0.5,
+                                  0.5, -0.5)
         };
     });
     auto         pl = Pipeline<Vertex> {
         device, uni, vbo, ibo, {
             Position3f(), Normal3f(), Texture2f(tx_canvas), Color4f()
-        }, std::string("main")
+        }, {0.05, 0.05, 0.2, 1.0}, std::string("main") /// canvas clear color is gray
     };
-    
     /// uniforms are meant to be managed by the app, passed into pipelines.
     w.loop([&]() {
         static bool init = false;
         if (!init) {
-            glfwInit();
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+            vk_subsystem_init();
             init = true;
         }
-        rectd box   = {   0,   0, 320, 240 };
-        rgba  color = { 255, 255,   0, 255 };
-        //i.tx_skia.set_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        canvas.color(color);
-        canvas.clear();            /// todo: like the idea of fill() with a color just being a clear color.
-        /*canvas.fill(box);*/      /// thats a simpler api. the path is a param that can be null
-        canvas.flush();            ///
-        /// i.tx_skia.set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        i.tx_skia.set_stage(Texture::Stage::Shader);
+        canvas.clear(rgba {255, 255, 255, 255}); // its missing data here.
         
-        device.tx_color.set_stage(Texture::Stage::Color);
-        device.tx_depth.set_stage(Texture::Stage::Depth);
+        auto r = rectd {0.0, 0.0, 320.0, 240.0};
+        canvas.color(rgba {255, 0, 0, 255});
+        canvas.fill(r);
         
-        /// this needs to happen here...
-        device.render.push(pl);
-        device.render.present(); /// execute all graphic (render) pipelines [ on the current frame ], and present
-        
-        i.tx_skia.set_stage(Texture::Stage::Color);
-        int test = 0;
-        test++;
+        /// run the composer
         //Composer &cmp = *composer;
         //cmp(fn(args));
+        
+        canvas.flush();
+
+        i.tx_skia.push_stage(Texture::Stage::Shader);
+        device.render.push(pl);
+        device.render.present();
+        i.tx_skia.pop_stage();
+        
         //w.set_title(cmp.root->props.text.label);
         
-        //if (!cmp.process())
-            glfwWaitEventsTimeout(1.0);
+        //if (!cmp.process()) # if there are no ui transitions, we can wait for an event
+        //    glfwWaitEventsTimeout(1.0);
     });
     return 0;
 }

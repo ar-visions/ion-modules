@@ -23,6 +23,7 @@ struct Edit:node {
     }
     
     void define() {
+        /*
         Define {this, "word-wrap",  &props.word_wrap,  false};
         Define {this, "multi-line", &props.multi_line, false};
         Define {this, "secret",     &props.secret,     false};
@@ -31,6 +32,7 @@ struct Edit:node {
         Define {this, "max-len",    &props.max_len,    -1};
         Define {this, "blank-text", &props.blank_text, str {"#00f"}};
         Define {this, "filter",     &props.filter,     FnFilter {null}};
+        */
     }
     
     void draw(Canvas &canvas) {

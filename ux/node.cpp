@@ -90,6 +90,7 @@ bool node::process() {
 node::~node() { }
 
 void node::define_standard() {
+    /*
     Define <str>     { this, "id",           &props.id,           ""};
     Define <str>     { this, "bind",         &props.bind,         ""};
     Define <int>     { this, "tab-index",    &props.tab_index,    -1};
@@ -104,6 +105,7 @@ void node::define_standard() {
     Define <rgba>    { this, "border-color", &props.border.color, rgba("#000f") };
     Define <bool>    { this, "border-dash",  &props.border.dash,  bool(false)   };
     Define <Region>  { this, "region",       &props.region,       Region()      };
+    */
 }
 
 void node::define() { }

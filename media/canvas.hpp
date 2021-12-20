@@ -46,6 +46,9 @@ struct Path {
     Path     offset(double o);
     operator  rectd();
     vec2         xy();
+    real          w() { return rect.w; };
+    real          h() { return rect.h; };
+    real     aspect() { return rect.h / rect.w; };
     operator  bool();
     bool operator!();
 };
@@ -118,6 +121,7 @@ struct ICanvasBackend {
     virtual vec2i      size() { return null; }
     virtual void    texture(DrawState &st, Image *im);
     virtual void      clear(DrawState &st);
+    virtual void      clear(DrawState &st, rgba &) { }
     
     // generically handled
     virtual void      color(DrawState &, rgba  &);
@@ -157,6 +161,7 @@ public:
     void        clip(rectd &path);
     void       color(rgba   c);
     void       clear();
+    void       clear(rgba   c);
     void    gaussian(vec2   sz, rectd cr);
     vec2i       size();
     void       scale(vec2   sc);
@@ -177,10 +182,7 @@ public:
     str   ansi_color(rgba c, bool text);
     Image   resample(vec2i size, double deg = 0.0f, rectd view = null, vec2 rc = null);
     void *copy_bstate(void *bs);
-    
-    operator bool() {
-        return backend != null;
-    }
+    operator     bool() { return backend != null; }
 };
 
 struct Filter {

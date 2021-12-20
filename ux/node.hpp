@@ -127,10 +127,6 @@ const std::string &type_name() {
     return n;
 }
 
-// for now, a list of pipeline per node is flexible enough.
-// constraints on the pipeline view depending on what node is rendering it
-// vulkan makes that easy.  its all part of its giant gumbo called pipeline.
-
 typedef std::function<vec<Attrib>(str)> AttribFn;
 
 struct node {
@@ -139,7 +135,8 @@ struct node {
     node          *parent = null;
     map<std::string, node *> mounts;
     Args           args;
-    var            data;
+    var            intern;
+    var            expose;
     vec<Element>   elements;
     DefMap         defs;
     State          smap;
@@ -150,6 +147,16 @@ struct node {
     double         y_scroll = 0;
     map<std::string, PipelineData> objects;
     
+    template <typename T>
+    void exposed(str name, T &loc, T value) {
+        expose[name]  = var(value);
+    }
+    
+    template <typename T>
+    void internal(str name, T &loc, T value) {
+        intern[name]  = var(value);
+    }
+
     /// node needs a way to update uniforms per frame
     struct Props:IProps {
         str         id;
@@ -200,15 +207,15 @@ struct node {
     IndexData polygons(vec<I> &v_ibo) {
         return IndexBuffer<I>(device(), v_ibo);
     }
-
-    template <typename T>
+    
+    template <typename V>
     PipelineMap model(path_t       path, UniformData  ubo,
-                      vec<Attrib>  attr, ShaderMap    shaders = { })
-    {
-        auto obj = Obj<T>(path, [&](auto &g, vec3 &p, vec2 &u, vec3 &n) -> T {
-            return T(p, n, u);
+                      vec<Attrib>  attr, ShaderMap    shaders = { }) {
+        /*
+        auto obj = Obj<V>(path, [&](auto &g, vec3 &p, vec2 &u, vec3 &n) -> V {
+            return V(p, n, u);
         });
-        auto vbo = vertices<Vertex>(obj.vbo);
+        auto vbo = vertices<V>(obj.vbo);
         auto res = PipelineMap(obj.groups.size());
         for (auto &[n, group]: obj.groups) {
             size_t cn = shaders.count(n);
@@ -216,10 +223,11 @@ struct node {
             auto   sh = cn ? shaders[n]   :
                         ca ? shaders["*"] : str(n);
             auto  ibo = polygons<uint32_t>(group.ibo);
-            res[n]    = Pipeline<T> { *vbo.device, ubo, vbo, ibo, attr, sh };
+            res[n]    = Pipeline<V> { *vbo.device, ubo, vbo, ibo, attr, sh };
             console.log("group: {0}, shader: {1}", {n, sh});
         }
-        return res;
+        return res;*/
+        return {};
     }
     
     /// simple texture output with ubo controller
@@ -230,7 +238,8 @@ struct node {
         auto   ibo = polygons(i_sqr);
         return Pipeline<Vertex> {
             device(), ubo, vbo, ibo,
-            { Position3f(), Normal3f(), Texture2f(tx), Color4f() }, "main" };
+            { Position3f(), Normal3f(), Texture2f(tx), Color4f() },
+              rgba {1.0, 0.7, 0.2, 1.0}, "main" };
     }
     
     inline size_t count(std::string n) {
@@ -245,11 +254,11 @@ struct node {
         static var d_null;
         node *n = this;
         while (n)
-            if (n->data.count(field))
-                return n->data[field];
+            if (n->expose.count(field))
+                return n->expose[field];
             else
                 n = n->parent;
-        return d_null;
+        return intern.count(field) ? intern[field] : d_null;
     }
 };
 
@@ -259,39 +268,6 @@ struct node {
         inline static T *factory() { return new T(); };\
         inline operator Element() { return { FnFactory(T::factory), args, elements }; }
 
-template <typename T>
-struct Define:Definition {
-    Define(node *node, const char *id, T *p, T def, Fn fn = null) : Definition(id, (void *)p, fn) {
-        data = var(def); // the operator= should not be a template function
-        setter = FnComposerData([&, p, fn](Composer *composer, var &new_value) {
-            *(T *)p = T(new_value);
-            if (fn)
-                fn(new_value);
-            return (void *)p;
-        });
-        auto k = std::string(id);
-        node->defs[k] = *this;
-        setter(null, data);
-    }
-};
-
-template <typename T>
-struct ArrayOf:Definition {
-    ArrayOf(node *node, const char *id, vec<T> *p, vec<T> def, Fn fn = null) : Definition(id, (void *)p, fn) {
-        data = var(def); // the operator= should not be a template function
-        setter = FnComposerData([&, p, fn](Composer *composer, var &new_value) {
-            *(vec<T> *)p = vec<T>(size_t(new_value.size()));
-            if (new_value.size())
-                for (auto &d: *(new_value.a))
-                    *p += T(d);
-            if (fn)
-                fn(new_value);
-            return (void *)p;
-        });
-        auto k = std::string(id);
-        node->defs[k] = *this;
-    }
-};
 
 struct Group:node {
     declare(Group);

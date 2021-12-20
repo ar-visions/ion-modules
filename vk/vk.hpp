@@ -2,17 +2,20 @@
 #include <vulkan/vulkan.hpp>
 
 #include <glm/glm.hpp>
+#include <glm/ext.hpp>
 #include <dx/dx.hpp>
 #include <media/canvas.hpp>
 #include <media/obj.hpp>
 
 struct Device;
 struct Texture;
+///
 VkDevice                handle(Device *device);
 VkDevice         device_handle(Device *device);
 VkPhysicalDevice    gpu_handle(Device *device);
 uint32_t           memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags props);
 VkDevice             vk_device();
+void         vk_subsystem_init();
 
 #include <vk/window.hpp>
 #include <vk/gpu.hpp>

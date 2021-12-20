@@ -118,6 +118,10 @@ struct Context2D:ICanvasBackend {
         sk_canvas->clear(sk_color(ds.color));
     }
     
+    void clear(DrawState &ds, rgba &c) {
+        sk_canvas->clear(sk_color(c));
+    }
+    
     void flush(DrawState &ds) {
         sk_canvas->flush();
     }
@@ -449,6 +453,7 @@ void  Canvas::fill(rectd &rect)         { backend->fill  (state, rect);         
 void  Canvas::stroke(Path &path)        { backend->stroke(state, path);                    }
 void  Canvas::stroke(rectd &rect)       { backend->stroke(state, rect);                    }
 void  Canvas::clear()                   { backend->clear(state);                           }
+void  Canvas::clear(rgba c)             { backend->clear(state, c);                        }
 void  Canvas::flush()                   { backend->flush (state);                          }
 bool  Canvas::operator==(Type   t)       { return type == t;                               }
 str   Canvas::ansi_color(rgba c, bool t) { return backend->ansi_color(c, t);               }
