@@ -3,19 +3,10 @@
 
 template <typename V>
 struct Object:node {
-    //declare(Object);
-    
-    Object(Binds binds = {}, vec<Element> elements = {}):
-        node((const char *)"", (const char *)"Object", binds, elements) { }
-        inline static Object *factory() { return new Object(); };
-        inline operator  Element() {
-            return {
-                FnFactory(Object::factory), node::binds, elements
-            };
-        }
+    declare(Object);
     
     struct Members {
-        Extern<str>         model;
+        Extern<path_t>      model;
         Extern<var>         shaders;
         Extern<UniformData> ubo;
         Extern<vec<Attrib>> attr;
@@ -24,7 +15,7 @@ struct Object:node {
         Intern<int>         ivar;
         Intern<PipelineMap> pmap;
     } m;
-    
+
     void binds() {
         external("uniform", m.ubo,       UniformData { null });
         external("model",   m.model,     null);
@@ -43,15 +34,15 @@ struct Object:node {
         if (list.count("model") == 0)
             return;
         
-        str &mod = m.model;
-        if (mod) {
+        path_t &mod = m.model;
+        if (std::filesystem::exists(mod)) {
             auto shaders = ShaderMap { };
             var &sh = m.shaders;
             for (auto &[group, shader]: sh.map())
                 shaders[group] = shader;
             /// --------------------------------------------------
             assert(m.ubo);
-            m.pmap = PipelineMap { null }; // model<Vertex>(mod, m.ubo, m.attr, shaders);
+            m.pmap = model<Vertex>(mod, m.ubo, m.attr, shaders);
         } else {
             //pmap = PipelineMap { null };
         }

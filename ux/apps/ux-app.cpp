@@ -1,34 +1,25 @@
 #include <ux/ux.hpp>
 #include <ux/app.hpp>
 #include <media/obj.hpp>
-#include <glm/ext/matrix_clip_space.hpp> // glm::perspective
 
-///component works to perform its own occlusion techniques
+/// simple rendering
 struct Car:node {
-    Car(Binds binds = {}, vec<Element> elements = {}):
-        node((const char *)"", (const char *)"Car", binds, elements) { }
-        inline static Car *factory() { return new Car(); };
-        inline operator  Element() {
-            return {
-                FnFactory(Car::factory),
-                node::binds,
-                elements
-            };
-        }
-    
+    declare(Car);
     enum Uniform { U_MVP };
 
     struct Members {
         Extern<str>         model;
         Extern<real>        fov;
+        /// ------------------------
         Intern<UniformData> uniform;
     } m;
     
+    /// configure binds
     void binds() {
-        external<str>  ("model",   m.model,  "models/dayna.obj");
-        external<real> ("fov",     m.fov,     60.0);
-        
-        internal<UniformData>("uniform", m.uniform,
+        external("model",   m.model,   str {"models/dayna.obj"});
+        external("fov",     m.fov,     60.0);
+        /// ---------------------------------
+        internal("uniform", m.uniform,
             uniform<MVP>(int(U_MVP), [&](MVP &mvp) {
                 mvp.model = glm::mat4(1.0);
                 mvp.view  = glm::mat4(1.0);
@@ -41,17 +32,15 @@ struct Car:node {
         );
     }
 
-    /// render car, smooth shaded
-    // we need array support in texture
+    /// render Component with simple binding syntax
+    /// this is much like having the same value for a field in ES6 field:field -> field
+    /// if there are different dest name you have two strings {"external-bind","internal-bind"}
     Element render() {
         return Object<Vertex> {{
             {"model"}, {"uniform"}
         }};
     }
 };
-
-// Member could be brought to higher significance
-// So binds over args, and depth lookups used with context
 
 Args defaults = {
     {"window-width",  int(1024) },
@@ -60,9 +49,5 @@ Args defaults = {
 };
 
 int main(int c, const char *v[]) {
-    return App::UX(c, v, defaults)([&] (Args &args) {
-        /// we find ourselves with no Args to Binds interfacing at root.
-        /// this is best to add to UX general, folding in this lambda
-        return Car();
-    });
+    return App::UX<Car>(c, v, defaults);
 }

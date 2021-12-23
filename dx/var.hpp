@@ -705,8 +705,7 @@ struct Element {
     static Element each(var &d, FnFilterMap f); // var(&data) ? var::ref(data) is clearer.
 };
 
-typedef std::function<Element(Args &)> FnRender;
-
+typedef std::function<Element(void)> FnRender;
 
 template <typename T>
 bool equals(T v, vec<T> values) {

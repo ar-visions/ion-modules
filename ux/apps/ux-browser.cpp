@@ -80,7 +80,5 @@ struct Commander:node {
 
 
 int main(int c, const char *v[]) {
-    return App::Console(c, v)([&] (Args &args) {
-        return Commander(args);
-    });
+    return App::Console<Commander>(c, v);
 }

@@ -64,21 +64,16 @@ struct vkState {
 
 typedef std::function<void(vkState &)> VkStateFn;
 
-///
-/// makes a bit of sense that Model is the interface into Vertex, its Attribs and Pipeline, correct?
-///
 /// explicit use of the implicit constructor with this comment
 struct PipelineData {
     struct Memory {
-        ///
-        /// properties [read only, set on initialization]
         Device                    *device;
         std::string                shader;          /// name of the shader.  worth saying.
         vec<VkCommandBuffer>       frame_commands;  /// pipeline are many and even across swap frame idents, and we need a ubo and cmd set for each
         vec<VkDescriptorSet>       desc_sets;       /// needs to be in frame, i think.
         VkPipelineLayout           pipeline_layout; /// and what a layout
         VkPipeline                 pipeline;        /// pipeline handle
-        UniformData                ubo;             /// we must broadcast this buffer across to all of teh swap uniforms
+        UniformData                ubo;             /// we must broadcast this buffer across to all of the swap uniforms
         VertexData                 vbo;             ///
         IndexData                  ibo;
         vec<VkVertexInputAttributeDescription> attr;
@@ -121,7 +116,6 @@ struct PipelineData {
                 new Memory { device, ubo, vbo, ibo, attr, vsize, clr, shader, vk_state }
             );
         }
-    /// general query engine for view construction and model definition to view creation
 };
 
 /// pipeline dx
@@ -132,7 +126,7 @@ struct Pipeline:PipelineData {
         PipelineData(device, ubo, vbo, ibo, attr, sizeof(V), clr, name) { }
 };
 
-/// eventually different texture vectors for the different parts..  shared uv across
+/// eventually different texture vectors for the different parts.. shared uv
 struct PipelineMap {
     struct Data {
         Device      *device  = null;
@@ -144,21 +138,19 @@ struct PipelineMap {
     std::shared_ptr<Data> data;
 };
 
-///
-/// model dx (using pipeline dx) -- best gaia can summon in me
+/// model dx (using pipeline dx)
 template <typename V>
 struct Model:PipelineMap {
     Model(Device &device, UniformData &ubo, vec<Attrib> ax, std::filesystem::path p) {
         this->data = std::shared_ptr<Data>(new Data { &device });
         auto &data = *this->data;
-        /// every group is essentially pipeline town going into a map (vim)
         auto   obj = Obj<V>(p, [](auto& g, vec3& pos, vec2& uv, vec3& norm) {
             return V(pos, norm, uv, vec4f {1.0f, 1.0f, 1.0f, 1.0f});
         });
         data.vbo = VertexBuffer<V>(device, obj.vbo);
         for (auto &[name, group]: obj.groups) {
-            auto        ibo = IndexBuffer<uint32_t>(group.ibo);
-            data.part[name] = Pipeline<V>(device, ubo, data.vbo, ibo, ax, name);
+            auto        ibo = IndexBuffer<uint32_t>(device, group.ibo);
+            data.part[name] = Pipeline<V>(device, ubo, data.vbo, ibo, ax, null, name);
         }
     }
 };

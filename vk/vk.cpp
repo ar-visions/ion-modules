@@ -202,8 +202,8 @@ int Vulkan::main(FnRender fn, Composer *composer) {
         canvas.fill(r);
         
         /// run the composer
-        //Composer &cmp = *composer;
-        //cmp(fn(args));
+        Composer &cmp = *composer;
+        cmp(fn());
         
         canvas.flush();
 
@@ -212,10 +212,10 @@ int Vulkan::main(FnRender fn, Composer *composer) {
         device.render.present();
         i.tx_skia.pop_stage();
         
-        //w.set_title(cmp.root->props.text.label);
+        w.set_title(cmp.root->m.text.label);
         
-        //if (!cmp.process()) # if there are no ui transitions, we can wait for an event
-        //    glfwWaitEventsTimeout(1.0);
+        if (!cmp.process())
+            glfwWaitEventsTimeout(1.0);
     });
     return 0;
 }

@@ -293,26 +293,10 @@ struct node {
     template <typename V>
     PipelineMap model(path_t       path, UniformData  ubo,
                       vec<Attrib>  attr, ShaderMap    shaders = { }) {
-        /*
-        auto obj = Obj<V>(path, [&](auto &g, vec3 &p, vec2 &u, vec3 &n) -> V {
-            return V(p, n, u);
-        });
-        auto vbo = vertices<V>(obj.vbo);
-        auto res = PipelineMap(obj.groups.size());
-        for (auto &[n, group]: obj.groups) {
-            size_t cn = shaders.count(n);
-            size_t ca = shaders.count("*");
-            auto   sh = cn ? shaders[n]   :
-                        ca ? shaders["*"] : str(n);
-            auto  ibo = polygons<uint32_t>(group.ibo);
-            res[n]    = Pipeline<V> { *vbo.device, ubo, vbo, ibo, attr, sh };
-            console.log("group: {0}, shader: {1}", {n, sh});
-        }
-        return res;
-        */
-        return {};
+        return Model<V>(device(), ubo, attr, path);
     }
     
+    /// vice versa pattern with above ^
     /// simple texture output with ubo controller
     Pipeline<Vertex> texture(Texture tx, UniformData ubo) {
         auto v_sqr = Vertex::square();

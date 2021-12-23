@@ -25,20 +25,20 @@ PipelineData::Memory::~Memory() {
 }
 
 /// constructor for pipeline memory; worth saying again.
-PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
-                             VertexData &vbo, IndexData &ibo,
-                             vec<Attrib> &attr,
-                             size_t vsize,    rgba clr, std::string shader, VkStateFn vk_state):
+PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
+                             VertexData  &vbo,     IndexData &ibo,
+                             vec<Attrib> &attr,       size_t vsize,
+                             rgba         clr,   std::string shader,
+                             VkStateFn    vk_state):
         device(&device),   shader(shader),  ubo(ubo),
         vbo(vbo), ibo(ibo), attr(attr), vsize(vsize), clr(clr)
 {
-    /// layout!  i crown thee placement of horridness descriptor and non-effective 'layout'
     /// obtain data via usage
     auto bindings = vec<VkDescriptorSetLayoutBinding> {
         { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
         { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }};
     /// create descriptor set layout
-    auto desc_layout_info = VkDescriptorSetLayoutCreateInfo { /// far too many terms reused in vulkan. an api should not lead in ambiguity; vulkan is just a sea of nothing but
+    auto desc_layout_info = VkDescriptorSetLayoutCreateInfo {
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         nullptr, 0, uint32_t(bindings.size()), bindings.data() };
     assert(vkCreateDescriptorSetLayout(device, &desc_layout_info, null, &set_layout) == VK_SUCCESS);
@@ -49,13 +49,11 @@ PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
     ai.sType               = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     ai.descriptorPool      = device.desc.pool;
     ai.descriptorSetCount  = n_frames;
-    ai.pSetLayouts         = layouts.data(); /// the struct is set_layout, the data is a set_layout (1) broadcast across the vector
+    ai.pSetLayouts         = layouts.data();
     desc_sets.resize(n_frames);
     assert (vkAllocateDescriptorSets(device, &ai, desc_sets.data()) == VK_SUCCESS);
     ubo.update(&device);
     ///
-    /// how do we get the Texture handle? yes it is referenced in the attribs but that is a hop and a jump to just look for the first
-    /// tx from attr (thats what we are doing now, though.. its wrong)
     Texture tx;
     for (size_t i = 0; i < attr.size(); i++)
         if (attr[i].tx)
@@ -63,8 +61,7 @@ PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
     ///
     /// write descriptor sets for all swap image instances
     for (size_t i = 0; i < device.frames.size(); i++) {
-        auto &desc_set = desc_sets[i]; /// the pipeline takes in an array of textures, and their index is just the identifier 0 to c - 1
-      //auto       &tx = f.attachments[Frame::Color]; /// this is ht problem, we arent using this one we are using the skia texture.
+        auto &desc_set = desc_sets[i];
         auto  v_writes = vec<VkWriteDescriptorSet> {
             ubo.write_desc(i, desc_set),
              tx.write_desc(desc_set) /// use the pipeline texture sampler bound at [1]
@@ -72,7 +69,7 @@ PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
         VkDevice dev = device;
         size_t    sz = v_writes.size();
         VkWriteDescriptorSet *ptr = v_writes.data();
-        vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr); // check when view is created, is it shader optimal layout at that point?
+        vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
     }
     ///
     auto vert = device.module(
@@ -107,10 +104,9 @@ PipelineData::Memory::Memory(Device &device,  UniformData &ubo,
     ///
     assert(vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline_layout) == VK_SUCCESS);
     
-    /// this should be one of the larger use-cases for this
     vkState state {
         .vertex_info = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, // these are silly.  what a blimp
+            .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, // these are silly.  what a blimp
             .vertexBindingDescriptionCount   = 1,
             .vertexAttributeDescriptionCount = uint32_t(vk_attr.size()), // bad variable naming here.  you dont redescribe the type that its in, lets go people.
             .pVertexBindingDescriptions      = &binding,
