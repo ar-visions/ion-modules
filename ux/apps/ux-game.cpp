@@ -56,7 +56,7 @@ struct Platform:Entity {
 };
 
 struct CarSelection:View {
-    struct Props:IProps {
+    struct Members {
         float gravity;
     };
     

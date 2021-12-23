@@ -3,7 +3,7 @@
 
 struct Button:node {
     declare(Button);
-    struct Props:IProps {
+    struct Members {
         str bind;
-    } props;
+    } m;
 };

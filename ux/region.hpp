@@ -2,7 +2,7 @@
 #include <dx/dx.hpp>
 #include <dx/vec.hpp>
 
-struct Coord {
+struct Coord:io {
     enum Type {
         Undefined,
         Left,
@@ -12,11 +12,14 @@ struct Coord {
         Width,
         Height
     } t = Undefined;
+    ///
     double v;
     bool   p;
+    ///
     Coord(Type t = Undefined, double v = 0.0) : t(t),     v(v),  p(true)  { }
     Coord(Type t, int v)                      : t(t), v(int(v)), p(false) { }
     Coord(Type t, double v, bool p)           : t(t),     v(v),  p(p)     { }
+    ///
     double operator()(double from, double size, double rel = 0.0) const {
         const double     s = p ? size : 1.0;
         const bool use_rel = t == Width || t == Height;
@@ -58,7 +61,7 @@ struct H:Coord { H(double v) : Coord(Height, v) { };
                  H(int    v) : Coord(Height, v) { }};
 
 struct Node;
-struct Region {
+struct Region:io {
     enum Type {
         Left,
         Top,

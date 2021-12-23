@@ -3,32 +3,55 @@
 
 template <typename V>
 struct Object:node {
-    declare(Object);
-    enum Uniform { U_MVP };
-    PipelineMap m;
+    //declare(Object);
     
-    struct Props:IProps {
-        str         model;
-        var         shaders;
-        UniformData ubo;
-        vec<Attrib> attr;
-    } props;
+    Object(Binds binds = {}, vec<Element> elements = {}):
+        node((const char *)"", (const char *)"Object", binds, elements) { }
+        inline static Object *factory() { return new Object(); };
+        inline operator  Element() {
+            return {
+                FnFactory(Object::factory), node::binds, elements
+            };
+        }
     
-    void define() {
-        //Define <UniformData> { this, "uniform", &props.ubo,      UniformData {null}       };
-        //Define <str>         { this, "model",   &props.model,   "this had better change." };
-        //Define <var>         { this, "shaders", &props.shaders,  Args {{"*", "main"}}     };
-        //ArrayOf <Attrib>     { this, "attr",    &props.attr,     vec<Attrib> { Position3f() }};
+    struct Members {
+        Extern<str>         model;
+        Extern<var>         shaders;
+        Extern<UniformData> ubo;
+        Extern<vec<Attrib>> attr;
+        /// --------------------- cross the streams?
+        Intern<str>         sval;
+        Intern<int>         ivar;
+        Intern<PipelineMap> pmap;
+    } m;
+    
+    void binds() {
+        external("uniform", m.ubo,       UniformData { null });
+        external("model",   m.model,     null);
+        external("shaders", m.shaders,   Args {{"*", "main"}});
+        external("attr",    m.attr,      vec<Attrib> { Position3f() });
+        /// ---------------------
+        internal("sval",    m.sval,      "");
+        internal("ivar",    m.ivar,      0);
+        internal("pmap",    m.pmap,      PipelineMap { null }); /// call it
     }
     
+    // changed method.
+    // perform node updates, thats not very hard to do.
+    
     void changed(PropList list) {
-        if (props.model) {
+        if (list.count("model") == 0)
+            return;
+        
+        str &mod = m.model;
+        if (mod) {
             auto shaders = ShaderMap { };
-            for (auto &[group,   shader]: props.shaders.map())
+            var &sh = m.shaders;
+            for (auto &[group, shader]: sh.map())
                 shaders[group] = shader;
-            ///
-            assert(props.ubo);
-            m = model<Vertex>(props.model, props.ubo, props.attr, shaders);
+            /// --------------------------------------------------
+            assert(m.ubo);
+            m.pmap = PipelineMap { null }; // model<Vertex>(mod, m.ubo, m.attr, shaders);
         } else {
             //pmap = PipelineMap { null };
         }

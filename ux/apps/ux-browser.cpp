@@ -3,9 +3,9 @@
 struct Commander:node {
     declare(Commander);
     
-    struct Props:IProps {
+    struct Members {
         str path;
-    } props;
+    } m;
     
     path_t path;
     

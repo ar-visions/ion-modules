@@ -3,16 +3,16 @@
 
 struct Edit:node {
     declare(Edit);
-    struct Props:IProps {
-        bool        word_wrap;
-        bool        multi_line;
-        bool        secret;
-        int         max_len;
-        str         blank_text;
-        FnFilter    filter;
-        rgba        sel_bg;
-        rgba        sel_fg;
-    } props;
+    struct Members {
+        Extern<bool>     word_wrap;
+        Extern<bool>     multi_line;
+        Extern<bool>     secret;
+        Extern<int>      max_len;
+        Extern<str>      blank_text;
+        Extern<FnFilter> filter;
+        Extern<rgba>     sel_bg;
+        Extern<rgba>     sel_fg;
+    } m;
     
     static FnFilter LCase() {
         return FnFilter([](var &d) {
@@ -22,32 +22,20 @@ struct Edit:node {
         });
     }
     
-    void define() {
-        /*
-        Define {this, "word-wrap",  &props.word_wrap,  false};
-        Define {this, "multi-line", &props.multi_line, false};
-        Define {this, "secret",     &props.secret,     false};
-        Define {this, "sel-bg",     &props.sel_bg,     rgba {"#ff0"}};
-        Define {this, "sel-fg",     &props.sel_fg,     rgba {"#000"}};
-        Define {this, "max-len",    &props.max_len,    -1};
-        Define {this, "blank-text", &props.blank_text, str {"#00f"}};
-        Define {this, "filter",     &props.filter,     FnFilter {null}};
-        */
+    void bind() {
+        external<bool>     ("word-wrap",  m.word_wrap,  false);
+        external<bool>     ("multi-line", m.multi_line, false);
+        external<bool>     ("secret",     m.secret,     false);
+        external<rgba>     ("sel-fg",     m.sel_fg,     rgba {"#ff0"});
+        external<rgba>     ("sel-bg",     m.sel_bg,     rgba {"#000"});
+        external<int>      ("max-len",    m.max_len,    -1);
+        external<str>      ("blank-text", m.blank_text, "");
+        external<FnFilter> ("filter",     m.filter,     FnFilter {null});
     }
     
     void draw(Canvas &canvas) {
         node::draw(canvas);
-        auto &data = context(node::props.bind);
-        if (!data.size())
-            return;
-        auto  text = str(data);
-        /// implement binding api
-        auto draw_line = [&](str &s) {
-            canvas.text(s, path.rect, node::props.text.align, {0,0});
-        };
-        canvas.save();
-        draw_line(text);
-        // draw all of that selection stuff.
-        canvas.restore();
+        Text &text = node::m.text;
+        canvas.text(text.label, path.rect, text.align, {0,0});
     }
 };

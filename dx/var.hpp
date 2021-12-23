@@ -61,6 +61,8 @@ typedef std::filesystem::path                       path_t;
 
 struct node;
 struct var;
+typedef std::function<void(void *)>                FnArb;
+typedef std::function<void(void)>                  FnVoid;
 typedef std::function<void(var &)>                 Fn;
 typedef std::function< var(var &)>                 FnFilter;
 typedef std::function< var(var &, std::string &)>  FnFilterMap;
@@ -611,12 +613,11 @@ public:
     }
 };
 
-#define valloc(N, T) ((T *)calloc(N, sizeof(T)))
 #define serializer(C,E) \
     C(nullptr_t n) : C()       { }                      \
     C(const C &ref)            { copy(ref);            }\
-    C(var &d)                 { import_data(d);       }\
-    operator var()            { return export_data(); }\
+    C(var &d)                  { import_data(d);       }\
+    operator var()             { return export_data(); }\
     operator bool()  const     { return   E;           }\
     bool operator!() const     { return !(E);          }\
     C &operator=(const C &ref) {\
@@ -669,12 +670,20 @@ typedef std::function<var(var &)> FnProcess;
 #define UNIX
 #endif
 
-struct node;
-typedef node *                     (*FnFactory)();
+struct Bind {
+    str id, to;
+    Bind(str id, str to = null):id(id), to(to ? to : id) { }
+    bool operator==(Bind &b) { return id == b.id; }
+    bool operator!=(Bind &b) { return !operator==(b); }
+};
+
+struct  node;
+typedef node * (*FnFactory)();
+typedef vec<Bind> Binds;
 
 struct Element {
     FnFactory       factory = null;
-    Args            args;
+    Binds           binds;
     vec<Element>    elements;
     node           *ref = 0;
     FnFilter        fn_filter;
@@ -685,8 +694,8 @@ struct Element {
     Element(var &ref, FnFilterArray f);
     Element(var &ref, FnFilterMap f);
     Element(var &ref, FnFilter f);
-    Element(FnFactory factory, Args &args, vec<Element> &elements):
-        factory(factory), args(args), elements(elements) { }
+    Element(FnFactory factory, Binds &binds, vec<Element> &elements):
+        factory(factory), binds(binds), elements(elements) { }
     bool operator==(Element &b);
     bool operator!=(Element &b);
     operator bool()  { return ref || factory;     }

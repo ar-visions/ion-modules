@@ -37,11 +37,11 @@ public:
         a.resize(sz, v);
     }
     int count(T v) {
-        int ret = 0;
+        int r = 0;
         for (auto &i: a)
             if (v == i)
-                ret++;
-        return ret;
+                r++;
+        return r;
     }
     void shuffle() {
         std::vector<std::reference_wrapper<const T>> v(a.begin(), a.end());
@@ -103,8 +103,13 @@ public:
         return v;
     }
     inline void operator +=   (T v) { a.push_back(v);                    }
-    inline void operator -= (int i) { if (i >= 0)
-                                         a.erase(a.begin() + size_t(i)); }
+    inline void erase(int index) {
+        if (index >= 0)
+            a.erase(a.begin() + size_t(index));
+    }
+    inline void operator -= (int i) {
+        return erase(i);
+    }
     inline operator bool() const    { return a.size() > 0;               }
     inline bool operator!() const   { return a.size() == 0;              }
     inline size_t index_of(T v) const {

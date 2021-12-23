@@ -9,7 +9,7 @@ typedef vec<vec2> Points;
 
 ///
 struct Canvas;
-struct Align {
+struct Align:io {
     enum Type {
         Undef,
         Start,
@@ -23,6 +23,8 @@ struct Align {
     bool  operator==(Type t)           { return type == t;       }
     serializer(Align, type != Undef);
 };
+
+typedef Vec2<Align> AlignV2;
 
 struct Path {
     vec<Points>   a;
@@ -211,7 +213,7 @@ struct Filter {
     bool operator!()    { return type == None; }
 };
 
-struct TextMetrics {
+struct TextMetrics:io {
     float           w = 0,
                     h = 0;
     float      ascent = 0,
@@ -255,7 +257,7 @@ struct TextMetrics {
     serializer(TextMetrics, h > 0);
 };
 
-struct Blending {
+struct Blending:io {
     enum Type {
         Clear,
         Src,        Dst,
