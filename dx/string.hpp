@@ -2,7 +2,8 @@
 #include <dx/var.hpp>
 #include <dx/array.hpp>
 
-struct str {
+/// io is basically just decoration.  dont tell that to its face, though.
+struct str:io {
     std::string s;
     str(nullptr_t n = null);
     str(const char *cstr);

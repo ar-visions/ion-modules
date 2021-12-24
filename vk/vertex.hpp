@@ -72,6 +72,35 @@ struct IndexBuffer:IndexData {
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) { }
 };
 
-typedef map<str, str> ShaderMap;
+struct Shaders {
+    map<std::string, std::string> map;
+    /// default construction
+    Shaders(nullptr_t n = null) {
+        map["*"] = "main";
+    }
+    
+    bool operator==(Shaders &ref) {
+        return map == ref.map;
+    }
+    
+    /// group=shader
+    Shaders(str v) { /// str is the only interface in it.  everything else is just too messy for how simple the map is
+        auto sp = v.split(",");
+        for (auto v: sp) {
+            auto a = v.split("=");
+            assert(a.size() == 2);
+            std::string key   = a[0];
+            std::string value = a[1];
+            map[key] = value;
+        }
+    }
+    std::string &operator[](std::string n) {
+        return map[n];
+    }
+    size_t count(std::string n) {
+        return map.count(n);
+    }
+};
+
 
 

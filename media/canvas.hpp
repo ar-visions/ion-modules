@@ -18,8 +18,8 @@ struct Align:io {
     } type;
                Align(Type t = Undef) : type(t) { }
     void        copy(const Align &ref) { type = ref.type;        }
-    void import_data(var &data)        { type = Type(int(data)); }
-    var export_data()                  { return int(type);       }
+    void importer(var &data)           { type = Type(int(data)); }
+    var  exporter()                    { return int(type);       }
     bool  operator==(Type t)           { return type == t;       }
     serializer(Align, type != Undef);
 };
@@ -88,15 +88,15 @@ struct DrawState {
            DrawState(Canvas *h, double s, double f, double o, m44 m, rgba c, vec2 b) :
                      host(h), stroke_sz(s), font_scale(f), opacity(o), m(m), color(c), blur(b) { }
            DrawState()             { }
-    void import_data(var &d)       { }
-    var  export_data()             { return null; }
+    void importer(var &d)          { }
+    var  exporter()                { return null; }
     void        copy(const DrawState &r);
     
     /// serializer(DrawState, true);
     DrawState(nullptr_t n) : DrawState() { }
     DrawState(const DrawState &ref) { copy(ref);            }
-    DrawState(var &d)            { import_data(d);       }
-    operator var()               { return export_data(); }
+    DrawState(var &d)            { importer(d);          }
+    operator var()               { return exporter();    }
     operator bool()  const       { return true;          }
     bool operator!() const       { return false;         }
     DrawState &operator=(const DrawState &ref) {
@@ -229,14 +229,14 @@ struct TextMetrics:io {
                     line_height(line_height),
                     cap_height(cap_height) { }
     
-    var export_data() {
+    var exporter() {
         return std::vector<float> {
             w, h, ascent, descent,
             line_height, cap_height
         };
     }
     
-    void import_data(var& d) {
+    void importer(var& d) {
         w           = float(d[size_t(0)]);
         h           = float(d[1]);
         ascent      = float(d[2]);
@@ -280,8 +280,8 @@ struct Blending:io {
     
     /// data import export
     void copy(const Blending &ref) { type = ref.type;         }
-    var export_data()              { return int32_t(type);    }
-    void import_data(var &d)       { type = Type(int32_t(d)); }
+    var exporter()                 { return int32_t(type);    }
+    void importer(var &d)          { type = Type(int32_t(d)); }
     
     serializer(Blending, type >= Clear);
 };

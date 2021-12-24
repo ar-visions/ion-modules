@@ -1,4 +1,5 @@
 #pragma once
+#include <dx/io.hpp>
 #include <dx/var.hpp>
 #include <vector>
 #include <queue>
@@ -8,11 +9,13 @@
 
 struct var;
 template <class T>
-struct vec {
+struct vec:io {
 protected:
     static typename std::vector<T>::iterator iterator;
     std::vector<T> a;
 public:
+    typedef T value_type;
+    
     vec(std::initializer_list<T> v) {
         for (auto &i: v)
             a.push_back(i);
@@ -140,3 +143,15 @@ public:
         return data();
     }
 };
+
+template<typename>
+struct is_vec                    : std::false_type {};
+
+template<typename T>
+struct is_vec<vec<T>>            : std::true_type  {};
+
+template<typename>
+struct is_func                   : std::false_type {};
+
+template<typename T>
+struct is_func<std::function<T>> : std::true_type  {};

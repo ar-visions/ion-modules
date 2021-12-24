@@ -7,7 +7,7 @@ struct Object:node {
     
     struct Members {
         Extern<path_t>      model;
-        Extern<var>         shaders;
+        Extern<Shaders>     shaders;
         Extern<UniformData> ubo;
         Extern<vec<Attrib>> attr;
         /// --------------------- cross the streams?
@@ -16,36 +16,25 @@ struct Object:node {
         Intern<PipelineMap> pmap;
     } m;
 
-    void binds() {
+    void bind() {
         external("uniform", m.ubo,       UniformData { null });
-        external("model",   m.model,     null);
-        external("shaders", m.shaders,   Args {{"*", "main"}});
+        external("model",   m.model,     path_t      { });
+        external("shaders", m.shaders,   Shaders     {"*=main"});
         external("attr",    m.attr,      vec<Attrib> { Position3f() });
-        /// ---------------------
-        internal("sval",    m.sval,      "");
+        /// ----------------------------------------------------------
+        internal("sval",    m.sval,      str {""});
         internal("ivar",    m.ivar,      0);
-        internal("pmap",    m.pmap,      PipelineMap { null }); /// call it
+        internal("pmap",    m.pmap,      PipelineMap { null });
     }
-    
-    // changed method.
-    // perform node updates, thats not very hard to do.
     
     void changed(PropList list) {
         if (list.count("model") == 0)
             return;
-        
+        /// ------------------------
         path_t &mod = m.model;
-        if (std::filesystem::exists(mod)) {
-            auto shaders = ShaderMap { };
-            var &sh = m.shaders;
-            for (auto &[group, shader]: sh.map())
-                shaders[group] = shader;
-            /// --------------------------------------------------
-            assert(m.ubo);
-            m.pmap = model<Vertex>(mod, m.ubo, m.attr, shaders);
-        } else {
-            //pmap = PipelineMap { null };
-        }
+        m.pmap = exists(mod) ?
+            model<Vertex>(mod, m.ubo, m.attr, m.shaders) :
+            PipelineMap { null };
     }
     
     Element render() {

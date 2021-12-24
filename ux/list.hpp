@@ -1,6 +1,10 @@
 #pragma once
 #include <ux/ux.hpp>
 
+// for some reason i most want to paint a table, so after the obj viewer im pivoting to this one
+// the context management needs to be there for Model types
+// we could test it out on real db
+
 /// bind-compatible List component for displaying data from models or static (type cases: array)
 struct List:node {
     declare(List);
@@ -13,14 +17,21 @@ struct List:node {
         Align  align  = Align::Start;
         
         Column() { }
-        
         Column(str id, double size = 1.0, Align align = Align::Start) :
             id(id), size(size),  scale(true),  align(align) { }
         
         Column(str id, int value, Align align = Align::Start) :
             id(id), size(value), scale(false), align(align) { }
         
-        void import_data(var &d) {
+        void copy(const Column &r) {
+            id          = r.id;
+            size        = r.size;
+            scale       = r.scale;
+            final       = r.final;
+            align       = r.align;
+        }
+        
+        inline void importer(var &d) {
             if (d == var::Array) {
                 id     =             str(d[size_t(0)]);
                 size   =          double(d[size_t(1)]);
@@ -33,15 +44,7 @@ struct List:node {
             }
         }
         
-        void copy(const Column &r) {
-            id          = r.id;
-            size        = r.size;
-            scale       = r.scale;
-            final       = r.final;
-            align       = r.align;
-        }
-        
-        var export_data() {
+        inline var exporter() {
             return std::vector<var> { id, size, scale, final, align };
         }
         
@@ -71,7 +74,7 @@ struct List:node {
         external<rgba>    ("odd-bg",     m.odd_bg,     rgba {null});
         external<rgba>    ("column-fg",  m.column.fg,  rgba {"#0f0"});
         external<rgba>    ("column-bg",  m.column.bg,  rgba {"#00f"});
-        external<Columns> ("column-ids", m.column.ids, {});
+        external<Columns> ("column-ids", m.column.ids,      { });
     }
     
     void update_columns() {
@@ -173,3 +176,12 @@ struct List:node {
         }
     }*/
 };
+
+/*
+
+void test1() {
+    var v = {};
+    vec<List::Column> conv = vec<List::Column>(v);
+}
+
+*/

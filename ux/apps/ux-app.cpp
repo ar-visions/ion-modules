@@ -2,7 +2,9 @@
 #include <ux/app.hpp>
 #include <media/obj.hpp>
 
+/// ------------------------
 /// simple rendering
+/// ------------------------
 struct Car:node {
     declare(Car);
     enum Uniform { U_MVP };
@@ -15,7 +17,7 @@ struct Car:node {
     } m;
     
     /// configure binds
-    void binds() {
+    void bind() {
         external("model",   m.model,   str {"models/dayna.obj"});
         external("fov",     m.fov,     60.0);
         /// ---------------------------------
@@ -31,10 +33,8 @@ struct Car:node {
             })
         );
     }
-
-    /// render Component with simple binding syntax
-    /// this is much like having the same value for a field in ES6 field:field -> field
-    /// if there are different dest name you have two strings {"external-bind","internal-bind"}
+    
+    /// configure binds
     Element render() {
         return Object<Vertex> {{
             {"model"}, {"uniform"}
@@ -47,6 +47,8 @@ Args defaults = {
     {"window-height", int(1024) },
     {"model",         str("models/dayna.obj") }
 };
+
+// [ ] get ux-app working
 
 int main(int c, const char *v[]) {
     return App::UX<Car>(c, v, defaults);

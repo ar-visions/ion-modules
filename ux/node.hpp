@@ -29,7 +29,7 @@ const std::string &type_name() {
         const size_t blen = sizeof(str);
         size_t b, l;
         n = __PRETTY_FUNCTION__;
-        b = n.find(str) + blen + 1;
+        b = n.find(str) + blen;
         l = n.find("]", b) - b;
         n = n.substr(b, l);
     }
@@ -70,6 +70,7 @@ struct node {
             Intern,
             Extern
         };
+        std::string type_name;
         size_t   type_hash = 0;
         Type     type      = Undefined;
         str      name      = null;
@@ -84,6 +85,12 @@ struct node {
         size_t peer_cache = 0xffffffff;
         Member *v_member  = null;
         
+        operator var() {
+            /// we know at runtime if we can var it up or not,
+            /// see line 130
+            var v = {};
+            return fn_var_get(v);
+        }
         bool operator != (Member &v) {
             return !(operator==(v));
         }
@@ -91,12 +98,14 @@ struct node {
             return v_member == &v && peer_cache == v.cache;
         }
         void operator=(Member &v) {
-            if (type_hash == v.type_hash)
+            if (type_hash == v.type_hash) /// this should be the same, and its not.  the types dont match somehow.
                 fn_type_set((void *)&v);
             else {
-                var p = null;
-                var conv0 = v.fn_var_get(p);
-                fn_var_set(conv0);
+                assert(v.fn_var_get); /// must inherit from io
+                assert(v.fn_var_set);
+                var p  = null;
+                var c0 = v.fn_var_get(p);
+                fn_var_set(c0);
             }
             v_member   = &v;
             peer_cache = v.cache;
@@ -119,31 +128,44 @@ struct node {
         T      value;
         ///
         void init() {
-            type_hash  = std::hash<std::string>()(::type_name<T>());
-            /// function sets, unset
+            type_name  = ::type_name<T>();
+            type_hash  = std::hash<std::string>()(type_name);
             fn_unset   = [&]() { cache = 0; };
-            /// line in the sand here. the need to know if a class is var'able is, quite needed here.
-            /// that means we need an io base class just as a pure indication that this happens
-            if constexpr (std::is_base_of<T, io>()) {
-                fn_var_get = [&](var &) {
-                    return var(value);
-                };
+            ///
+            /// a set of primitives will get the var set
+            if constexpr (std::is_base_of<io, T>() || std::is_same_v<T, path_t>) {
+                if constexpr (!std::is_same_v<T, path_t>) {
+                    fn_var_get = [&](var &) {
+                        return var(value);
+                    };
+                }
                 fn_var_set = [&](var &v) {
-                    if constexpr (std::is_same_v<T, Fn>()) {
+                    if constexpr (is_vec<T>()) {
+                        size_t sz = v.size();
+                        T    conv = T(sz);
+                        for (auto &i: *v.a)
+                            conv += static_cast<typename T::value_type>(i); /// static_cast not required, i think.  thats why its here.
+                        value     = conv;
+                        cache++;
+                    } else if constexpr (is_func<T>()) {
                         T conv = T(v);
-                        if (fn_id(value) != fn_id(conv)) {
+                        if (fn_id(value) != fn_id(conv)) { /// todo: integrate into var
                             value  = v;
                             cache++;
                         }
-                    }/* else if (!(value == conv)) {
-                        value  = conv;
-                        cache++;
-                    }*/
+                    } else {
+                        T conv = T(v);
+                        if (!(value == conv)) {
+                            value = conv;
+                            cache++;
+                        }
+                    }
                 };
             }
+            ///
             fn_type_set = [&](void *pv) {
                 T &v = *(T *)pv;
-                if constexpr (std::is_same_v<T, Fn>) {
+                if constexpr (is_func<T>()) {
                     if (fn_id(value) != fn_id(v)) {
                         value  = v;
                         cache++;
@@ -292,7 +314,7 @@ struct node {
     
     template <typename V>
     PipelineMap model(path_t       path, UniformData  ubo,
-                      vec<Attrib>  attr, ShaderMap    shaders = { }) {
+                      vec<Attrib>  attr, Shaders      shaders = null) {
         return Model<V>(device(), ubo, attr, path);
     }
     

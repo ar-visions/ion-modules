@@ -18,6 +18,8 @@
 #include <cstring>
 #include <unistd.h>
 #include <random>
+#include <type_traits>
+#include <dx/io.hpp>
 
 // nullptr verbose, incorrect (nullptr_t is not constrained to pointers at all)
 static const nullptr_t null = nullptr;
@@ -55,9 +57,10 @@ static inline void memcopy(T *dst, T *src, size_t count = 1) {
     memcpy(dst, src, count * sizeof(T));
 }
 
-#include <dx/map.hpp>
+typedef std::filesystem::path   path_t;
+bool exists(path_t &p);
 
-typedef std::filesystem::path                       path_t;
+#include <dx/map.hpp>
 
 struct node;
 struct var;
@@ -616,8 +619,8 @@ public:
 #define serializer(C,E) \
     C(nullptr_t n) : C()       { }                      \
     C(const C &ref)            { copy(ref);            }\
-    C(var &d)                  { import_data(d);       }\
-    operator var()             { return export_data(); }\
+    C(var &d)                  { importer(d);          }\
+    operator var()             { return exporter();    }\
     operator bool()  const     { return   E;           }\
     bool operator!() const     { return !(E);          }\
     C &operator=(const C &ref) {\

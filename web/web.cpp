@@ -243,7 +243,7 @@ vec<path_t> files(path_t p, vec<str> exts = {}) {
         for (const auto &f: std::filesystem::directory_iterator(p))
             if (f.is_regular_file() && (!exts || exts.index_of(f.path().string()) >= 0))
                 v += f.path();
-    } else if (std::filesystem::exists(p))
+    } else if (exists(p))
         v += p;
     return v;
 }
@@ -281,7 +281,7 @@ Socket::Socket(bool secure, bool listen) {
         }
         
         path_t sv_path = "server.key";
-        if (std::filesystem::exists(sv_path)) {
+        if (exists(sv_path)) {
             std::string p = sv_path.string();
             int r = mbedtls_pk_parse_keyfile(&i.pkey, p.c_str(),
                         nullptr, mbedtls_ctr_drbg_random, &i.ctr_drbg);

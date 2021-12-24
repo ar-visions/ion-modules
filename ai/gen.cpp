@@ -46,14 +46,14 @@ void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
             ///
             auto  rp = p.string().substr(0, p.filename().string().length());
             auto  js = path_t(str(rp) + str(p.stem().string()) + str {".json"});
-            str  vid = std::filesystem::exists(js) ? ".mp4"  : "";
-            str  img = std::filesystem::exists(id + ".jpg")  ? (id + ".jpg")  :
-                       std::filesystem::exists(id + ".jpeg") ? (id + ".jpeg") :
-                       std::filesystem::exists(id + ".png")  ? (id + ".png")  : "";
-            str  aud = std::filesystem::exists(id + ".mp4")  ? (id + ".mp4")  :
-                       std::filesystem::exists(id + ".mp3")  ? (id + ".mp3")  : "";
+            str  vid = exists(js) ? ".mp4"  : "";
+            str  img = exists(id + ".jpg")  ? (id + ".jpg")  :
+                       exists(id + ".jpeg") ? (id + ".jpeg") :
+                       exists(id + ".png")  ? (id + ".png")  : "";
+            str  aud = exists(id + ".mp4")  ? (id + ".mp4")  :
+                       exists(id + ".mp3")  ? (id + ".mp3")  : "";
             
-            if (require.size() && !std::filesystem::exists(js))
+            if (require.size() && !exists(js))
                 continue;
             ///
             /// image and audio files get their best path to resource selection here
@@ -73,7 +73,7 @@ void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
                 /// filter by resource availability
                 if (r[0] == '.') {
                     auto res = path_t(str(rp) + str(p.stem().string()) + r);
-                    if (!std::filesystem::exists(res)) {
+                    if (!exists(res)) {
                         cont = true;
                         break;
                     }

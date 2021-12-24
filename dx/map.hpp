@@ -14,7 +14,7 @@ struct pair {
 };
 
 template <typename K, typename V>
-class map {
+class map:io {
 public:
     std::vector<pair<K,V>> pairs;
     static typename std::vector<pair<K,V>>::iterator iterator;
@@ -93,3 +93,8 @@ public:
     }
 };
 
+template<typename>
+struct is_map                    : std::false_type {};
+
+template<typename K, typename V>
+struct is_map<map<K,V>>          : std::true_type  {};

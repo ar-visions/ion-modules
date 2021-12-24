@@ -61,18 +61,23 @@ struct Composer {
         for (auto &bind: e.binds) {
             bool exists = n->externals.count(bind.id); // assertion
             if (exists) {
-                node::Member &dst = *n->externals[bind.id];
-                if (p->binds.count(bind.to) == 0)
-                    console.fatal("bind-to:{0} not found on node:{1}", {bind.to, str(n->class_name)});
-                node::Member &src = *p->internals[bind.to];
+                str   p_id    = p->m.id;
+                str   p_cn    = p->class_name;
+                auto &dst     = (node::Member &)(*n->externals[bind.id]);
+                bool  has_int = p->internals.count(bind.to) > 0;
+                bool  has_ext = p->externals.count(bind.to) > 0;
+                if (!has_int && !has_ext)
+                    console.fatal("bind:{0} not found on node:{1}", {bind.to, p_cn, p_id});
+                auto &src     = (node::Member &)(has_int ? *p->internals[bind.to] : *p->externals[bind.to]);
                 if (dst != src) {
-                    changed += bind.id;
-                    dst      = src;
+                    changed  += bind.id;
+                    dst       = src;
                 }
             } else {
-                console.fatal("bind-from:{0} not found on node:{1}", {bind.id, str(n->class_name)});
+                str n_id = n->m.id;
+                str n_cn = n->class_name;
+                console.fatal("external:{0} not found on {1}:{2}", {bind.id, n_cn, n_id});
             }
-
             if (dropped.count(bind.id))
                 dropped[bind.id] = false;
         }
@@ -125,7 +130,7 @@ struct Composer {
                 update(n, &n->mounts[id], eee);
                 u[id] = false;
             }
-        } else {
+        } else if (ee.factory) {
             std::string id = element_id(ee);
             update(n, &n->mounts[id], ee);
             u[id] = false;
@@ -138,6 +143,8 @@ struct Composer {
                 update(n, &n->mounts[id], e_null);
                 node_updated = true;
             }
+        if (node_updated)
+            n->changed(changed);
         return node_updated;
     }
     

@@ -1,7 +1,4 @@
 #pragma once
-
-struct io { };
-
 #include <dx/var.hpp>
 
 struct Raw {

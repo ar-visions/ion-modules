@@ -1165,3 +1165,7 @@ size_t var::type_size(var::Type t) {
     }
     return 0;
 }
+
+bool exists(path_t &p) {
+    return std::filesystem::exists(p);
+}

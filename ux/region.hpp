@@ -31,12 +31,12 @@ struct Coord:io {
     bool operator==(Type t) {
         return this->t == t;
     }
-    void import_data(var &d) {
+    void importer(var &d) {
         t = Type(double(d[size_t(0)]));
         v =      double(d[size_t(1)]);
         p =        bool(d[size_t(2)]);
     }
-    inline var export_data() {
+    inline var exporter() {
         return std::vector<double> { double(t), double(v), double(p) };
     }
     void copy(const Coord &ref) {
@@ -88,7 +88,7 @@ struct Region:io {
         return Rect<double>(vec2 { vx0, vy0 }, vec2 { vx1, vy1 });
     }
     
-    inline var export_data() {
+    inline var exporter() {
         var dd = std::vector<double> {
             double(left.t),   double(left.v),   double(left.p),
             double(top.t),    double(top.v),    double(top.p),
@@ -98,7 +98,7 @@ struct Region:io {
         return dd;
     }
     
-    void import_data(var& d) {
+    void importer(var& d) {
         if (d.size() >= 12) {
             std::vector<var> &a = *(d.a);
             left    = Coord { Coord::Type(double(a[size_t(0)])), double(a[size_t(1)]),  bool(double(a[size_t(2)]))  };
