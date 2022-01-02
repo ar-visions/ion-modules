@@ -1,5 +1,7 @@
 #pragma once
-#include <ux/ux.hpp>
+#include <ux/style.hpp>
+#include <ux/node.hpp>
+//#include <ux/ux.hpp>
 
 template <typename V>
 struct Object:node {
@@ -18,12 +20,12 @@ struct Object:node {
 
     void bind() {
         external("uniform", m.ubo,       UniformData { null });
-        external("model",   m.model,     path_t      { });
+        external("model",   m.model,     path_t      {  });
         external("shaders", m.shaders,   Shaders     {"*=main"});
         external("attr",    m.attr,      vec<Attrib> { Position3f() });
         /// ----------------------------------------------------------
-        internal("sval",    m.sval,      str {""});
-        internal("ivar",    m.ivar,      0);
+        internal("sval",    m.sval,      str         { "" });
+        internal("ivar",    m.ivar,      int         { 0 });
         internal("pmap",    m.pmap,      PipelineMap { null });
     }
     
@@ -37,12 +39,10 @@ struct Object:node {
             PipelineMap { null };
     }
     
-    Element render() {
-        /*
+    Element render() { /// no reference returned, so it wont do a thing except push this pipeline
         auto &device = Vulkan::device();
         for (auto &[group, pipeline]: m)
             device.render.push(pipeline);
-        */
         return null;
     }
 };

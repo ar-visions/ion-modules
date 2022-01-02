@@ -44,7 +44,7 @@ struct Coord:io {
         v = ref.v;
         p = ref.p;
     }
-    serializer(Coord, t > Undefined);
+    io_define(Coord, t > Undefined);
 };
 
 struct L:Coord { L(double v) : Coord(Left,   v) { };
@@ -63,6 +63,7 @@ struct H:Coord { H(double v) : Coord(Height, v) { };
 struct Node;
 struct Region:io {
     enum Type {
+        Undefined,
         Left,
         Top,
         Right,
@@ -97,9 +98,78 @@ struct Region:io {
         };
         return dd;
     }
+    /*
+    struct UValue {
+        str  unit;
+        real value;
+    };
+    
+    vec<UValue> split_units(str &s) {
+        char *start = s.cstr();
+        char *sc    = start;
+        bool  find  = true;
+        char letter = 0;
+        while (*sc) {
+            while (isspace(*sc))
+                sc++;
+            char    c = *sc;
+            bool is_d = c == '-' || (c >= '0' && c <= '9');
+            if (!find && isalpha(c)) {
+                letter = c;
+                find   = false;
+            }
+        };
+    }*/
     
     void importer(var& d) {
-        if (d.size() >= 12) {
+        if (d == ::Type::Str) {
+            auto   parse_side = [](str &s, enum Coord::Type def_side, Coord &e)  {
+                auto word_letter = [](str &s) -> str {
+                    bool listen = true;
+                    for (const char c:s.s) {
+                        if (listen && isalpha(c)) { /// it should take the first letter, preferring start but should also take a suffix too
+                            char b[2] = { char(toupper(c)), 0 };
+                            return str(b, 2);
+                        } else
+                            listen = isspace(c);
+                    }
+                    return str(null);
+                };
+                auto   p_side = Coord::Undefined;
+                static auto m = map<const char *, Coord::Type> {
+                    {"L", Coord::Left},  {"T", Coord::Top},
+                    {"X", Coord::Left},  {"Y", Coord::Top},
+                    {"R", Coord::Right}, {"B", Coord::Bottom},
+                    {"W", Coord::Width}, {"H", Coord::Height}
+                };
+                ///
+                for (auto &[k,v]: m)
+                    if (word_letter(s) == k)
+                        p_side = v;
+                ///
+                real     v = s.real();
+                bool     p = s.index_of("%") >= 0;
+                ///
+                e = Coord((p_side == Coord::Undefined) ? def_side : p_side, v, p);
+            };
+            ///
+            auto sp = str(d).split(" ");
+            assert(sp.size() >= 4);
+            ///
+            parse_side(sp[0], Coord::Left,   left);
+            parse_side(sp[1], Coord::Top,    top);
+            parse_side(sp[2], Coord::Right,  right);
+            parse_side(sp[3], Coord::Bottom, bottom);
+            
+            /// let us help each other
+            if ((left == Coord::Top  || left == Coord::Bottom || left == Coord::Height) &&
+                (top  == Coord::Left || top  == Coord::Right  || top  == Coord::Width))
+                std::swap(left, top);
+            if ((right  == Coord::Top  || right  == Coord::Bottom || right  == Coord::Height) &&
+                (bottom == Coord::Left || bottom == Coord::Right  || bottom == Coord::Width))
+                std::swap(right, bottom);
+            
+        } else if (d.size() >= 12) {
             std::vector<var> &a = *(d.a);
             left    = Coord { Coord::Type(double(a[size_t(0)])), double(a[size_t(1)]),  bool(double(a[size_t(2)]))  };
             top     = Coord { Coord::Type(double(a[size_t(3)])), double(a[size_t(4)]),  bool(double(a[size_t(5)]))  };
@@ -116,5 +186,5 @@ struct Region:io {
     }
     
     rectd operator()(node *n, node *rel) const;
-    serializer(Region, left);
+    io_define(Region, left);
 };

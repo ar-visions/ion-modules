@@ -36,7 +36,7 @@ str URI::encode(str s) {
         chars = vec<char>(data.data(), data.size());
     }
     // A-Z, a-z, 0-9, -, ., _, ~, :, /, ?, #, [, ], @, !, $, &, ', (, ), *, +, ,, ;, %, and =
-    size_t  len = s.length();
+    size_t  len = s.len();
     vec<char> v = vec<char>(len * 4 + 1);
     
     for (int i = 0; i < len; i++) {
@@ -66,7 +66,7 @@ str URI::encode(str s) {
 
 
 str URI::decode(str e) {
-    size_t sz = e.length();
+    size_t sz = e.len();
     auto    v = vec<char>(sz * 4 + 1);
     size_t  i = 0;
     auto is_hex = [](const char c) {
@@ -120,7 +120,7 @@ Args Web::read_headers(Socket sc) {
             str hello = str(rbytes, sz - 2);
             int  code = 0;
             auto   sp = hello.split(" ");
-            if (hello.length() >= 12) {
+            if (hello.len() >= 12) {
                 if (sp.size()  >= 2)
                     code = sp[1].integer();
             }
@@ -129,7 +129,7 @@ Args Web::read_headers(Socket sc) {
             for (size_t i = 0; i < sz; i++) {
                 if (rbytes[i] == ':') {
                     str k      = str(&rbytes[0], i);
-                    str v      = str(&rbytes[i + 2], sz - k.length() - 2 - 2);
+                    str v      = str(&rbytes[i + 2], sz - k.len() - 2 - 2);
                     headers[k] = v;
                     break;
                 }
@@ -152,7 +152,7 @@ bool Web::write_headers(Socket sc, Args &headers) {
 }
 
 var Web::content_data(Socket sc, var &c, Args& headers) {
-    if (c == var::Map || c == var::Array)
+    if (c == Type::Map || c == Type::Array)
         headers["Content-Type"] = "application/json";
     str s = std::string(c);
     return var(s);
@@ -331,7 +331,7 @@ bool Socket::read(const char *v, size_t sz) {
 
 vec<char> Socket::read_until(str s, int max_len) {
     auto rbytes = vec<char>(max_len);
-    size_t slen = s.length();
+    size_t slen = s.len();
     ///
     for (;;) {
         rbytes   += '\0';
@@ -375,11 +375,11 @@ bool Socket::write(vec<char> &v) {
 
 bool Socket::write(str s, std::vector<var> a) {
     str f = str::format(s, a);
-    return write(f.cstr(), f.length(), 0);
+    return write(f.cstr(), f.len(), 0);
 }
 
 bool Socket::write(var &v) {
-    if (v == var::Str)
+    if (v == Type::Str)
         return write(str(v));
     assert(false); // todo
     return true;
@@ -522,7 +522,7 @@ Future Web::request(str s_uri, Args args) {
         /// prepare post string
         str   post = null;
         if (content) {
-            if (content->t == var::Map) {
+            if (content->t == Type::Map) {
                 /// compatible with Form systems and their RESTful APIs
                 for (auto &[key,val]: content->map()) {
                     if (post)
@@ -531,7 +531,7 @@ Future Web::request(str s_uri, Args args) {
                     post += "=";
                     post += URI::encode(val); /// encoded due to the hash representation
                 }
-            } else if (content->t == var::Str)
+            } else if (content->t == Type::Str)
                 post = str(*content);
             else {
                 /// no solution for the serialization
@@ -546,7 +546,7 @@ Future Web::request(str s_uri, Args args) {
                 { false, "Accept-Language", "en-us"             },
                 { false, "Accept-Encoding", "gzip, deflate, br" },
                 { false, "Accept",          "*/*"               },
-                {  true, "Content-Length",  int(post.length())  },
+                {  true, "Content-Length",  int(post.len())     },
               //{  true, "Content-Type",    "application/x-www-form-urlencoded" }
         };
         for (auto &d: vdefs)
@@ -560,7 +560,7 @@ Future Web::request(str s_uri, Args args) {
         
         /// write POST data
         if (post)
-            sc.write(post.cstr(), post.length(), 0);
+            sc.write(post.cstr(), post.len(), 0);
         
         /// read headers
         auto     &r = message.headers = Web::read_headers(sc);
@@ -594,7 +594,7 @@ Future Web::json(str resource, Args args, Args headers) {
     std::function<void(var &)> s, f;
     Completer c = { s, f };
     Web::request(resource, headers).then([s, f](var &d) {
-        (d == var::Map) ? s(d) : f(d);
+        (d == Type::Map) ? s(d) : f(d);
     }).except([f](var &d) {
         f(d);
     });

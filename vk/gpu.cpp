@@ -98,8 +98,8 @@ GPU::operator VkPhysicalDevice() {
 }
 
 bool GPU::operator()(Capability caps) {
-    bool g = gfx     == var::ui32;
-    bool p = present == var::ui32;
+    bool g = gfx     == Type::ui32;
+    bool p = present == Type::ui32;
     if (caps == Complete)
         return g && p;
     if (caps == Graphics)
@@ -110,7 +110,7 @@ bool GPU::operator()(Capability caps) {
 }
 
 uint32_t GPU::index(Capability caps) {
-    assert(gfx == var::ui32 || present == var::ui32);
+    assert(gfx == Type::ui32 || present == Type::ui32);
     if (caps == Graphics && (*this)(Graphics))
         return uint32_t(gfx);
     if (caps == Present  && (*this)(Present))

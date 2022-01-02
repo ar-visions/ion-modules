@@ -8,15 +8,18 @@
 #include <vk/vk.hpp>
 #include <dx/dx.hpp>
 #include <ux/ux.hpp>
-#include <web/web.hpp>
+#include <ux/interface.hpp>
+#include <ux/composer.hpp>
 
-App::Interface *App::Interface::instance = nullptr;
+Interface *Interface::instance = nullptr;
 
-App::Interface::operator int() {
+Interface::operator int() {
     return code;
 }
 
-void App::Interface::draw(node *root) {
+/// render is popular because it pushes the act of rendition upwards to elements and their binds
+/// the next thing up from that is composition, it takes care of groups of components in its abstract
+void Interface::draw(node *root) {
     /// setup recursion lambda
     std::function<void(node *)> recur;
                                 recur = [&](node *n) {
@@ -30,16 +33,16 @@ void App::Interface::draw(node *root) {
     recur(root);
 }
 
-Composer *Composer_init(void *ix, Args &args) {
-    return new Composer((App::Interface *)ix, args);
+Composer *Composer_init(void *ix, FnRender fn, Args &args) {
+    return new Composer((Interface *)ix, fn, args);
 }
 
 node *Composer_root(Composer *cc) {
     return cc->root;
 }
 
-void Composer_render(Composer *cc, FnRender &fn) {
-    (*cc)(fn());
+void Composer_render(Composer *cc) {
+    cc->render();
 }
 
 void Composer_input(Composer *cc, str &s) {

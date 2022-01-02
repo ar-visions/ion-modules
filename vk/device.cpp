@@ -83,7 +83,7 @@ VkShaderModule Device::module(std::filesystem::path p, Module type) {
         auto mc     = VkShaderModuleCreateInfo { };
         str code    = str::read_file(p);
         mc.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        mc.codeSize = code.length();
+        mc.codeSize = code.len();
         mc.pCode    = reinterpret_cast<const uint32_t *>(code.cstr());
         assert (vkCreateShaderModule(device, &mc, nullptr, &m[key]) == VK_SUCCESS);
     }

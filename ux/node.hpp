@@ -3,117 +3,111 @@
 #include <ux/ux.hpp>
 #include <ux/region.hpp>
 #include <vk/vk.hpp>
+#include <ux/style.hpp>
 
 #define STRINGIFY(x) #x
 #define TO_STRING(x) STRINGIFY(x)
 
 struct node;
-
 struct Composer;
-typedef std::function<void *(Composer *, var &)> FnComposerData;
-typedef std::function<void *(Composer *, Args &)> FnComposerArgs;
-typedef map<std::string, node *>     NodeMap;
 struct Construct;
+struct Member;
 
 typedef map<std::string, node *>     State;
 typedef vec<str> &PropList;
-typedef std::function<vec<Attrib>(str)> AttribFn;
 
 void delete_node(node *n);
 
-template <typename _ZXZtype_name>
-const std::string &type_name() {
-    static std::string n;
-    if (n.empty()) {
-        const char str[] = "_ZXZtype_name =";
-        const size_t blen = sizeof(str);
-        size_t b, l;
-        n = __PRETTY_FUNCTION__;
-        b = n.find(str) + blen;
-        l = n.find("]", b) - b;
-        n = n.substr(b, l);
-    }
-    return n;
-}
+typedef std::function<void(Member &, var &)>  MFn;
+typedef std::function< var(Member &)>         MFnGet;
+typedef std::function<bool(Member &)>         MFnBool;
+typedef std::function<void(Member &)>         MFnVoid;
+typedef std::function<void(Member &, void *)> MFnArb;
 
-template <typename T, typename... U>
-size_t fn_id(std::function<T(U...)> fn) {
-    typedef T(fnType)(U...);
-    fnType ** fnPointer = fn.template target<fnType *>();
-    return (size_t) *fnPointer;
-}
+struct Member {
+    enum MType {
+        Undefined,
+        Context, // context is a direct value at member, such as id
+        Intern, // ??? Split into State, and Override; Override keeps Extern or Intern function; overrides the value processing
+        Extern
+    };
+    ///
+    Type     type       =  Type::Undefined;
+    MType    member     = MType::Undefined;
+    str      name       = null;
+    size_t   cache      = 0;
+    size_t   peer_cache = 0xffffffff;
+    Member  *bound_to   = null;
+    bool     style_init = false;
+    ///
+    virtual void *ptr() { return null; }
+    ///
+    virtual bool state_bool()  {
+        assert(false);
+        return bool(false);
+    }
+    ///
+    /// once per type (todo)
+    struct Lambdas {
+        MFn      var_set;
+        MFnGet   var_get;
+        MFnBool  get_bool;
+        MFnVoid  compute_style;
+        MFnArb   type_set;
+        MFnVoid  unset;
+    } *fn = null;
+    ///
+    node    *node;
+    ///
+    void operator=(const str &s) {
+        var v = s;
+        console.log("1. name = {0}", {name}); /// for context we certainly dont
+        if (fn && fn->var_set)
+            fn->var_set(*this, v);
+    }
+    ///
+    // we need a way to inline set and obtain from style as well
+    // the style value is a mere pointer
+    // fn_type_set not called via update, and this specific call is only when its assigned by binding
+    void operator=(Member &v);
+    ///
+    virtual bool operator==(Member &m) {
+        return bound_to == &m && peer_cache == m.peer_cache;
+    }
+};
+
+size_t Style_members_count(str &s);
+vec<struct StBlock *> &Style_members(str &s);
+double StBlock_match(struct StBlock *, struct node *);
+struct StPair* StBlock_pair (struct StBlock *b, str  &s);
+size_t StPair_instances_count(struct StPair *p, Type &t);
+/// only need to do this on members that will be different
+StPair *Style_pair(Member *member);
+
+struct Style;
 
 struct node {
+    /// not preferred but Members must access them
     enum Flags {
-        Focused  = 1,
-        Captured = 2
+        Focused     = 1,
+        Captured    = 2,
+        StateUpdate = 4
     };
     const char    *selector   = "";
     const char    *class_name = "";
     node          *parent     = null;
     map<std::string, node *> mounts;
     vec<Element>   elements; /// used to check differences
+    Element        element; /// use shared ptr in element
     std::queue<Fn> queue;
     Path           path;
     bool           mounted    = false;
     node          *root       = nullptr;
-    double         y_scroll   = 0; // store indirect
+    vec2           scroll     = {0,0};
     Binds          binds;
     int32_t        flags;
     map<std::string, PipelineData> objects;
-    
-    /// member data structure
-    struct Member {
-        enum Type {
-            Undefined,
-            Context, // context is a direct value at member, such as id
-            Intern,
-            Extern
-        };
-        std::string type_name;
-        size_t   type_hash = 0;
-        Type     type      = Undefined;
-        str      name      = null;
-        size_t   cache     = 0;
-     ///var      data      = null; /// when we lose type context we resort to serialization
-        Fn       fn_var_set;
-        FnFilter fn_var_get;
-        FnArb    fn_type_set;
-        FnVoid   fn_unset;
-        
-        ///
-        size_t peer_cache = 0xffffffff;
-        Member *v_member  = null;
-        
-        operator var() {
-            /// we know at runtime if we can var it up or not,
-            /// see line 130
-            var v = {};
-            return fn_var_get(v);
-        }
-        bool operator != (Member &v) {
-            return !(operator==(v));
-        }
-        bool operator == (Member &v) {
-            return v_member == &v && peer_cache == v.cache;
-        }
-        void operator=(Member &v) {
-            if (type_hash == v.type_hash) /// this should be the same, and its not.  the types dont match somehow.
-                fn_type_set((void *)&v);
-            else {
-                assert(v.fn_var_get); /// must inherit from io
-                assert(v.fn_var_set);
-                var p  = null;
-                var c0 = v.fn_var_get(p);
-                fn_var_set(c0);
-            }
-            v_member   = &v;
-            peer_cache = v.cache;
-        }
-        void unset() {
-            fn_unset();
-        }
-    };
+    Style         *style;
     
     ///
     map<str, Member *> contextuals;
@@ -121,57 +115,118 @@ struct node {
     map<str, Member *> externals;
     
     /// member type-specific struct
-    template <typename T, const Member::Type MT>
+    template <typename T, const Member::MType MT>
     struct MType:Member {
-        size_t cache = 0;
-        T        def;
-        T      value;
-        ///
+        size_t   cache = 0;
+        T          def;
+        T        value;
+        T *style_value = null;
+
+        /// state cant and wont use style, not unless we want to create a feedback in spacetime
+        bool state_bool()  {
+            T &v = cache ? value : def;
+            if constexpr (std::is_same_v<T, std::filesystem::path>)
+                return std::filesystem::exists(v);
+            else
+                return bool(v);
+        }
+        static T &effective(MType<T,MT> &m) { return (m.cache != 0) ? m.value : (m.style_value ? *m.style_value : m.def); }
+        void *ptr() { return &effective(*this); }
+        
+        /// extern, intern, context and such could override; only to disable most likely
+        /// perhaps you may want intern to use the style only if its default is null
+        void style_value_set(void *ptr) {
+            style_value = ptr ? (T *)ptr : null;
+        }
+        
         void init() {
-            type_name  = ::type_name<T>();
-            type_hash  = std::hash<std::string>()(type_name);
-            fn_unset   = [&]() { cache = 0; };
-            ///
-            /// a set of primitives will get the var set
-            if constexpr (std::is_base_of<io, T>() || std::is_same_v<T, path_t>) {
-                if constexpr (!std::is_same_v<T, path_t>) {
-                    fn_var_get = [&](var &) {
-                        return var(value);
-                    };
-                }
-                fn_var_set = [&](var &v) {
-                    if constexpr (is_vec<T>()) {
-                        size_t sz = v.size();
-                        T    conv = T(sz);
-                        for (auto &i: *v.a)
-                            conv += static_cast<typename T::value_type>(i); /// static_cast not required, i think.  thats why its here.
-                        value     = conv;
-                        cache++;
-                    } else if constexpr (is_func<T>()) {
-                        T conv = T(v);
-                        if (fn_id(value) != fn_id(conv)) { /// todo: integrate into var
-                            value  = v;
-                            cache++;
+            type = Id<T>();
+            static std::unordered_map<Type, Lambdas> lambdas;
+
+            /// release the lambdas of war
+            if (lambdas.count(type) == 0) {
+                lambdas[type] = {};
+                
+                /// unset value, use default value
+                lambdas[type].unset = [](Member &m) -> void {
+                    MType<T,MT> &mm = (MType<T,MT> &)m;
+                    mm.cache = 0;
+                };
+                
+                /// boolean check, used with style. members extend the syntax of style. focus is just a standard member
+                lambdas[type].get_bool = [](Member &m) -> bool {
+                    MType<T,MT> &mm = (MType<T,MT> &)m;
+                    if constexpr (std::is_same_v<T, std::filesystem::path>) {
+                        T &v = (mm.cache != 0) ? mm.value : (mm.style_value ? *mm.style_value : mm.def);
+                        return std::filesystem::exists(v);
+                    } else
+                        return bool(effective(mm));
+                };
+                
+                /// recompute style on this node:member
+                lambdas[type].compute_style = [](Member &m) -> void {
+                    if (m.name == "bg") {
+                        console.log(m.name);
+                        int test = 0; // members_count needs to be 1, with p: value: #ff0 str
+                        test++;
+                    }
+                    StPair *p = Style_members_count(m.name) ? Style_pair(&m) : null;
+                    MType<T,MT> &mm = (MType<T,MT> &)m;
+                    if (p && p->instances.count(m.type) == 0) {
+                        var conv = p->value;
+                        p->instances.set(m.type, new T(conv));
+                    }
+                    mm.style_value_set(p ? p->instances.get<T>(m.type) : null);
+                };
+                
+                /// direct set
+                lambdas[type].type_set = [](Member &m, void *pv) -> void {
+                    MType<T,MT> &mm = (MType<T,MT> &)m;
+                    T *v = (T *)pv;
+                    if constexpr (is_func<T>()) {
+                        if (fn_id(mm.value) != fn_id(*v)) {
+                            mm.value  = *v;
+                            mm.cache++;
                         }
                     } else {
-                        T conv = T(v);
-                        if (!(value == conv)) {
-                            value = conv;
-                            cache++;
-                        }
+                        // handle transitions here
+                        mm.value = *v; // 2 level terniary used for style or default; a value overrides both
+                        mm.cache++;    // we need a 'set_value'
                     }
                 };
-            }
-            ///
-            fn_type_set = [&](void *pv) {
-                T &v = *(T *)pv;
-                if constexpr (is_func<T>()) {
-                    if (fn_id(value) != fn_id(v)) {
-                        value  = v;
-                        cache++;
-                    }
+                
+                /// io conversion
+                if constexpr (std::is_base_of<io, T>() || std::is_same_v<T, path_t>) {
+                    if constexpr (!std::is_same_v<T, path_t>)
+                        lambdas[type].var_get = [](Member &m) -> var { return var(effective((MType<T,MT> &)m)); };
+                    ///
+                    lambdas[type].var_set = [&](Member &m, var &v) -> void {
+                        MType<T,MT> &mm = (MType<T,MT> &)m;
+                        if constexpr (is_vec<T>()) {
+                            size_t sz = v.size();
+                            T    conv = T(sz);
+                            for (auto &i: *v.a)
+                                conv += static_cast<typename T::value_type>(i); /// static_cast not required, i think.  thats why its here.
+                            mm.value  = conv;
+                            mm.cache++;
+                        } else if constexpr (is_func<T>()) {
+                            T conv = T(v);
+                            if (fn_id(mm.value) != fn_id(conv)) { /// todo: integrate into var
+                                mm.value  = v;
+                                mm.cache++;
+                            }
+                        } else {
+                            T conv = T(v);
+                            if (!(mm.value == conv)) {
+                                mm.value = conv;
+                                mm.cache++;
+                            }
+                        }
+                    };
                 }
-            };
+            }
+            /// lambdas for io conversion and direct are all type-mapped
+            fn = &lambdas[type];
         }
         ///
         MType() {
@@ -183,35 +238,42 @@ struct node {
             init();
         }
         ///
-        T &operator=(T  &v) {
-            fn_type_set((void *)&v);
+        ///
+        T &operator=(T v) const {
+            fn->type_set(*this, (void *)&v);
+            return value;
+        }
+        T &operator=(var  &v) {
+            fn->var_set(*this, v);
             return value;
         }
         ///
-        T &ref()         { return cache ? value : def; }
-           operator T&() { return ref(); }
-        T &operator() () { return ref(); }
-        operator bool () { return ref(); }
-    };
+        T &ref()           { return effective(*this); }
+           operator T&  () { return ref(); }
+        T &operator()   () { return ref(); }
+           operator bool() { return bool(ref()); }
+    };           ///
     
     template <typename T>
     struct Context:MType<T, Member::Context> {
         inline void operator=(T v) {
-            Member::fn_type_set((void *)&v);
+            Member::fn->type_set(*this, (void *)&v);
         }
     };
     
     template <typename T>
     struct Intern:MType<T, Member::Intern> {
+        typedef T value_type;
         inline void operator=(T v) {
-            Member::fn_type_set((void *)&v);
+            Member::fn->type_set(*this, (void *)&v);
         }
     };
     
     template <typename T>
     struct Extern:MType<T, Member::Extern> {
+        typedef T value_type;
         inline void operator=(T v) {
-            Member::fn_type_set((void *)&v);
+            Member::fn->type_set(*this, (void *)&v);
         }
     };
     
@@ -238,28 +300,60 @@ struct node {
     
     template <typename T>
     void contextual(str name, Context<T> &m, T def) {
+        m.type          = Id<T>();
+        m.member        = Member::Context;
         m.name          = name;
         m.def           = def;
         contextuals[name] = &m;
     }
     
-    ///
     template <typename T>
     void internal(str name, Intern<T> &m, T def) {
+        m.type          = Id<T>();
+        m.member        = Member::Intern;
         m.name          = name;
         m.def           = def;
         internals[name] = &m;
     }
     
-    ///
     template <typename T>
     void external(str name, Extern<T> &m, T def) {
+        m.type          = Id<T>();
+        m.member        = Member::Extern;
         m.name          = name;
         m.def           = def;
         externals[name] = &m;
     }
     
-    /// node needs a way to update uniforms per frame
+    vec2 offset() { /// untested
+        node *n = this;
+        vec2  o = { 0, 0 };
+        while (n) {
+            rectd &rect = n->path;
+            o  -= rect.xy();
+            o  += n->scroll;
+            n   = n->parent;
+        }
+        return o;
+    }
+    
+    ///
+    template <typename T>
+    void override(Intern<T> &m, T def) {
+        assert(m.name);
+        assert(Id<T>() == m.type);
+        m.def             = def;
+        internals[m.name] = &m;
+    }
+    
+    template <typename T>
+    void override(Extern<T> &m, T def) {
+        assert(m.name);
+        assert(Id<T>() == m.type);
+        m.def             = def;
+        externals[m.name] = &m;
+    }
+    
     struct Members {
         Context<str>   id;
         Extern<str>    bind;
@@ -268,11 +362,28 @@ struct node {
         Fill           fill;
         Border         border;
         Extern<Region> region;
+        Intern<bool>   captured;
+        Intern<bool>   focused;
+        Intern<vec2>   cursor;
+        Intern<bool>   active;
+        Intern<bool>   hover;
+        ///
+        struct Events {
+            Extern<Fn> hover;
+            Extern<Fn> out;
+            Extern<Fn> down;
+            Extern<Fn> up;
+            Extern<Fn> key;
+            Extern<Fn> focus;
+            Extern<Fn> blur;
+            Extern<Fn> cursor;
+        } ev;
     } m;
                     node(nullptr_t n = null);
                     node(const char *selector, const char *cn, Binds binds, vec<Element> elements);
     virtual        ~node();
-            void    standard();
+            void    standard_bind();
+            void    standard_style();
     virtual void    bind();
     virtual void    mount();
     virtual void    umount();
@@ -286,12 +397,24 @@ struct node {
     node           *find(std::string n);
     node           *select_first(std::function<node *(node *)> fn);
     vec<node *>     select(std::function<node *(node *)> fn);
+    void            exec(std::function<void(node *)> fn);
     virtual rectd   calculate_rect(node *child);
     void            focus();
     void            blur();
     node           *focused();
     
     int             u_next_id = 0;
+    
+    template <typename T>
+    inline T state(str name) {
+        if constexpr (std::is_same_v<T, bool>) {
+            if (externals.count(name))
+                return externals[name]->state_bool();
+            if (internals.count(name))
+                return internals[name]->state_bool();
+        }
+        return T(null);
+    }
     
     Device &device() {
         return Vulkan::device();
@@ -361,4 +484,3 @@ struct node {
 struct Group:node {
     declare(Group);
 };
-

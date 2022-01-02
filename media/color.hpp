@@ -13,23 +13,37 @@ struct RGBA {
     alignas(T) T r = 0, g = 0, b = 0, a = 0;
     RGBA(nullptr_t n = nullptr) { }
     RGBA(real r, real g, real b, real a) {
-        const auto sc = real(255.0);
-        this->r = std::clamp(r * sc, 0.0, 255.0);
-        this->g = std::clamp(g * sc, 0.0, 255.0);
-        this->b = std::clamp(b * sc, 0.0, 255.0);
-        this->a = std::clamp(a * sc, 0.0, 255.0);
+        if constexpr (std::is_same_v<T, uint8_t>) {
+            const auto sc = real(255.0);
+            this->r = std::clamp(r * sc, 0.0, 255.0);
+            this->g = std::clamp(g * sc, 0.0, 255.0);
+            this->b = std::clamp(b * sc, 0.0, 255.0);
+            this->a = std::clamp(a * sc, 0.0, 255.0);
+        } else {
+            this->r = r;
+            this->g = g;
+            this->b = b;
+            this->a = a;
+        }
     }
     RGBA(vec4 v) {
-        r = v.x * 255.0;
-        g = v.y * 255.0;
-        b = v.z * 255.0;
-        a = v.w * 255.0;
+        if constexpr (std::is_same_v<T, uint8_t>) {
+            r = v.x * 255.0;
+            g = v.y * 255.0;
+            b = v.z * 255.0;
+            a = v.w * 255.0;
+        } else {
+            r = v.x;
+            g = v.y;
+            b = v.z;
+            a = v.w;
+        }
     }
     RGBA(const char *pc) {
         parse(pc);
     }
     RGBA(var &d) {
-        if (d == var::Str) {
+        if (d == Type::Str) {
             parse(d);
         } else {
             if      constexpr (std::is_same_v<T, uint8_t>)
@@ -67,7 +81,7 @@ struct RGBA {
     void parse(str s) {
         const char *pc = s.cstr();
         str      h = pc;
-        size_t  sz = h.length();
+        size_t  sz = h.len();
         int32_t ir = 0, ig = 0,
                 ib = 0, ia = 255;
         if (sz && h[0] == '#') {
@@ -95,37 +109,41 @@ struct RGBA {
                     break;
             }
         }
-        if constexpr (std::is_same_v<T, int8_t> || std::is_same_v<T, uint8_t>) {
-            r = ir;
-            g = ig;
-            b = ib;
-            a = ia;
+        if constexpr (sizeof(T) == 1) {
+            r = T(ir);
+            g = T(ig);
+            b = T(ib);
+            a = T(ia);
         } else {
-            r = ir / T(255.0); // not so sure if we should even keep this one templated. it does make some good sense though
-            g = ig / T(255.0);
-            b = ib / T(255.0);
-            a = ia / T(255.0);
+            r = T(std::round(T(ir) / T(255.0)));
+            g = T(std::round(T(ig) / T(255.0)));
+            b = T(std::round(T(ib) / T(255.0)));
+            a = T(std::round(T(ia) / T(255.0)));
         }
     }
+    real scale() const {
+        return sizeof(T) == 1 ? 255.0 : 1.0;
+    }
     inline RGBA<T> operator+(RGBA<T> b) {
+        const real sc = scale();
         return RGBA<T> {
-            real(this->r + b.r) / real(255.0),
-            real(this->g + b.g) / real(255.0),
-            real(this->b + b.b) / real(255.0),
-            real(this->a + b.a) / real(255.0)
+            real(this->r + b.r) / sc,
+            real(this->g + b.g) / sc,
+            real(this->b + b.b) / sc,
+            real(this->a + b.a) / sc
         };
     }
     inline RGBA<T> operator*(real f) {
-        real m = f / 255.0;
+        real m = f / scale();
         return RGBA<T> { r * m, g * m, b * m, a * m };
     }
     operator vec4() {
-        return vec4 { r / 255.0, g / 255.0, b / 255.0, a / 255.0 };
+        const real sc = scale();
+        return vec4 { r / sc, g / sc, b / sc, a / sc };
     }
     std::vector<double> doubles() {
-        if constexpr (std::is_same_v<T, uint8_t>)
-            return { r / 255.0, g / 255.0, b / 255.0, a / 255.0 };
-        assert(false);
+        const real sc = scale();
+        return { r / sc, g / sc, b / sc, a / sc };
     }
     bool operator!() { return a <= 0; }
     operator bool()  { return a >  0; }

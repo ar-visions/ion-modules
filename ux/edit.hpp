@@ -9,18 +9,20 @@ struct Edit:node {
         Extern<bool>     secret;
         Extern<int>      max_len;
         Extern<str>      blank_text;
-        Extern<FnFilter> filter;
+      //Extern<FnFilter> filter;
         Extern<rgba>     sel_bg;
         Extern<rgba>     sel_fg;
     } m;
     
-    static FnFilter LCase() {
+    /*
+    static FnFilter LCase() { /// good concept i just want type-specific data
         return FnFilter([](var &d) {
             std::string s = *(d.s);
             std::transform(s.begin(), s.end(), s.begin(), [](uint8_t c) { return std::tolower(c); });
             return var(s);
         });
     }
+    */
     
     void bind() {
         external<bool>     ("word-wrap",  m.word_wrap,  false);
@@ -30,7 +32,7 @@ struct Edit:node {
         external<rgba>     ("sel-bg",     m.sel_bg,     rgba {"#000"});
         external<int>      ("max-len",    m.max_len,    -1);
         external<str>      ("blank-text", m.blank_text, "");
-        external<FnFilter> ("filter",     m.filter,     FnFilter {null});
+      //external<FnFilter> ("filter",     m.filter,     FnFilter {null});
     }
     
     void draw(Canvas &canvas) {

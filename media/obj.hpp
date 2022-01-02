@@ -5,10 +5,6 @@ typedef size_t IPos;
 typedef size_t INormal;
 typedef size_t IUV;
 
-
-// material mapping is an important one
-// right now its all about simple shader to what, shader textfile.
-// 
 template <typename T>
 struct Obj {
     struct Group {
@@ -28,10 +24,10 @@ struct Obj {
            std::function<T(Group&, vec3&, vec2&, vec3&)> fn)
     {
         str g;
-        str contents  = p;
-        assert(contents.length() > 0);
+        str contents  = str::read_file(p); /// rename to resource
+        assert(contents.len() > 0);
         
-        auto lines    = contents.split("\n"); // todo: clean this one up.
+        auto lines    = contents.split("\n");
         auto line_c   = lines.size();
         auto wlines   = vec<Strings>();
         auto v        = vec<vec3>(line_c);
@@ -50,7 +46,7 @@ struct Obj {
                 groups[g].name  = g;
                 groups[g].faces = 0;
             } else if (w[0] == "f") {
-                assert(g.length() && w.size() == 4); /// f pos/uv/norm pos/uv/norm pos/uv/norm
+                assert(g.len() && w.size() == 4); /// f pos/uv/norm pos/uv/norm pos/uv/norm
                 groups[g].faces++;
             }
         }
@@ -65,7 +61,7 @@ struct Obj {
             else if (w[0] == "vt") vt += vec2 { w[1].real(), w[2].real() };
             else if (w[0] == "vn") vn += vec3 { w[1].real(), w[2].real(), w[3].real() };
             else if (w[0] == "f") {
-                assert(g.length());
+                assert(g.len());
                 for (size_t i = 1; i < 4; i++) {
                     auto key = w[i];
                     if (indices.count(key) == 0) {

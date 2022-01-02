@@ -115,7 +115,7 @@ struct Image {
     var  pixels;
     
     inline void set_each(std::function<rgba(rgba &, int, int)> fn) {
-        assert(pixels.c == var::ui32 || pixels.c == var::i32);
+        assert(pixels.c == Type::ui32 || pixels.c == Type::i32);
         auto    sh = pixels.shape();
         assert(sh[2] == 4);
         recti crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh[1], sh[0] };
@@ -128,7 +128,7 @@ struct Image {
     }
     
     inline void set_each(std::function<uint8_t(uint8_t &, int, int)> fn) {
-        assert(pixels.c == var::ui8 || pixels.c == var::i8);
+        assert(pixels.c == Type::ui8 || pixels.c == Type::i8);
         auto    sh = pixels.shape();
         assert(sh[2] == 1);
         recti crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh[1], sh[0] };
@@ -141,7 +141,7 @@ struct Image {
     }
     
     inline void each(std::function<void(uint8_t &, int, int)> fn) {
-        assert(pixels.c == var::ui8 || pixels.c == var::i8);
+        assert(pixels.c == Type::ui8 || pixels.c == Type::i8);
         auto    sh = pixels.shape();
         assert(sh[2] == 1);
         recti crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh[1], sh[0] };

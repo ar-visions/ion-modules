@@ -20,11 +20,11 @@ void _log(str t, std::vector<var> a, bool error) {
 #endif
 }
 
-static bool is_numeric(const char *s) {
+bool var::is_numeric(const char *s) {
     return (s && (*s == '-' || isdigit(*s)));
 }
 
-static std::string parse_numeric(char **cursor) {
+std::string var::parse_numeric(char **cursor) {
     char *s = *cursor;
     if (*s != '-' && !isdigit(*s))
         return "";
@@ -46,7 +46,7 @@ static std::string parse_numeric(char **cursor) {
     return result;
 }
 
-static std::string parse_quoted(char **cursor, size_t max_len = 0) {
+std::string var::parse_quoted(char **cursor, size_t max_len) {
     const char *first = *cursor;
     if (*first != '"')
         return "";
@@ -72,22 +72,6 @@ static std::string parse_quoted(char **cursor, size_t max_len = 0) {
         result += start[i];
     return result;
 }
-/*
-static std::string parse_symbol(const char **cursor) {
-    const int max_sane_symbol = 128;
-    const char *sym_start = *cursor;
-    const char *s = *cursor;
-    while (isalpha(*s))
-        s++;
-    *cursor = s;
-    size_t sym_len = s - sym_start;
-    if (sym_len == 0 || sym_len > max_sane_symbol)
-        return "";
-    std::string result = "";
-    for (size_t i = 0; i < sym_len; i++)
-        result += sym_start[i];
-    return result;
-}*/
 
 static char ws(char **cursor) {
     char *s = *cursor;
@@ -105,9 +89,9 @@ bool var::type_check(var &a, var &b) {
     return aa.t == bb.t && aa.c == bb.c;
 }
 
-var::var(nullptr_t p): var(Undefined) { }
+var::var(nullptr_t p): var(Type::Undefined) { }
 
-var::var(std::vector<var> data_array) : t(Array) {
+var::var(std::vector<var> data_array) : t(Type::Array) {
     size_t sz = data_array.size();
     if (sz)
         c = data_array[0].t;
@@ -125,16 +109,17 @@ bool var::operator==(uint64_t v) { return n && *((uint64_t *)n) == v; }
 bool var::operator==( int64_t v) { return n && *(( int64_t *)n) == v; }
 bool var::operator==(float    v) { return n && *((   float *)n) == v; }
 bool var::operator==(double   v) { return n && *((  double *)n) == v; }
-
+/*
 var::var(FnFilter ff_) : t(Filter) {
     ff = ff_;
 }
+*/
 
-var::var(Fn fn_) : t(Lambda) {
+var::var(Fn fn_) : t(Type::Lambda) {
     fn = fn_;
 }
 
-bool var::operator==(Type tt) {
+bool var::operator==(Type::Specifier tt) {
     return var::resolve(*this).t == tt;
 }
 
@@ -163,12 +148,12 @@ std::vector<var> var::select(std::function<var(var &)> fn) {
 
 void var::clear() {
     var &v = var::resolve(*this);
-    if (v.t == Ref)
+    if (v.t == Type::Ref)
         return;
     v.n_value = {}; /// clear may just mean reset to default primitive state, so 0
-    if (v.t == Array)
+    if (v.t == Type::Array)
         v.a = std::shared_ptr<std::vector<var>>(new std::vector<var>());
-    if (v.t == Map)
+    if (v.t == Type::Map)
         v.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
 }
 
@@ -221,7 +206,7 @@ std::shared_ptr<uint8_t> var::encode(const char *data, size_t len) {
     }
     for (size_t i = b; i < p_len; i++)
         *(e++) = '=';
-    *e = NULL;
+    *e = 0;
     return encoded;
 }
 
@@ -264,7 +249,7 @@ std::shared_ptr<uint8_t> var::decode(const char *b64, size_t b64_len, size_t *al
         if (e <= 0) o[n++] = b2;
     }
     assert(n + e == *alloc);
-    o[n] = NULL;
+    o[n] = 0;
     return out;
 }
 
@@ -311,7 +296,7 @@ var::var(std::ifstream &f, enum var::Format format) {
     rd = [&](var &d) {
         int dt;
         f.read((char *)&dt, sizeof(int));
-        d.t = Type(dt);
+        d.t = Type::Specifier(size_t(dt));
         
         int meta_sz = 0;
         f.read((char *)&meta_sz, sizeof(int));
@@ -321,7 +306,7 @@ var::var(std::ifstream &f, enum var::Format format) {
             std::string key = st();
             rd(d[key]);
         }
-        if (d == Array) {
+        if (d == Type::Array) {
             int sz;
             f.read((char *)&d.c, sizeof(int));
             f.read((char *)&sz,  sizeof(int));
@@ -334,8 +319,8 @@ var::var(std::ifstream &f, enum var::Format format) {
                     f.read((char *)&sh[sh.size() - 1], sizeof(int));
                 }
                 d.sh = sh;
-                if (d.c >= i8 && d.c <= Bool) {
-                    int ts = type_size(d.c);
+                if (d.c >= Type::i8 && d.c <= Type::Bool) {
+                    int ts = Type::size(d.c);
                     d.d = std::shared_ptr<uint8_t>(new uint8_t[ts * sz]);
                     f.read((char *)d.data<uint8_t>(), ts * sz);
                 } else {
@@ -347,20 +332,20 @@ var::var(std::ifstream &f, enum var::Format format) {
                     }
                 }
             }
-        } else if (d == Map) {
+        } else if (d == Type::Map) {
             int sz;
             f.read((char *)&sz, sizeof(int));
             for (int i = 0; i < sz; i++) {
                 std::string key = st();
                 rd(d[key]);
             }
-        } else if (d == Str) {
+        } else if (d == Type::Str) {
             int len;
             f.read((char *)&len, sizeof(int));
             d.s = std::shared_ptr<std::string>(new std::string(st()));
         } else {
-            size_t ts = type_size(d.t);
-            assert(d.t >= i8 && d.t <= Bool);
+            size_t ts = Type::size(d.t);
+            assert(d.t >= Type::i8 && d.t <= Type::Bool);
             d.n = &d.n_value;
             f.read((char *)d.n, ts);
         }
@@ -383,10 +368,10 @@ void var::write(std::ofstream &f, enum var::Format format) {
     wri = [&](var &d) {
         int dt = d.t;
         f.write((const char *)&dt, sizeof(int));
-        size_t ts = type_size(d.t);
+        size_t ts = Type::size(d.t);
         
         // meta != map in abstract; we just dont support it at runtime
-        size_t meta_sz = ((d.t != Map) && d.m) ? d.m->size() : 0;
+        size_t meta_sz = ((d.t != Type::Map) && d.m) ? d.m->size() : 0;
         f.write((const char *)&meta_sz, sizeof(int));
         if (meta_sz)
             for (auto &[k,v]: *(d.m)) {
@@ -395,7 +380,7 @@ void var::write(std::ofstream &f, enum var::Format format) {
                 wri(v);
             }
         
-        if (d == Array) {
+        if (d == Type::Array) {
             int     idc = d.c;
             int      sz = d.a ? int(d.a->size()) : int(shape_volume(d.sh));
             int    s_sz = int(d.sh.size());
@@ -412,17 +397,17 @@ void var::write(std::ofstream &f, enum var::Format format) {
                     for (int i: d.sh)
                         f.write((const char *)&i, sizeof(int));
                 }
-                if (d.c >= i8 && d.c <= Bool) {
+                if (d.c >= Type::i8 && d.c <= Type::Bool) {
                     assert(d.d);
-                    size_t ts = type_size(d.c);
+                    size_t ts = Type::size(d.c);
                     f.write((const char *)d.data<uint8_t>(), ts * size_t(sz));
-                } else if (d.c == var::Map) {
+                } else if (d.c == Type::Map) {
                     assert(d.a);
                     for (auto &i: *d.a)
                         wri(i);
                 }
             }
-        } else if (d == Map) {
+        } else if (d == Type::Map) {
             assert(d.m);
             int sz = int(d.m->size());
             f.write((const char *)&sz, sizeof(int));
@@ -430,14 +415,14 @@ void var::write(std::ofstream &f, enum var::Format format) {
                 wri_str(k);
                 wri(v);
             }
-        } else if (d == Str) {
+        } else if (d == Type::Str) {
             int len = d.s ? int(d.s->length()) : int(0);
             for (size_t i = 0; i < len; i++) {
                 uint8_t v = d[i];
                 f.write((const char *)&v, 1);
             }
         } else {
-            assert(d.t >= i8 && d.t <= Bool);
+            assert(d.t >= Type::i8 && d.t <= Type::Bool);
             f.write((const char *)d.n, ts);
         }
     };
@@ -447,40 +432,40 @@ void var::write(std::ofstream &f, enum var::Format format) {
         wri(v);
     else {
         auto json = str(v);
-        f.write(json.cstr(), json.length());
+        f.write(json.cstr(), json.len());
     }
 }
 
 var::operator std::string() {
     var &r = var::resolve(*this);
-    switch (r.t) {
-        case i8:   [[fallthrough]];
-        case ui8:  return std::to_string(*((int8_t  *)r.n));
-        case i16:  [[fallthrough]];
-        case ui16: return std::to_string(*((int16_t *)r.n));
-        case i32:  [[fallthrough]];
-        case ui32: return std::to_string(*((int32_t *)r.n));
-        case i64:  [[fallthrough]];
-        case ui64: return std::to_string(*((int64_t *)r.n));
-        case f32:  return std::to_string(*((float   *)r.n));
-        case f64:  return std::to_string(*((double  *)r.n));
-        case Str:  return r.s ? *r.s : "";
-        case Array: {
+    switch (size_t(r.t)) {
+        case Type::i8:   [[fallthrough]];
+        case Type::ui8:  return std::to_string(*((int8_t  *)r.n));
+        case Type::i16:  [[fallthrough]];
+        case Type::ui16: return std::to_string(*((int16_t *)r.n));
+        case Type::i32:  [[fallthrough]];
+        case Type::ui32: return std::to_string(*((int32_t *)r.n));
+        case Type::i64:  [[fallthrough]];
+        case Type::ui64: return std::to_string(*((int64_t *)r.n));
+        case Type::f32:  return std::to_string(*((float   *)r.n));
+        case Type::f64:  return std::to_string(*((double  *)r.n));
+        case Type::Str:  return r.s ? *r.s : "";
+        case Type::Array: {
             std::string ss = "[";
-            if (c >= var::i8 && c <= var::Bool) {
+            if (c >= Type::i8 && c <= Type::Bool) {
                 size_t  sz = shape_volume(sh);
-                size_t  ts = type_size(c);
+                size_t  ts = Type::size(c);
                 uint8_t *v = d.get();
                 for (size_t i = 0; i < sz; i++) {
                     if (i > 0)
                         ss += ",";
-                    if      (c == var::f32)                    ss += std::to_string(*(float *)  &v[ts * i]);
-                    else if (c == var::f64)                    ss += std::to_string(*(double *) &v[ts * i]);
-                    else if (c == var::i8  || c == var::ui8)   ss += std::to_string(*(int8_t *) &v[ts * i]);
-                    else if (c == var::i16 || c == var::ui16)  ss += std::to_string(*(int16_t *)&v[ts * i]);
-                    else if (c == var::i32 || c == var::ui32)  ss += std::to_string(*(int32_t *)&v[ts * i]);
-                    else if (c == var::i64 || c == var::ui64)  ss += std::to_string(*(int64_t *)&v[ts * i]);
-                    else if (c == var::Bool)                   ss += std::to_string(*(bool *)   &v[ts * i]);
+                    if      (c == Type::f32)                     ss += std::to_string(*(float *)  &v[ts * i]);
+                    else if (c == Type::f64)                     ss += std::to_string(*(double *) &v[ts * i]);
+                    else if (c == Type::i8  || c == Type::ui8)   ss += std::to_string(*(int8_t *) &v[ts * i]);
+                    else if (c == Type::i16 || c == Type::ui16)  ss += std::to_string(*(int16_t *)&v[ts * i]);
+                    else if (c == Type::i32 || c == Type::ui32)  ss += std::to_string(*(int32_t *)&v[ts * i]);
+                    else if (c == Type::i64 || c == Type::ui64)  ss += std::to_string(*(int64_t *)&v[ts * i]);
+                    else if (c == Type::Bool)                    ss += std::to_string(*(bool *)   &v[ts * i]);
                     else
                         assert(false);
                 }
@@ -495,7 +480,7 @@ var::operator std::string() {
             ss += "]";
             return ss;
         }
-        case Map: {
+        case Type::Map: {
             if (r.s)
                 return *(r.s.get()); /// use-case: var-based Model names (second thoughts...)
             std::string ss = "{";
@@ -510,7 +495,7 @@ var::operator std::string() {
             ss += "}";
             return ss;
         }
-        case Ref: {
+        case Type::Ref: {
             if (r.n) {
                 char buf[64];
                 sprintf(buf, "%p", (void *)r.n);
@@ -526,22 +511,22 @@ var::operator std::string() {
 
 var::operator bool() {
     var &v = var::resolve(*this);
-    switch (v.t) {
-        case Bool:  return *((  bool   *)v.n) != false;
-        case i8:    return *((  int8_t *)v.n) > 0;
-        case ui8:   return *(( uint8_t *)v.n) > 0;
-        case i16:   return *(( int16_t *)v.n) > 0;
-        case ui16:  return *((uint16_t *)v.n) > 0;
-        case i32:   return *(( int32_t *)v.n) > 0;
-        case ui32:  return *((uint32_t *)v.n) > 0;
-        case i64:   return *(( int64_t *)v.n) > 0;
-        case ui64:  return *((uint64_t *)v.n) > 0;
-        case f32:   return *((float    *)v.n) > 0;
-        case f64:   return *((double   *)v.n) > 0;
-        case Str:   return      v.s->length() > 0;
-        case Map:   return        v.m->size() > 0;
-        case Array: return        v.a->size() > 0;
-        case Ref:   return v.n_value.vref ? bool(v.n_value.vref) : bool(v.n);
+    switch (size_t(v.t)) {
+        case Type::Bool:  return *((  bool   *)v.n) != false;
+        case Type::i8:    return *((  int8_t *)v.n) > 0;
+        case Type::ui8:   return *(( uint8_t *)v.n) > 0;
+        case Type::i16:   return *(( int16_t *)v.n) > 0;
+        case Type::ui16:  return *((uint16_t *)v.n) > 0;
+        case Type::i32:   return *(( int32_t *)v.n) > 0;
+        case Type::ui32:  return *((uint32_t *)v.n) > 0;
+        case Type::i64:   return *(( int64_t *)v.n) > 0;
+        case Type::ui64:  return *((uint64_t *)v.n) > 0;
+        case Type::f32:   return *((float    *)v.n) > 0;
+        case Type::f64:   return *((double   *)v.n) > 0;
+        case Type::Str:   return      v.s->length() > 0;
+        case Type::Map:   return        v.m->size() > 0;
+        case Type::Array: return        v.a->size() > 0;
+        case Type::Ref:   return v.n_value.vref ? bool(v.n_value.vref) : bool(v.n);
         default:
             break;
     }
@@ -552,78 +537,83 @@ bool var::operator!() {
     return !(var::operator bool());
 }
 
-var::var(var::Type t, var::Type c, size_t sz)  : t(t == var::Undefined ? var::Map : t), c(
-        ((t == var::Array || t == var::Map) && c == var::Undefined) ? var::Any : c) {
-    if (this->t == Array) {
+/// design should definitely have Type t and Type c, not Specifier
+/// i am holding off on this, though
+/// what it needs is basic error facilities for conversion at runtime
+/// the Type really makes it truly non-duck typing on the data because we have a hash identifier
+/// better to use the stricter facilities on a default basis
+var::var(Type::Specifier t, Type::Specifier c, size_t sz)  : t(t == Type::Undefined ? Type::Map : t), c(
+        ((t == Type::Array || t == Type::Map) && c == Type::Undefined) ? Type::Any : c) {
+    if (this->t == Type::Array) {
         a = std::shared_ptr<std::vector<var>>(new std::vector<var>());
         a->reserve(sz);
-    } else if (this->t == Map)
+    } else if (this->t == Type::Map)
         m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
     else
         n = &n_value;
 }
 
-var::var(float    v)         : t(f32)  {
+var::var(float    v) : t(Type::f32)  {
     n = &n_value;
     *((float *)n) = v;
 }
 
-var::var(double   v)         : t(f64)  {
+var::var(double   v) : t(Type::f64)  {
     n = &n_value;
     *((double *)n) = v;
 }
 
-var::var(int8_t   v)         : t(i8)   {
+var::var(int8_t   v) : t(Type::i8)   {
     n = &n_value;
     *((int8_t *)n) = v;
 }
 
-var::var(uint8_t  v)         : t(ui8)  {
+var::var(uint8_t  v) : t(Type::ui8)  {
     n = &n_value;
     *((uint8_t *)n) = v;
 }
 
-var::var(int16_t  v)         : t(i16)  {
+var::var(int16_t  v) : t(Type::i16)  {
     n = &n_value;
     *((int16_t *)n) = v;
 }
 
-var::var(uint16_t v)         : t(ui16) {
+var::var(uint16_t v) : t(Type::ui16) {
     n = &n_value;
     *((uint16_t *)n) = v;
 }
 
-var::var(int32_t  v)         : t(i32)  {
+var::var(int32_t  v) : t(Type::i32)  {
     n = &n_value;
     *((int32_t *)n) = v;
 }
 
-var::var(uint32_t v)         : t(ui32) {
+var::var(uint32_t v) : t(Type::ui32) {
     n = &n_value;
     *((uint32_t *)n) = v;
 }
 
-var::var(int64_t  v, int flags) : t(i64), flags(flags)  {
+var::var(int64_t  v, int flags) : t(Type::i64), flags(flags)  {
     n = &n_value;
     *((int64_t *)n) = v;
 }
 
-/*var::var(uint64_t v)       : t(ui64) {
+/*var::var(uint64_t v) : t(Type::ui64) {
     n = &n_value;
     *((uint64_t *)n) = v;
 }*/
 
-var::var(size_t v)           : t(ui64) {
+var::var(size_t v) : t(Type::ui64) {
     n = &n_value;
     *((uint64_t *)n) = uint64_t(v);
 }
 
 /// merge these two use cases into VoidRef, Ref, singular Ref struct (likely quite usable for data Modeling as well)
-var::var(void* v)            : t(Ref) { n = (u *)v;    }
-var::var(VoidRef vr)         : t(Ref) { n = (u *)vr.v; }
-var::var(std::string str)    : t(Str), s(new std::string(str)) { }
-var::var(const char *str)    : t(Str), s(new std::string(str)) { }
-var::var(path_t p) : t(Type::Str),     s(new std::string(p.string())) { }
+var::var(void* v)            : t(Type::Ref) { n = (u *)v;    }
+var::var(VoidRef vr)         : t(Type::Ref) { n = (u *)vr.v; }
+var::var(std::string str)    : t(Type::Str), s(new std::string(str)) { }
+var::var(const char *str)    : t(Type::Str), s(new std::string(str)) { }
+var::var(path_t p) : t(Type::Str),           s(new std::string(p.string())) { }
 var::var(const var &ref) {
     copy((var &)ref);
 }
@@ -632,8 +622,8 @@ char *var::parse_obj(var &scope, char *start, std::string field, FieldFlags &fla
     char *cur = start;
     assert(*cur == '{');
     ws(&(++cur));
-    scope.t = Map;
-    scope.c = Any;
+    scope.t = Type::Map;
+    scope.c = Type::Any;
     scope.m = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
     while (*cur != '}') {
         auto field = parse_quoted(&cur);
@@ -641,8 +631,8 @@ char *var::parse_obj(var &scope, char *start, std::string field, FieldFlags &fla
         assert(field != "");
         assert(*cur == ':');
         ws(&(++cur));
-        scope[field] = var(Undefined);
-        cur = parse_value(scope[field], cur, field, Any, flags);
+        scope[field] = var(Type::Undefined);
+        cur = parse_value(scope[field], cur, field, Type::Any, flags);
         if (ws(&cur) == ',')
             ws(&(++cur));
     }
@@ -654,13 +644,13 @@ char *var::parse_obj(var &scope, char *start, std::string field, FieldFlags &fla
 char *var::parse_arr(var &scope, char *start, std::string field, FieldFlags &flags) {
     char *cur = start;
     assert(*cur == '[');
-    scope.t = Array;
-    scope.c = Any;
+    scope.t = Type::Array;
+    scope.c = Type::Any;
     scope.a = std::shared_ptr<std::vector<var>>(new std::vector<var>());
     ws(&(++cur));
     for (;;) {
-        scope.a->push_back(var(Undefined));
-        cur = parse_value(scope.a->back(), cur, field, Any, flags);
+        scope.a->push_back(var(Type::Undefined));
+        cur = parse_value(scope.a->back(), cur, field, Type::Any, flags);
         ws(&cur);
         if (*cur == ',') {
             ws(&(++cur));
@@ -678,32 +668,32 @@ char *var::parse_arr(var &scope, char *start, std::string field, FieldFlags &fla
 }
 
 char *var::parse_value(var &scope, char *start, std::string field,
-                       var::Type enforce_type, FieldFlags &flags) {
+                       Type::Specifier enforce_type, FieldFlags &flags) {
     char *cur = start;
     if (*cur == '{') {
         return parse_obj(scope, start, field, flags);
     } else if (*cur == '[') {
         return parse_arr(scope, start, field, flags);
     } else if (*cur == 't' || *cur == 'f') {
-        assert(enforce_type == Any || enforce_type == Bool);
+        assert(enforce_type == Type::Any || enforce_type == Type::Bool);
         scope.n = &scope.n_value;
-        scope.t = Bool;
+        scope.t = Type::Bool;
         *((bool *)scope.n) = *cur == 't';
         while(*cur && isalpha(*cur))
             cur++;
     } else if (*cur == '"') {
         std::string s = parse_quoted(&cur);
         if (flags.count(field) > 0 && (flags[field].flags & Flags::Encode)) {
-            assert(enforce_type == Any || enforce_type == Array);
+            assert(enforce_type == Type::Any || enforce_type == Type::Array);
             size_t alloc = 0;
-            scope.t  = Array;
+            scope.t  = Type::Array;
             scope.c  = flags[field].t;
             scope.d  = decode(s.c_str(), s.length(), &alloc);
-            scope.sh = { int((alloc - 1) / type_size(scope.c)) };
+            scope.sh = { int((alloc - 1) / Type::size(scope.c)) };
             assert(alloc > 0);
         } else {
-            assert(enforce_type == Any || enforce_type == Str);
-            scope.t = Str;
+            assert(enforce_type == Type::Any || enforce_type == Type::Str);
+            scope.t = Type::Str;
             scope.s = std::shared_ptr<std::string>(new std::string(s));
         }
     } else if (*cur == '-' || isdigit(*cur)) {
@@ -713,31 +703,31 @@ char *var::parse_value(var &scope, char *start, std::string field,
         int64_t i;
         try   { i = std::stoull(value); } catch (std::exception &e) { }
         ///
-        if (enforce_type == Any) {
+        if (enforce_type == Type::Any) {
             if (flags.count(field) > 0)
                 scope.t = flags[field].t;
             else if (std::floor(d) != d)
-                scope.t = f64;
+                scope.t = Type::f64;
             else
-                scope.t = i32;
+                scope.t = Type::i32;
         } else
             scope.t = enforce_type;
         ///
-        if (scope.t != Str) {
+        if (scope.t != Type::Str) {
             scope.n = &scope.n_value;
             switch (scope.t) {
-                case Bool: *((    bool *)scope.n) =     bool(i); break;
-                case  ui8: *(( uint8_t *)scope.n) =  uint8_t(i); break;
-                case   i8: *((  int8_t *)scope.n) =   int8_t(i); break;
-                case ui16: *((uint16_t *)scope.n) = uint16_t(i); break;
-                case  i16: *(( int16_t *)scope.n) =  int16_t(i); break;
-                case ui32: *((uint32_t *)scope.n) = uint32_t(i); break;
-                case  i32: *(( int32_t *)scope.n) =  int32_t(i); break;
-                case ui64: *((uint64_t *)scope.n) = uint64_t(i); break;
-                case  i64: *(( int64_t *)scope.n) =  int64_t(i); break;
-                case  f32: *((   float *)scope.n) =    float(d); break;
-                case  f64: *((  double *)scope.n) =   double(d); break;
-                case  Str:
+                case Type::Bool: *((    bool *)scope.n) =     bool(i); break;
+                case Type::ui8:  *(( uint8_t *)scope.n) =  uint8_t(i); break;
+                case Type::i8:   *((  int8_t *)scope.n) =   int8_t(i); break;
+                case Type::ui16: *((uint16_t *)scope.n) = uint16_t(i); break;
+                case Type::i16:  *(( int16_t *)scope.n) =  int16_t(i); break;
+                case Type::ui32: *((uint32_t *)scope.n) = uint32_t(i); break;
+                case Type::i32:  *(( int32_t *)scope.n) =  int32_t(i); break;
+                case Type::ui64: *((uint64_t *)scope.n) = uint64_t(i); break;
+                case Type::i64:  *(( int64_t *)scope.n) =  int64_t(i); break;
+                case Type::f32:  *((   float *)scope.n) =    float(d); break;
+                case Type::f64:  *((  double *)scope.n) =   double(d); break;
+                case Type::Str:
                 default:
                     assert(false);
                     break;
@@ -751,23 +741,23 @@ char *var::parse_value(var &scope, char *start, std::string field,
 }
 
 /// call this from json
-var::var(Type t, std::string str) : t(t) {
+var::var(Type::Specifier t, std::string str) : t(t) {
     const char *c = str.c_str();
     int64_t     i = std::strtoll(c, NULL, 10);
                 n = &n_value;
-    switch (t) {
-        case Bool: *((    bool *)n) =     bool(*c && (*c == 't' || *c == 'T' || isdigit(*c))); break;
-        case  ui8: *(( uint8_t *)n) =  uint8_t(i); break;
-        case   i8: *((  int8_t *)n) =   int8_t(i); break;
-        case ui16: *((uint16_t *)n) = uint16_t(i); break;
-        case  i16: *(( int16_t *)n) =  int16_t(i); break;
-        case ui32: *((uint32_t *)n) = uint32_t(i); break;
-        case  i32: *(( int32_t *)n) =  int32_t(i); break;
-        case ui64: *((uint64_t *)n) = uint64_t(i); break;
-        case  i64: *(( int64_t *)n) =  int64_t(i); break;
-        case  f32: *((   float *)n) =    float(std::stod(str)); break;
-        case  f64: *((  double *)n) =   double(std::stod(str)); break;
-        case  Str: {
+    switch (size_t(t)) {
+        case Type::Bool: *((    bool *)n) =     bool(*c && (*c == 't' || *c == 'T' || isdigit(*c))); break;
+        case Type::ui8:  *(( uint8_t *)n) =  uint8_t(i); break;
+        case Type::i8:   *((  int8_t *)n) =   int8_t(i); break;
+        case Type::ui16: *((uint16_t *)n) = uint16_t(i); break;
+        case Type::i16:  *(( int16_t *)n) =  int16_t(i); break;
+        case Type::ui32: *((uint32_t *)n) = uint32_t(i); break;
+        case Type::i32:  *(( int32_t *)n) =  int32_t(i); break;
+        case Type::ui64: *((uint64_t *)n) = uint64_t(i); break;
+        case Type::i64:  *(( int64_t *)n) =  int64_t(i); break;
+        case Type::f32:  *((   float *)n) =    float(std::stod(str)); break;
+        case Type::f64:  *((  double *)n) =   double(std::stod(str)); break;
+        case Type::Str: {
             n = null;
             s = std::shared_ptr<std::string>(new std::string(str));
             break;
@@ -785,14 +775,14 @@ var var::parse_json(str &js) {
     var r;
     FieldFlags flags;
     ///
-    parse_value(r, (char *)js.cstr(), "", Any, flags);
+    parse_value(r, (char *)js.cstr(), "", Type::Any, flags);
     return r;
 }
 
 var var::load(path_t p) {
     if (!std::filesystem::is_regular_file(p))
         return null;
-    str js = str(p);
+    str js = str::read_file(p);
     return parse_json(js);
 }
 
@@ -805,7 +795,7 @@ var &var::operator[](str s) {
 }
 
 void var::compact() {
-    if (!a || t != Array || (flags & Flags::Compact))
+    if (!a || t != Type::Array || (flags & Flags::Compact))
         return;
     flags    |= Flags::Compact;
     int type  = -1;
@@ -816,17 +806,17 @@ void var::compact() {
             types++;
         }
     if (types == 1) {
-        size_t ts = type_size(Type(type));
+        size_t ts = Type::size(Type::Specifier(size_t(type)));
         if (ts == 0)
             return;
         size_t sz = a->size();
         var   *r = a->data();
-        assert(type >= i8 && type <= Bool);
+        assert(type >= Type::i8 && type <= Type::Bool);
         sh = { int(sz) };
         d  = std::shared_ptr<uint8_t>((uint8_t *)malloc(ts * sz));
         
         switch (t) {
-            case var::Bool: {
+            case Type::Bool: {
                 bool *v = (bool *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((bool *)r[i].n);
@@ -834,8 +824,8 @@ void var::compact() {
                 }
                 break;
             }
-            case var::i8:
-            case var::ui8: {
+            case Type::i8:
+            case Type::ui8: {
                 int8_t *v = (int8_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int8_t *)r[i].n);
@@ -843,8 +833,8 @@ void var::compact() {
                 }
                 break;
             }
-            case var::i16:
-            case var::ui16: {
+            case Type::i16:
+            case Type::ui16: {
                 int16_t *v = (int16_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int16_t *)r[i].n);
@@ -852,8 +842,8 @@ void var::compact() {
                 }
                 break;
             }
-            case var::i32:
-            case var::ui32: {
+            case Type::i32:
+            case Type::ui32: {
                 int32_t *v = (int32_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int32_t *)r[i].n);
@@ -861,8 +851,8 @@ void var::compact() {
                 }
                 break;
             }
-            case var::i64:
-            case var::ui64: {
+            case Type::i64:
+            case Type::ui64: {
                 int64_t *v = (int64_t *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((int64_t *)r[i].n);
@@ -870,7 +860,7 @@ void var::compact() {
                 }
                 break;
             }
-            case var::f32: {
+            case Type::f32: {
                 float *v = (float *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((float *)r[i].n);
@@ -878,7 +868,7 @@ void var::compact() {
                 }
                 break;
             }
-            case var::f64: {
+            case Type::f64: {
                 double *v = (double *)d.get();
                 for (size_t i = 0; i < sz; i++) {
                     v[i] = *((double *)r[i].n);
@@ -899,7 +889,7 @@ void var::compact() {
 
 var &var::resolve(var &in) {
     var *p = &in;
-    while (p && p->t == var::Ref)
+    while (p && p->t == Type::Ref)
         p = p->n_value.vref;
     return *p;
 }
@@ -910,7 +900,7 @@ void var::notify_update() {
         return;
     if (v.row) {
         /// [design] row is not set on new rows, because it has not yet been added.
-        assert(v.t != Ref);
+        assert(v.t != Type::Ref);
         assert(v.field != "");
         str   s_field = v.field;
         observer->fn_change(Binding::Update, *v.row, s_field, v);
@@ -921,7 +911,7 @@ void var::notify_insert() {
     var &v = resolve(*this);
     if (!v.observer)
         return;
-    assert( v.t != Ref);
+    assert( v.t != Type::Ref);
     assert(!v.row);
     str snull = null;
     var vnull = null; /// print observer values; they should all point to the same var
@@ -932,7 +922,7 @@ void var::notify_delete() {
     var &v = resolve(*this);
     if (!v.observer)
         return;
-    assert( v.t != Ref);
+    assert( v.t != Type::Ref);
     assert(!v.row);
     str snull = null;
     var vnull = null;
@@ -941,13 +931,13 @@ void var::notify_delete() {
 
 var::~var() { }
 
-var:: var(str s) : t(var::Str), s(new std::string(s.s)) { }
+var:: var(str s) : t(Type::Str), s(new std::string(s.s)) { }
 
 std::vector<int> var::shape() {
     var &v = resolve(*this);
     if (v.sh.size())
         return v.sh;
-    return std::vector<int> { v.size() ? int(v.size()) : int(type_size(v.t)) };
+    return std::vector<int> { v.size() ? int(v.size()) : int(Type::size(v.t)) };
 }
 
 void var::set_shape(std::vector<int> s) {
@@ -957,7 +947,7 @@ void var::set_shape(std::vector<int> s) {
 
 var var::tag(::map<std::string, var> m) {
     var v = copy();
-    assert(v.t != var::Map);
+    assert(v.t != Type::Map);
     v.m    = std::shared_ptr<::map<std::string, var>>(new ::map<std::string, var>());
     for (auto &[field, value]: *v.m)
         v[field] = value;
@@ -969,13 +959,13 @@ size_t var::size() {
     int sz = 1;
     for (auto d: v.sh)
         sz *= d;
-    if (v.t == Array)
+    if (v.t == Type::Array)
         return v.d ? sz : (v.a ? v.a->size() : 0);
-    else if (v.t == Map)
+    else if (v.t == Type::Map)
         return m->size();
-    else if (v.t == Str)
+    else if (v.t == Type::Str)
         return v.s ? v.s->length() : 0;
-    return v.t == Undefined ? 0 : 1;
+    return v.t == Type::Undefined ? 0 : 1;
 }
 
 void var::each(FnEach each) {
@@ -1009,7 +999,7 @@ void var::observe_row(var &row) {
 /// once we get an assign= operator, you are notified with the value, and you call update
 void var::observe(std::function<void(Binding op, var &row, str &field, var &value)> fn) {
     var &v = var::resolve(*this);
-    assert(v.t == Array);
+    assert(v.t == Type::Array);
     for (auto &row: *v.a)
         v.observe_row(row);
     v.observer  = v.ptr(); /// bug fix: i think that was a boolean op again.
@@ -1019,12 +1009,12 @@ void var::observe(std::function<void(Binding op, var &row, str &field, var &valu
 /// external copy; refs as resolved in this process
 var var::copy() {
     var &v = var::resolve(*this);
-    if (v.t == Map) {
+    if (v.t == Type::Map) {
         var res = { v.t, v.c };
         for (auto &[field, value]: v.map())
             res[field] = value;
         return res;
-    } else if (v.t == Array) {
+    } else if (v.t == Type::Array) {
         var res = { v.t, v.c };
         if (a) for (auto &e: *v.a) /// these will be hard to spot if missing v.*
             res += e;
@@ -1044,20 +1034,20 @@ void var::copy(var &ref) {
     sh       = ref.sh;
     flags   |= ref.flags; /// accumulate flags.
     n_value  = ref.n_value;
-    if (ref.observer) {
+    if (ref.observer) { /// todo: pack into observer delegate, smart ptr user, refrain from any allocation unless set
         observer  = ref.observer;
         field     = ref.field;
         row       = ref.row;
         fn_change = ref.fn_change;
     }
-    if (ref.ff)
-        ff = ref.ff;
+    //if (ref.ff)
+    //    ff = ref.ff;
     if (ref.fn)
         fn = ref.fn;
     
     if (ref.n == &ref.n_value)
         n = &n_value;
-    else if (ref.t == var::Ref) /// Important to remember the public t member, if we know its a reference and this is a copy constructor.
+    else if (ref.t == Type::Ref) /// Important to remember the public t member, if we know its a reference and this is a copy constructor.
         n = ref.n;
     else
         n = ref.n;
@@ -1089,11 +1079,13 @@ bool var::operator!= (const var &ref) {
     var  &v = var::resolve(*this);
     if (v.t != ref.t)
         return true;
-    else if (v.t == var::Undefined || v.t == var::Lambda || v.t == var::Filter || v.t == var::Any)
+    else if (v == Type::Lambda) {
+        
+    } else if (v.t == Type::Undefined || v.t == Type::Any)
         return false;
-    else if (v.t == var::Str)
+    else if (v.t == Type::Str)
         return *v.s != *(ref.s);
-    else if (v.t == var::Map) {
+    else if (v.t == Type::Map) {
         if (v.m ? v.m->size() : 0 != ref.m ? ref.m->size() : 0)
             return true;
         if (v.m)
@@ -1105,7 +1097,7 @@ bool var::operator!= (const var &ref) {
                     return true;
             }
         return true;
-    } else if (v.t == var::Array) {
+    } else if (v.t == Type::Array) {
         size_t a_sz =   v.a ?   v.a->size() : 0;
         size_t b_sz = ref.a ? ref.a->size() : 0;
         if (a_sz != b_sz)
@@ -1117,11 +1109,11 @@ bool var::operator!= (const var &ref) {
                 if (value != rd)
                     return true;
             }
-    } else if (v.t == var::Ref) {
+    } else if (v.t == Type::Ref) {
         assert(false); // todo
     } else {
-        assert(v.t >= var::i8 && v.t <= var::Bool);
-        size_t  ts = type_size(v.t);
+        assert(v.t >= Type::i8 && v.t <= Type::Bool);
+        size_t  ts = Type::size(v.t);
         bool match = memcmp(v.n, ref.n, ts) == 0;
         return !match;
     }
@@ -1147,25 +1139,27 @@ bool var::operator==(var &ref) {
     return !(operator!=((const var &)ref));
 }
 
-size_t var::type_size(var::Type t) {
-    switch (t) {
-        case var::Bool:  return 1; /// make sure this is honored through and through.
-        case var::i8:    return 1;
-        case var::ui8:   return 1;
-        case var::i16:   return 2;
-        case var::ui16:  return 2;
-        case var::i32:   return 4;
-        case var::ui32:  return 4;
-        case var::i64:   return 8;
-        case var::ui64:  return 8;
-        case var::f32:   return 4;
-        case var::f64:   return 8;
-        default:
-            break;
-    }
-    return 0;
-}
-
 bool exists(path_t &p) {
     return std::filesystem::exists(p);
 }
+
+
+void resources(path_t p, std::vector<const char *> exts, std::function<void(path_t &)> fn) {
+    if (std::filesystem::is_directory(p)) {
+        for (const auto &f: std::filesystem::directory_iterator(p)) {
+            path_t path = f.path();
+            if (!f.is_regular_file() || !exists(path))
+                continue;
+            std::string ext = f.path().extension().string();
+            for (size_t i = 0; exts.size() == 0 || i < exts.size(); i++)
+                if (exts.size() == 0 || exts[i] == ext) {
+                    fn(path);
+                    break;
+                }
+        }
+    } else if (exists(p))
+        fn(p);
+}
+
+
+    

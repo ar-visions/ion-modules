@@ -32,14 +32,14 @@ struct List:node {
         }
         
         inline void importer(var &d) {
-            if (d == var::Array) {
+            if (d == Type::Array) {
                 id     =             str(d[size_t(0)]);
                 size   =          double(d[size_t(1)]);
                 scale  =            bool(d[size_t(2)]);
                 final  =          double(d[size_t(3)]);
                 align  = Align::Type(int(d[size_t(4)]));
             } else {
-                assert(d == var::Str);
+                assert(d == Type::Str);
                 id = str(d);
             }
         }
@@ -48,7 +48,7 @@ struct List:node {
             return std::vector<var> { id, size, scale, final, align };
         }
         
-        serializer(Column, id);
+        io_define(Column, id);
     };
     
     vec<Column>             columns;

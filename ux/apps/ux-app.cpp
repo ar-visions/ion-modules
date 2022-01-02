@@ -1,24 +1,20 @@
-#include <ux/ux.hpp>
 #include <ux/app.hpp>
-#include <media/obj.hpp>
+#include <ux/button.hpp>
 
-/// ------------------------
-/// simple rendering
-/// ------------------------
+/*
 struct Car:node {
     declare(Car);
     enum Uniform { U_MVP };
 
     struct Members {
-        Extern<str>         model;
+        Extern<path_t>      model;
         Extern<real>        fov;
         /// ------------------------
         Intern<UniformData> uniform;
     } m;
     
-    /// configure binds
     void bind() {
-        external("model",   m.model,   str {"models/dayna.obj"});
+        external("model",   m.model,   path_t {"models/egon.obj"});
         external("fov",     m.fov,     60.0);
         /// ---------------------------------
         internal("uniform", m.uniform,
@@ -34,22 +30,47 @@ struct Car:node {
         );
     }
     
-    /// configure binds
     Element render() {
         return Object<Vertex> {{
             {"model"}, {"uniform"}
         }};
     }
 };
+*/
 
-Args defaults = {
-    {"window-width",  int(1024) },
-    {"window-height", int(1024) },
-    {"model",         str("models/dayna.obj") }
+struct View:node {
+    declare(View);
+
+    struct Members {
+        Extern<path_t> model;
+        Extern<Region> button_region;
+        Intern<str>    button_label;
+        Intern<rgba>   button_fill;
+    } m;
+    
+    /// support live reloads on css and shaders.
+    
+    void bind() {
+        external("model",          m.model,          path_t {"models/dayna.obj"});
+        /// -------------------------------------------
+        override(node::m.ev.hover, Fn([&](Event ev) { // no type set on hover Member. that would of been done in standard()
+            console.log("Good morning, Dave...");
+        }));
+    }
+    
+    Element render() {
+        return Button {{
+            {"id", "button"}
+        }};
+    }
 };
 
-// [ ] get ux-app working
+Args defaults = {
+    {"window-width",  int(1024)},
+    {"window-height", int(1024)},
+    {"model",         path_t("models/ray.obj")}
+};
 
 int main(int c, const char *v[]) {
-    return App::UX<Car>(c, v, defaults);
+    return UX<View>(c, v, defaults);
 }

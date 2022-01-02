@@ -26,13 +26,13 @@ AI::AI(path_t p) {
 /// forward pass data
 vec<float> AI::operator()(Table in) { /// Table == vec<var>
     assert(in.size() > 0);
-    assert(equals(in[0].t, { var::f32, var::ui8, var::i8 }));
+    assert(equals(in[0].t, { Type::f32, Type::ui8, Type::i8 }));
     auto     itr = i->itr.get();
     ///
     /// copy inputs, tensorflow lite performs data conversions from float to int or vice versa, if needed.
     for (size_t d = 0; d < in.size(); d++) {
         var  &dd = in[d];
-        if (dd.t == var::f32)
+        if (dd.t == Type::f32)
             memcopy(dd.data<float>(),   itr->typed_input_tensor<float>  (d), dd.size());
         else
             memcopy(dd.data<uint8_t>(), itr->typed_input_tensor<uint8_t>(d), dd.size());

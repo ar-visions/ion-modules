@@ -23,8 +23,8 @@ struct Commander:node {
         size_t iter = 0;
         while (!std::filesystem::is_directory(path) || iter++ == 100)
             path = path.parent_path();
-        data = var(var::Map);
-        data["resources"] = {var::Array};
+        data = var(Type::Map);
+        data["resources"] = {Type::Array};
         auto dir = std::filesystem::directory_iterator(path);
         for (auto &e: dir) {
             auto   ep = e.path();
@@ -37,9 +37,9 @@ struct Commander:node {
             }};
             data["resources"] += res;
         }
-        data["resolve"] = (FnFilter) [&](var &d) {
-            return str(d);
-        };
+        //data["resolve"] = (FnFilter) [&](var &d) {
+        //    return str(d);
+        //};
         data["edit-data"] = str("this is some data");
     }
     
@@ -80,5 +80,5 @@ struct Commander:node {
 
 
 int main(int c, const char *v[]) {
-    return App::Console<Commander>(c, v);
+    return Console<Commander>(c, v);
 }

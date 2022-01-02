@@ -16,26 +16,25 @@
 #include <core/SkSurface.h>
 #include <core/SkFontMgr.h>
 #include <core/SkFontMetrics.h>
+#include <core/SkTextBlob.h>
 #include <effects/SkGradientShader.h>
 #include <effects/SkImageFilters.h>
 #include <effects/SkDashPathEffect.h>
 
 #include <media/canvas.hpp>
+#include <media/font.hpp>
 #include <media/image.hpp>
 #include <media/color.hpp>
-#include <dx/dx.hpp>
-#include <media/canvas.hpp>
 #include <dx/dx.hpp>
 #include <dx/vec.hpp>
 #include <vk/vk.hpp>
 
 inline SkColor sk_color(rgba c) {
-    const double s = 255.0;
-    return SkColor(uint32_t(c.b * s)        | (uint32_t(c.g * s) << 8) |
-                  (uint32_t(c.r * s) << 16) | (uint32_t(c.a * s) << 24));
+    auto sk = SkColor(uint32_t(c.b)        | (uint32_t(c.g) << 8) |
+                     (uint32_t(c.r) << 16) | (uint32_t(c.a) << 24));
+    return sk;
 }
 
-// this really needs to be in vk
 struct Skia {
     sk_sp<GrDirectContext> sk_context;
     Skia(sk_sp<GrDirectContext> sk_context) : sk_context(sk_context) { }
@@ -58,7 +57,7 @@ struct Skia {
                 Vulkan::version()
             };
             grc.fMaxAPIVersion = Vulkan::version();
-            //grc.fVkExtensions = new GrVkExtensions(); // internal needs population perhaps
+          //grc.fVkExtensions = new GrVkExtensions(); // internal needs population perhaps
             grc.fGetProc = [](const char *name, VkInstance inst, VkDevice dev) -> PFN_vkVoidFunction {
                 return (dev == VK_NULL_HANDLE) ? vkGetInstanceProcAddr(inst, name) :
                                                  vkGetDeviceProcAddr  (dev,  name);
@@ -122,6 +121,10 @@ struct Context2D:ICanvasBackend {
         sk_canvas->clear(sk_color(c));
     }
     
+    void font(DrawState &ds, Font &f) {
+        
+    }
+    
     void flush(DrawState &ds) {
         sk_canvas->flush();
     }
@@ -153,8 +156,72 @@ struct Context2D:ICanvasBackend {
     vec2i size() {
         return sz;
     }
+    
+    /// console would just think of everything in char units. like it is.
+    /// measuring text would just be its length, line height 1.
+    TextMetrics measure(DrawState &ds, str &text) {
+        SkFontMetrics mx;
+        SkFont     &font = *ds.font.handle();
+        auto         adv = font.measureText(text.cstr(), text.len(), SkTextEncoding::kUTF8);
+        auto          lh = font.getMetrics(&mx);
+        return TextMetrics {
+            .w           = adv,
+            .h           = abs(mx.fAscent) + abs(mx.fDescent),
+            .ascent      = mx.fAscent,
+            .descent     = mx.fDescent,
+            .line_height = lh,
+            .cap_height  = mx.fCapHeight
+        };
+    }
 
-    void text(DrawState &ds, str &s, rectd &rect, Vec2<Align> &align, vec2 &offset) {
+    /// the text out has a rect, controls line height, scrolling offset and all of that nonsense we need to handle
+    /// as a generic its good to have the rect and alignment enums given.  there simply isnt a user that doesnt benefit
+    /// it effectively knocks out several redundancies to allow some components to be consolidated with style difference alone
+
+    str ellipsis(DrawState &ds, str &text, rectd &rect, TextMetrics &tm) {
+        const str el = "…";
+        str       cur, *p = &text;
+        int       trim = p->len();
+        for (;;) {
+            tm = measure(ds, *p);
+            if (tm.w <= rect.w || trim <= 1)
+                break;
+            if (tm.w > rect.w && trim > 1) {
+                cur = text.substr(0, --trim) + el;
+                p   = &cur;
+            }
+        }
+        return cur;
+    }
+    
+    void text(DrawState &ds, str &text, rectd &rect, Vec2<Align> &align, vec2 &offset, bool ellip) {
+        State   *s = (State *)ds.b_state; // backend state (this)
+        SkPaint ps = SkPaint(s->ps);
+        ps.setColor(sk_color(ds.color));
+        if (ds.opacity != 1.0f)
+            ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
+        SkFont  &f = *ds.font.handle();
+        auto    tb = SkTextBlob::MakeFromText(text.cstr(),
+            text.len(), (const SkFont &)f, SkTextEncoding::kUTF8);
+        vec2   pos = { 0, 0 };
+        str  stext;
+        str *ptext = &text;
+        TextMetrics tm;
+        if (ellip) {
+            stext  = ellipsis(ds, text, rect, tm);
+            ptext  = &text;
+        } else
+            tm     = measure(ds, *ptext);
+        ///
+        pos.x = (align.x == Align::End)    ? rect.x + rect.w     - tm.w :
+                (align.x == Align::Middle) ? rect.x + rect.w / 2 - tm.w / 2 :
+                                             rect.x;
+        pos.y = (align.y == Align::End)    ? rect.y + rect.h     - tm.h :
+                (align.y == Align::Middle) ? rect.y + rect.h / 2 - tm.h / 2 :
+                                             rect.y;
+        sk_canvas->drawTextBlob(
+            tb, SkScalar(pos.x + offset.x),
+                SkScalar(pos.y + offset.y), ps);
     }
 
     void clip(DrawState &ds, rectd &path) {
@@ -167,6 +234,7 @@ struct Context2D:ICanvasBackend {
     void fill(DrawState &ds, rectd &rect) {
         State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
+        ps.setColor(sk_color(ds.color));
         if (ds.opacity != 1.0f)
             ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
         SkRect   r = SkRect {
@@ -193,6 +261,7 @@ struct Context2D:ICanvasBackend {
 void DrawState::copy(const DrawState &r) {
     host       = r.host;
     stroke_sz  = r.stroke_sz;
+    font       = r.font;
     font_scale = r.font_scale;
     opacity    = r.opacity;
     m          = r.m;
@@ -202,6 +271,7 @@ void DrawState::copy(const DrawState &r) {
     b_state    = r.host ? r.host->copy_bstate(r.b_state) : null;
 }
 
+/// this is a very KiSS-oriented Terminal Canvas
 struct Terminal:ICanvasBackend {
     static map<str, str> t_text_colors_8;
     static map<str, str> t_bg_colors_8;
@@ -268,10 +338,6 @@ struct Terminal:ICanvasBackend {
             
             auto is_border = [&](int x, int y) {
                 ColoredGlyph *cg = value_at(x, y);
-                if (cg && cg->border > 0) {
-                    int test = 0;
-                    test++;
-                }
                 return cg ? (cg->border > 0) : false;
             };
             
@@ -303,9 +369,9 @@ struct Terminal:ICanvasBackend {
         return get_str();
     }
 
-    void text(DrawState &state, str &s, rectd &rect, Vec2<Align> &align, vec2 &offset) {
+    void text(DrawState &state, str &s, rectd &rect, Vec2<Align> &align, vec2 &offset, bool ellip) {
         assert(glyphs.size() == (sz.x * sz.y));
-        size_t len = s.length();
+        size_t len = s.len();
         if (!len)
             return;
         int x0 = std::clamp(int(std::round(rect.x)), 0, sz.x - 1);
@@ -337,10 +403,7 @@ struct Terminal:ICanvasBackend {
     }
 
     void clip(DrawState &st, rectd &path) {
-        assert(false); // todo: clipping in terminal
-        // since theres no notion of 'unclip', it must be a bit odd how skia works
-        // it should be sufficient to have a singular path stored for clipping
-        // any additional clip just boolean &'s this rect
+        assert(false);
     }
 
     void stroke(DrawState &state, rectd &rect) {
@@ -400,12 +463,9 @@ map<str, str> Terminal::t_bg_colors_8 = {
     { "#ffffff",  "\u001b[47m" }};
 
 
-void ICanvasBackend::clear    (DrawState &st)  { }
-
-void ICanvasBackend::texture  (DrawState &st, Image *im)  {
-    st.im = im;
-}
-
+void ICanvasBackend::    clear(DrawState &st)             { }
+void ICanvasBackend::  texture(DrawState &st, Image *im)  { st.im = im; }
+void ICanvasBackend::     font(DrawState &st, Font  &f)   { st.font = f; }
 void ICanvasBackend::translate(DrawState &st, vec2  &tr)  { st.m = st.m.translate(tr); }
 void ICanvasBackend::    scale(DrawState &st, vec2  &sc)  { st.m = st.m.scale(sc); }
 void ICanvasBackend::   rotate(DrawState &st, double deg) { st.m = st.m.rotate_z(deg); }
@@ -420,6 +480,7 @@ Canvas::Canvas(vec2i sz, Canvas::Type type, var *result) : type(type),
                                           (ICanvasBackend *)new ::Context2D(sz)) {
     backend->host   = this;
     backend->result = result;
+    default_font    = Font::default_font();
     defaults();
     save();
 }
@@ -430,41 +491,41 @@ void  Canvas::restore() {
      assert(states.size() >= 1);
 }
 
-void  Canvas::save()                    { states.push(state); backend->save(state); }
 void *Canvas::data()                    { return type ? ((::Terminal *)backend)->data() : null; }
-str   Canvas::get_char(int x, int y)    { return backend->get_char(state, x, y); }
-void  Canvas::defaults()                { state = {this, 1, 1, 1, m44(), "#000f", vec2 {0, 0}}; }
-void  Canvas::stroke_sz( double sz)     { state.stroke_sz = sz;                            }
-void  Canvas::font_scale(double sc)     { state.font_scale  = sc;                          }
-void *Canvas::copy_bstate(void *bs)     { return type ? backend->copy_bstate(bs) : null;   }
+str   Canvas::get_char(int x, int y)    { return backend->get_char(state, x, y);           }
+TextMetrics Canvas::measure(str s)      { return backend->measure(state, s);               }
 vec2i Canvas::size()                    { return backend->size();                          }
+void *Canvas::copy_bstate(void *bs)     { return type ? backend->copy_bstate(bs) : null;   }
+void  Canvas::save()                    { states.push(state); backend->save(state);        }
+void  Canvas::defaults()                { state = { this, 1, 1, 1, m44(), "#000f", vec2 {0, 0}, default_font }; }
+void  Canvas::stroke_sz( double sz)     { state.stroke_sz = sz;                            }
+void  Canvas::font(Font &f)             { state.font = f;                                  }
+void  Canvas::font_scale(double sc)     { state.font_scale  = sc;                          }
 void  Canvas::scale(vec2 sc)            { state.m = state.m.scale(sc);                     }
 void  Canvas::rotate(double d)          { state.m = state.m.rotate_z(d);                   }
 void  Canvas::translate(vec2 tr)        { backend->translate(state, tr);                   }
-void  Canvas::texture(Image &im)        {
-    backend->texture(state, im ? &im : null);
-}
-void  Canvas::color(rgba c)             { backend->color(state, c);                        }
-void  Canvas::gaussian(vec2 s, rectd c) { backend->gaussian(state, s, c);                  }
-void  Canvas::clip(Path &path)          { backend->clip  (state, path);                    }
-void  Canvas::clip(rectd &rect)         { backend->clip  (state, rect);                    }
-void  Canvas::fill(Path &path)          { backend->fill  (state, path);                    }
-void  Canvas::fill(rectd &rect)         { backend->fill  (state, rect);                    }
-void  Canvas::stroke(Path &path)        { backend->stroke(state, path);                    }
-void  Canvas::stroke(rectd &rect)       { backend->stroke(state, rect);                    }
-void  Canvas::clear()                   { backend->clear(state);                           }
-void  Canvas::clear(rgba c)             { backend->clear(state, c);                        }
-void  Canvas::flush()                   { backend->flush (state);                          }
+void  Canvas::texture(Image &im)        { backend->texture  (state, im ? &im : null);      }
+void  Canvas::color(rgba c)             { backend->color    (state, c);                    }
+void  Canvas::gaussian(vec2 s, rectd c) { backend->gaussian (state, s, c);                 }
+void  Canvas::clip(Path &path)          { backend->clip     (state, path);                 }
+void  Canvas::clip(rectd &rect)         { backend->clip     (state, rect);                 }
+void  Canvas::fill(Path &path)          { backend->fill     (state, path);                 }
+void  Canvas::fill(rectd &rect)         { backend->fill     (state, rect);                 }
+void  Canvas::stroke(Path &path)        { backend->stroke   (state, path);                 }
+void  Canvas::stroke(rectd &rect)       { backend->stroke   (state, rect);                 }
+void  Canvas::clear()                   { backend->clear    (state);                       }
+void  Canvas::clear(rgba c)             { backend->clear    (state, c);                    }
+void  Canvas::flush()                   { backend->flush    (state);                       }
 bool  Canvas::operator==(Type   t)       { return type == t;                               }
 str   Canvas::ansi_color(rgba c, bool t) { return backend->ansi_color(c, t);               }
-void  Canvas::text(str s,rectd r, Vec2<Align> align, vec2 o) {
-    backend->text(state, s, r, align, o);
+void  Canvas::text(str text, rectd rect, Vec2<Align> align, vec2 offset, bool ellipsis) {
+    backend->text(state, text, rect, align, offset, ellipsis);
 }
 
 Path::Path()                    { }
 Path::Path(rectd r) : rect(r)   { }
 Path::Path(const Path &ref)     { copy((Path &)ref); }
-Path::operator rectd()          { return rect;       }
+Path::operator rectd &()        { return rect;       }
 Path &Path::operator=(Path ref) {
     if (this != &ref)
         copy(ref);

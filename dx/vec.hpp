@@ -43,10 +43,10 @@ struct Vec2: Vector<T> {
     Vec2(var &d) {
         if (d.size() < 2) {
             x = std::numeric_limits<T>::quiet_NaN();
-        } else if (d == var::Array) {
+        } else if (d == Type::Array) {
             x = T(d[size_t(0)]);
             y = T(d[size_t(1)]);
-        } else if (d == var::Map) {
+        } else if (d == Type::Map) {
             x = T(d["x"]);
             y = T(d["y"]);
         } else {
@@ -338,6 +338,10 @@ struct Rect: Vector<T> {
         auto x1 = std::max(p1.x, p1.x);
         auto y1 = std::max(p1.y, p1.y);
         *this   = { x0, y0, x1 - x0, y1 - y0 };
+    }
+    
+    inline Rect<T> offset(T a) const {
+        return { x - a, y - a, w + (a * 2), h + (a * 2) };
     }
     
     static Rect<T> &null() {

@@ -99,22 +99,22 @@ public:
         return null;
     }
     static inline vec<T> import(var &a) {
-        assert(a == var::Array);
+        assert(a == Type::Array);
         vec<T> v(a.size());
         for (auto &i: *a.a)
             v += i;
         return v;
     }
-    inline void operator +=   (T v) { a.push_back(v);                    }
-    inline void erase(int index) {
+    inline void operator +=   (T v) { a.push_back(v);       }
+    inline void erase(int index)    {
         if (index >= 0)
             a.erase(a.begin() + size_t(index));
     }
     inline void operator -= (int i) {
         return erase(i);
     }
-    inline operator bool() const    { return a.size() > 0;               }
-    inline bool operator!() const   { return a.size() == 0;              }
+    inline operator bool() const    { return a.size() > 0;  }
+    inline bool operator!() const   { return a.size() == 0; }
     inline size_t index_of(T v) const {
         for (size_t i = 0; i < size(); i++)
             if (a[i] == v)

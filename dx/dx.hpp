@@ -6,9 +6,9 @@ struct Raw {
     std::vector<std::string> values;
 };
 
-typedef std::vector<Raw>                Results;
-typedef std::map<std::string, var>      Idents;
-typedef std::map<std::string, Idents>   ModelIdents;
+typedef std::vector<Raw>                        Results;
+typedef std::unordered_map<std::string, var>    Idents;
+typedef std::unordered_map<std::string, Idents> ModelIdents;
 
 struct ModelCache {
     Results       results;
@@ -17,8 +17,8 @@ struct ModelCache {
 
 struct ModelContext {
     ModelMap      models;
-    std::map<std::string, std::string> first_fields;
-    std::map<std::string, ModelCache *> mcache;
+    std::unordered_map<std::string, std::string> first_fields;
+    std::unordered_map<std::string, ModelCache *> mcache;
     var           data;
 };
 

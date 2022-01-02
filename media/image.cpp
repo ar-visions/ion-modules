@@ -11,23 +11,23 @@ Image::Image(path_t p, Image::Format f) {
     bool  rgba = (f == Format::Rgba);
     vec3i   sh = { 0, 0, rgba ? 4 : 1 };
     uint8_t *m = (uint8_t *)stbi_load(p.string().c_str(), &sh.x, &sh.y, null, sh.z);
-    pixels     = { rgba ? var::ui32 : var::ui8, std::shared_ptr<uint8_t>(m), { sh.y, sh.x, 1 }};
+    pixels     = { rgba ? Type::ui32 : Type::ui8, std::shared_ptr<uint8_t>(m), { sh.y, sh.x, 1 }};
     assert(pixels.size());
 }
 
 Image::Image(vec2i sz, Format f) {
     auto g = f == Gray;
-    pixels = {g ? var::ui8 :
-                  var::ui32,
+    pixels = {g ? Type::ui8 :
+                  Type::ui32,
               std::vector<int> { sz.y, sz.x, g ? 1 : 4 }};
 }
 
 Image::Image(vec2i sz, rgba clr) {
-    pixels = {var::ui32, std::vector<int>{ sz.y, sz.x, 4 }};
+    pixels = {Type::ui32, std::vector<int>{ sz.y, sz.x, 4 }};
 }
 
 Image::Format Image::format() {
-    return pixels.c == var::ui32 ? Rgba : Gray;
+    return pixels.c == Type::ui32 ? Rgba : Gray;
 }
 
 vec2 Image::size() {
@@ -85,7 +85,7 @@ Image::operator var() {
 }
 
 size_t Image::stride() {
-    size_t c = pixels.c == var::ui32 ? 4 : 1;
+    size_t c = pixels.c == Type::ui32 ? 4 : 1;
     return pixels.sh.size() >= 2 ? size_t(pixels.sh[1]) * c : 0;
 }
 
@@ -97,7 +97,7 @@ void Image::save(path_t p) {
             recti { pixels["crop"] } :
             recti { 0, 0, w, h };
     size_t     st = stride();
-    int         c = pixels.c == var::ui32 ? 4 : 1;
+    int         c = pixels.c == Type::ui32 ? 4 : 1;
     char       *d = (char *)calloc(r.h, r.w * c);
     uint8_t   *px = &pixel<uint8_t>(0, 0);
     size_t  rsize = r.w * c;

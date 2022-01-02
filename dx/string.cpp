@@ -14,6 +14,8 @@ str::operator path_t() const {
 }
 
 str str::read_file(path_t f) {
+    if (!std::filesystem::is_regular_file(f))
+        return null;
     std::ifstream fs;
     fs.open(f);
     std::ostringstream sstr;
@@ -24,7 +26,7 @@ str str::read_file(path_t f) {
 
 bool str::starts_with(const char *cstr) const {
     size_t l0 = strlen(cstr);
-    size_t l1 = length();
+    size_t l1 = len();
     if (l1 < l0)
         return false;
     return memcmp(cstr, s.c_str(), l0) == 0;
@@ -32,7 +34,7 @@ bool str::starts_with(const char *cstr) const {
 
 bool str::ends_with(const char *cstr) const {
     size_t l0 = strlen(cstr);
-    size_t l1 = length();
+    size_t l1 = len();
     if (l1 < l0)
         return false;
     const char *end = &(s.c_str())[l1 - l0];
@@ -65,13 +67,6 @@ str::str(std::ifstream& in) {
     s = sstr.str();
 }
 
-str::str(path_t p) {
-    /// deprecate, its a bit unclear syntax-wise whats going on
-    std::ifstream f(p);
-    std::ostringstream sstr;
-    sstr << f.rdbuf();
-    s = sstr.str();
-}
 /*
 bool str::operator< (const str& rhs) const {
     return s < rhs.s;
@@ -94,7 +89,7 @@ size_t str::find(str &str, size_t from) const {
     return s.find(str.s, from);
 }
 
-size_t str::length() const {
+size_t str::len() const {
     return s.length();
 }
 
@@ -106,8 +101,8 @@ str str::replace(str from, str to, bool all) const {
     size_t start_pos = 0;
     std::string str = s;
     while((start_pos = str.find(from.s, start_pos)) != std::string::npos) {
-        str.replace(start_pos, from.length(), to.s);
-        start_pos += to.length();
+        str.replace(start_pos, from.len(), to.s);
+        start_pos += to.len();
         if (!all)
             break;
     }
@@ -129,7 +124,7 @@ str::operator var() {
 str::str(var &d) : s(std::string(d)) { }
 
 vec<str> str::split(str delim) const {
-    size_t start = 0, end, delim_len = delim.length();
+    size_t start = 0, end, delim_len = delim.len();
     ::vec<str> result;
     if (s.length() > 0) {
         while ((end = s.find(delim.s, start)) != std::string::npos) {
@@ -148,12 +143,12 @@ vec<str> str::split(const char *delim) const {
     return split(std::string(delim));
 }
 
-/// split by whitespace in 38 seconds both in design time and runtime
+/// a common split, this splits by white space and comma
 vec<str> str::split() const {
     ::vec<str> result;
     str chars = "";
     for (char const &c: s) { /// replace traditional for uses where index not used
-        bool is_ws = isspace(c);
+        bool is_ws = isspace(c) || c == ',';
         if (is_ws) {
             if (chars) {
                 result += chars;
@@ -172,6 +167,14 @@ int str::index_of(const char *f) const {
     if (loc != std::string::npos)
         return int(loc);
     return -1;
+}
+
+int str::index_icase(const char *f) const {
+    const std::string fs = f;
+    auto it = std::search(s.begin(), s.end(), fs.begin(), fs.end(), [](char ch1, char ch2) {
+        return std::toupper(ch1) == std::toupper(ch2);
+    });
+    return (it == s.end()) ? -1 : it - s.begin();
 }
 
 str::operator std::string() const & {
@@ -207,11 +210,17 @@ const char &str::operator[](size_t i) const {
 }
 
 int str::integer() const {
-    return s.length() ? std::stoi(s) : 0;
+    const char *c = s.c_str();
+    while (isalpha(*c))
+        c++;
+    return s.length() ? int(strtol(c, null, 10)) : 0;
 }
 
 double str::real() const {
-    return std::stod(s);
+    const char *c = s.c_str();
+    while (isalpha(*c))
+        c++;
+    return strtod(c, null);
 }
 
 bool str::is_numeric() const {
@@ -227,4 +236,12 @@ str str::format(str t, std::vector<var> p) {
     return t;
 }
 
+str str::trim() const {
+    auto   start  = s.begin();
+    while (start != s.end() && std::isspace(*start))
+           start++;
+    auto end = s.end();
+    do { end--; } while (std::distance(start, end) > 0 && std::isspace(*end));
+    return std::string(start, end + 1);
+}
 

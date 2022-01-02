@@ -146,25 +146,27 @@ Texture Vulkan::texture(vec2i size) {
 }
 
 static recti s_rect;
-
+///
 recti Vulkan::startup_rect() {
     assert(s_rect);
     return s_rect;
 }
 
-///
 /// allocate composer, the class which takes rendered elements and manages instances
 /// allocate window internal (glfw subsystem) and canvas (which initializes a Device for usage on skia?)
-int Vulkan::main(FnRender fn, Composer *composer) {
+int Vulkan::main(Composer *composer) {
     Args     &args = composer->args;
     vec2i       sz = {args.count("window-width")  ? int(args["window-width"])  : 512,
                       args.count("window-height") ? int(args["window-height"]) : 512};
     s_rect         = recti { 0, 0, sz.x, sz.y };
     Internal    &i = Internal::handle();
     Window      &w = *i.window;
-    Device &device = i.device;
+    Device &device =  i.device;
     Canvas  canvas = Canvas(sz, Canvas::Context2D);
     Texture &tx_canvas = i.tx_skia;
+    ///
+    composer->sz = &w.size;
+    composer->ux->canvas = canvas;
     ///
     i.device.initialize(&w);
     w.show();
@@ -178,9 +180,7 @@ int Vulkan::main(FnRender fn, Composer *composer) {
         mvp         = {
              .model = glm::mat4(1.0f),
              .view  = glm::mat4(1.0f),
-             .proj  = glm::ortho( 0.5, -0.5,
-                                  0.5, -0.5,
-                                  0.5, -0.5)
+             .proj  = glm::ortho(-0.5, 0.5, 0.5, -0.5, 0.5, -0.5)
         };
     });
     auto         pl = Pipeline<Vertex> {
@@ -188,6 +188,14 @@ int Vulkan::main(FnRender fn, Composer *composer) {
             Position3f(), Normal3f(), Texture2f(tx_canvas), Color4f()
         }, {0.05, 0.05, 0.2, 1.0}, std::string("main") /// canvas clear color is gray
     };
+    
+    /// prototypes add a Window&
+    w.fn_cursor  = [&](double x, double y)         { composer->cursor(w, x, y);    };
+    w.fn_mbutton = [&](int b, int a, int m)        { composer->button(w, b, a, m); };
+    w.fn_resize  = [&]()                           { composer->resize(w);          };
+    w.fn_key     = [&](int k, int s, int a, int m) { composer->key(w, k, s, a, m); };
+    w.fn_char    = [&](uint32_t c)                 { composer->character(w, c);    };
+    
     /// uniforms are meant to be managed by the app, passed into pipelines.
     w.loop([&]() {
         static bool init = false;
@@ -195,26 +203,20 @@ int Vulkan::main(FnRender fn, Composer *composer) {
             vk_subsystem_init();
             init = true;
         }
-        canvas.clear(rgba {255, 255, 255, 255}); // its missing data here.
-        
-        auto r = rectd {0.0, 0.0, 320.0, 240.0};
-        canvas.color(rgba {255, 0, 0, 255});
-        canvas.fill(r);
-        
-        /// run the composer
-        Composer &cmp = *composer;
-        cmp(fn());
-        
+        ///
+        canvas.clear(rgba {0.0, 0.01, 0.05, 1.0});
+        composer->render();
         canvas.flush();
-
+        ///
         i.tx_skia.push_stage(Texture::Stage::Shader);
         device.render.push(pl);
         device.render.present();
         i.tx_skia.pop_stage();
-        
-        w.set_title(cmp.root->m.text.label);
-        
-        if (!cmp.process())
+        ///
+        if (composer->root)
+            w.set_title(composer->root->m.text.label);
+        ///
+        if (!composer->process())
             glfwWaitEventsTimeout(1.0);
     });
     return 0;

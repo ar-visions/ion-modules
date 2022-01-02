@@ -15,7 +15,7 @@ struct Animals:node {
 struct ExampleServer:node {
     declare(ExampleServer);
     void mount() {
-        data = var(var::Map);
+        data = var(Type::Map);
         vec<str> s = {"chicken", "frog", "bird"};
         data["animals"] = s;
     }
@@ -32,7 +32,7 @@ Args defaults = {
 };
 
 int main(int c, const char *v[]) {
-    return App::Server(c, v, defaults)([&](Args &args) {
+    return Server(c, v, defaults)([&](Args &args) {
         return ExampleServer(args);
     });
 }

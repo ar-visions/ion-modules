@@ -180,10 +180,10 @@ void SQLite::observe(str model_name) {
         assert(rc == SQLITE_OK);
         ///
         auto str_from_value = [&](str field, var &value) {
-            if (value == var::Str)
+            if (value == Type::Str)
                 return str::format("'{0}'", {sql_encode(value)});
             ///
-            if (value == var::Map) {
+            if (value == Type::Map) {
                 for (auto &[peer_name, v_fields]: refs.map()) {
                     std::string speer_name = peer_name;
                     var field_names_used = v_fields;
@@ -261,10 +261,10 @@ void SQLite::fetch() {
         int         rc = sqlite3_open(uri.cstr(), &db);
         assert(     rc == SQLITE_OK);
         char      *err = 0;
-        ctx.data[m]    = var {var::Array, var::Map};
+        ctx.data[m]    = var {Type::Array, Type::Map};
         var     &table = ctx.data[m]; /// creates data for table
         table["model"] = &model;
-        table["refs"]  = { var::Map };
+        table["refs"]  = { Type::Map };
         ///
         /// use this data for the queries in a bit
         bool first = true;
@@ -272,7 +272,7 @@ void SQLite::fetch() {
             if (first || value.count("resolves")) {
                 str model_name = first ? str(model) : str(value["resolves"]); // model name
                 if (!table["refs"][model_name])
-                     table["refs"][model_name] = { var::Array, var::Str };
+                     table["refs"][model_name] = { Type::Array, Type::Str };
                 table["refs"][model_name] += field;
                 if (first)
                     ctx.first_fields[m] = field;

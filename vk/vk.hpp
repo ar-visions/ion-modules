@@ -50,7 +50,7 @@ struct Vulkan {
     static uint32_t         version();
     static Canvas           canvas(vec2i);
     static void             set_title(str);
-    static int              main(FnRender, Composer *);
+    static int              main(Composer *);
     static Texture          texture(vec2i);
     static void             draw_frame();
     static recti            startup_rect();

@@ -35,9 +35,8 @@ static void glfw_mbutton(GLFWwindow *h, int button, int action, int mods) {
 
 static void glfw_cursor (GLFWwindow *handle, double x, double y) {
     auto &win = Window::ref(handle);
-    if (win.fn_cursor) {
+    if (win.fn_cursor)
         win.fn_cursor(x, y);
-    }
 }
 
 static void glfw_resize (GLFWwindow *handle, int32_t w, int32_t h) {
@@ -45,6 +44,13 @@ static void glfw_resize (GLFWwindow *handle, int32_t w, int32_t h) {
     win.size    = vec2i { w, h };
     if (win.fn_resize)
         win.fn_resize();
+}
+
+vec2 Window::cursor() {
+    vec2 result = { 0, 0 };
+    glfwGetCursorPos(handle, &result.x, &result.y);
+    console.log("cursor: {0}", { result });
+    return result;
 }
 
 Window::operator GLFWwindow *() {

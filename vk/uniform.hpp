@@ -34,7 +34,7 @@ struct UniformData {
         return Args {
             {"id", m->id},
             {"sz", m->struct_sz},
-            {"fn", var { var::ui8, b, uni_sz }}
+            {"fn", var { Type::ui8, b, uni_sz }}
         };
     }
 };

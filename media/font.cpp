@@ -60,3 +60,13 @@ Font::Font(std::string alias, double sz, path_t path) {
     this->data  = font->data;
 }
 
+SkFont *Font::handle() {
+    return &data->font;
+}
+
+Font Font::default_font() {
+    static Font def_font;
+    if (!def_font)
+         def_font = Font("regular", 16, "fonts/NanumGothic-Regular.ttf");
+    return def_font;
+}

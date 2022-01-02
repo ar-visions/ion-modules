@@ -29,6 +29,8 @@ public:
     void        set_clipboard(str);
     void        show();
     void        hide();
+    vec2      cursor();
+    bool         key(int key);
     int         loop(std::function<void()> fn);
     
     static Window *first;

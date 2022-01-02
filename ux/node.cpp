@@ -1,27 +1,28 @@
 #include <ux/ux.hpp>
 
+// fn_type_set not called via update, and this specific call is only when its assigned by binding
+void Member::operator=(Member &v) {
+    if (type == v.type)
+        fn->type_set(*this, v.ptr());
+    else {
+        /// simple conversions here in constexpr for primitives; no need to goto var when its an easy convert
+        assert(v.fn->var_get); /// must inherit from io
+        assert(v.fn->var_set);
+        var val = v.fn->var_get(*this);
+        fn->var_set(*this, val);
+    }
+    bound_to   = &v;
+    peer_cache = v.cache; // an external can pass on style when bound to anotehr external (and not set explicitly), but not internal -> external
+    /// must flag for style update
+    node->flags |= node::StateUpdate;
+}
+
 bool Element::operator==(Element &b) {
     return factory == b.factory && binds == b.binds && elements == b.elements;
 }
 
 bool Element::operator!=(Element &b) {
     return !operator==(b);
-}
-
-Element::Element(var &ref, FnFilterArray f) : fn_filter_arr(f) { }
-Element::Element(var &ref, FnFilterMap f)   : fn_filter_map(f) { }
-Element::Element(var &ref, FnFilter f)      : fn_filter(f)     { }
-
-Element Element::each(var &d, FnFilter f) {
-    return Element(d, f);
-}
-
-Element Element::each(var &d, FnFilterArray f) {
-    return Element(d, f);
-}
-
-Element Element::each(var &d, FnFilterMap f) {
-    return Element(d, f);
 }
 
 node *node::select_first(std::function<node *(node *)> fn) {
@@ -37,6 +38,18 @@ node *node::select_first(std::function<node *(node *)> fn) {
         return null;
     };
     return recur(this);
+}
+
+void node::exec(std::function<void(node *)> fn) {
+    std::function<node *(node *)> recur;
+    recur = [&](node* n) -> node* {
+        fn(n);
+        for (auto &[id, sn]:n->mounts)
+            if (sn)
+                recur(sn);
+        return null;
+    };
+    recur(this);
 }
 
 vec<node *> node::select(std::function<node *(node *)> fn) {
@@ -60,7 +73,7 @@ node::node(const char *selector, const char *cn, Binds binds, vec<Element> eleme
 node::node(nullptr_t n) { }
 
 Element node::render() {
-    return Element(this); // default render behaviour, so something like a Group, or a Button
+    return Element(this); // standard render end-point
 }
 
 bool node::processing() {
@@ -89,21 +102,39 @@ bool node::process() {
 
 node::~node() { }
 
-void node::standard() {
-    contextual<str>  ("id", m.id, "");
-    /// -------------------------------------------------------------------------
-    external <str>   ("bind",         m.bind,         "");
-    external <int>   ("tab-index",    m.tab_index,    -1);
-    /// -------------------------------------------------------------------------
-    external <str>   ("text-label",   m.text.label,   "");
-    external <AlignV2> ("text-align", m.text.align,  AlignV2 { Align::Middle, Align::Middle });
-    external <rgba>  ("text-color",   m.text.color,   rgba("#fff") );
-    /// -------------------------------------------------------------------------
-    external <rgba>  ("fill-color",   m.fill.color,   null);
-    external <double>("border-size",  m.border.size,  double(0));
-    external <rgba>  ("border-color", m.border.color, rgba("#000f"));
-    external <bool>  ("border-dash",  m.border.dash,  bool(false));
-    external <Region>("region",       m.region,       Region());
+void node::standard_bind() {
+    contextual<str>    ("id",            m.id,            "");
+    /// ------------------------------------------------------------
+    external <int>     ("tab-index",     m.tab_index,     -1);
+    /// ------------------------------------------------------------
+    external <str>     ("text-label",    m.text.label,    "");
+    external <AlignV2> ("text-align",    m.text.align,    AlignV2 { Align::Middle, Align::Middle });
+    external <rgba>    ("text-color",    m.text.color,    rgba("#fff") );
+    /// ------------------------------------------------------------
+    external <rgba>    ("fill-color",    m.fill.color,    null);
+    external <double>  ("border-size",   m.border.size,   double(0));
+    external <rgba>    ("border-color",  m.border.color,  rgba("#000f"));
+    external <bool>    ("border-dash",   m.border.dash,   bool(false));
+    external <Region>  ("region",        m.region,        Region());
+    /// ------------------------------------------------------------
+    external <Fn>      ("ev-hover",      m.ev.hover,      Fn(null));
+    external <Fn>      ("ev-out",        m.ev.out,        Fn(null));
+    external <Fn>      ("ev-down",       m.ev.down,       Fn(null));
+    external <Fn>      ("ev-up",         m.ev.up,         Fn(null));
+    external <Fn>      ("ev-key",        m.ev.key,        Fn(null));
+    external <Fn>      ("ev-focus",      m.ev.focus,      Fn(null));
+    external <Fn>      ("ev-blur",       m.ev.blur,       Fn(null));
+    /// ------------------------------------------------------------
+    internal <bool>    ("captured",      m.captured,      false); /// cannot style these internals, they are used within style as read-only 'state'
+    internal <bool>    ("focused",       m.focused,       false); /// so to add syntax to css you just add internals, boolean and other ops should be supported
+    /// ------------------------------------------------------------
+    internal <vec2>    ("cursor",        m.cursor,        vec2(null));
+    internal <bool>    ("active",        m.active,        false);
+    internal <bool>    ("hover",         m.hover,         false);
+}
+
+void node::standard_style() {
+    style = Style::for_class(class_name);
 }
 
 void node::bind() { }
@@ -147,22 +178,20 @@ node *node::focused() {
 }
 
 void node::draw(Canvas &canvas) {
-    auto p = Path(rectd {0, 0, 32, 24}); // ?
     canvas.save();
     Border &b = m.border;
     if (b.color() && b.size() > 0.0) {
         canvas.color(b.color());
         canvas.stroke_sz(b.size());
-        auto p = path.rect; // offset border.
-        p.x -= 1.0;
-        p.y -= 1.0;
-        p.w += 2.0;
-        p.h += 2.0;
+        rectd p = rectd(path).offset(1.0);
+        // offset border.
+        // we want path offset, if we can get it from skia that would be wonderful news
+        // save us.
         canvas.stroke(p);
     }
     if (m.text) {
         canvas.color(m.text.color);
-        canvas.text(m.text.label, path, m.text.align, {0.0, 0.0});
+        canvas.text(m.text.label, path, m.text.align, {0.0, 0.0}, true);
     }
     canvas.restore();
 }

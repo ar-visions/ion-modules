@@ -4,29 +4,29 @@
 
 void first_data(str model, Truth &schema, vec<std::ofstream *> &odata, std::ofstream *& olabels) {
     std::ofstream o_index(str::format("gen/{0}/index.json", {model}).cstr());
-    var d_index  = var(var::Map);
+    var d_index  = var(Type::Map);
     str s_shape  = "";
     for (size_t i = 0; i < schema.data.size(); i++) {
         if (s_shape)
             s_shape += str {","};
         var &d   = schema.data[i]; // store the shape on pixels in image?
         str key  = str::format("data{0}.{1}", {
-            i, (schema.data[i].c == var::ui8 ? "u8" : "f32")});
-        var dm   = var(var::Map);
+            i, (schema.data[i].c == Type::ui8 ? "u8" : "f32")});
+        var dm   = var(Type::Map);
         dm[key]  = vec<int>::import(d.shape());
         s_shape += str(dm);
     }
     std::string   s_index = std::string(d_index);
-    o_index.write(s_index.c_str(), s_index.length());
+    o_index.write(s_index.c_str(), s_index.len());
     olabels = new std::ofstream(
         str::format("gen/{0}/labels.f32", {model}).cstr(),
         std::ios::out | std::ios::binary);
     for (size_t i = 0; i < schema.data.size(); i++) {
-        assert(schema.data[i].t == var::Array);
-        assert(schema.data[i].c == var::ui8 || schema.data[i].c == var::f32);
+        assert(schema.data[i].t == Type::Array);
+        assert(schema.data[i].c == Type::ui8 || schema.data[i].c == Type::f32);
         odata += new std::ofstream(
             str::format("gen/{0}/data{1}.{2}", {
-                model, i, (schema.data[i].c == var::ui8 ? "u8" : "f32")
+                model, i, (schema.data[i].c == Type::ui8 ? "u8" : "f32")
             }).cstr(),
             std::ios::out | std::ios::binary);
     }
@@ -58,7 +58,7 @@ void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
             ///
             /// image and audio files get their best path to resource selection here
             /// video and audio will not conflict
-            var data = var(var::Map);
+            var data = var(Type::Map);
             if (img) data[".image"] = img;
             if (aud) data[".audio"] = aud;
             data["annots"] = var { path_t { id + ".json" }, var::Json };
@@ -137,7 +137,7 @@ void Gen(
                         var &c = schema.data[i];
                         assert(var::type_check(d, c));
                         assert(d.size() == c.size());
-                        if (d.c == var::ui8)
+                        if (d.c == Type::ui8)
                             odata[i]->write((const char *)d.data<uint8_t>(), d.size() * sizeof(uint8_t));
                         else
                             odata[i]->write((const char *)d.data<float>(),   d.size() * sizeof(float));
