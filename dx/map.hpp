@@ -2,9 +2,8 @@
 
 /// purposely plain map for the time being
 /// intuitive design is fifo-style behaviour, and thats essentially all thats here now
-/// as part of the design; optimizations needed
 template <typename K, typename V>
-class map;
+class  map;
 struct var;
 
 template <typename K, typename V>

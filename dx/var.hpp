@@ -55,7 +55,8 @@ static inline void memcopy(T *dst, T *src, size_t count = 1) {
     memcpy(dst, src, count * sizeof(T));
 }
 
-typedef std::filesystem::path   path_t;
+typedef std::filesystem::path           path_t;
+typedef std::filesystem::file_time_type path_date_t;
 
 void resources(path_t p, std::vector<const char *> exts, std::function<void(path_t &)> fn);
 bool exists(path_t &p);
@@ -628,7 +629,7 @@ void _log(str t, std::vector<var> a, bool error);
 
 
 struct Logging {
-#ifndef NDEBUG
+#if !defined(NDEBUG)
     static void log(str t, std::vector<var> a = {}) { // add this operation to Array
         _log(t, a, false);
     }

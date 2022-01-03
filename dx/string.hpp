@@ -21,8 +21,8 @@ struct str:io {
     size_t       len()                          const;
     str         trim()                          const;
     str      replace(str, str, bool all = true) const;
-    str       substr(size_t start, size_t len)  const;
-    str       substr(size_t start)              const;
+    str       substr(int start, size_t len)     const;
+    str       substr(int start)                 const;
     str   operator()(size_t start, size_t len)  const;
     str   operator()(size_t start)              const;
     bool starts_with(const char *cstr)          const;
@@ -70,5 +70,11 @@ typedef vec<str> Strings;
 namespace std {
     template<> struct hash<str> {
         size_t operator()(str const& s) const { return hash<std::string>()(s.s); }
+    };
+}
+
+namespace std {
+    template<> struct hash<path_t> {
+        size_t operator()(path_t const& p) const { return hash<std::string>()(p.string()); }
     };
 }

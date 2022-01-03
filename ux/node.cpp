@@ -133,10 +133,6 @@ void node::standard_bind() {
     internal <bool>    ("hover",         m.hover,         false);
 }
 
-void node::standard_style() {
-    style = Style::for_class(class_name);
-}
-
 void node::bind() { }
 void node::mount() { }
 void node::changed(PropList props) { }

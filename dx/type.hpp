@@ -141,7 +141,6 @@ struct Instances {
 /// the smart pointer with baked in arrays and a bit of indirection.
 template <typename T>
 struct ptr {
-    ///
     struct Alloc {
         Type              type   = 0;
         std::atomic<long> refs   = 0;
@@ -149,36 +148,32 @@ struct ptr {
         alignas(16) void *mstart; // imported pointers are not aligned to this spec but our own pointers are.
     } *info;
     ///
+    private:
+    void alloc(T *&p) {
+        size_t   asz = sizeof(Alloc) + sizeof(T);
+        info         = (Alloc *)calloc(asz, 1);
+        info->type   = Id<T>();
+        info->refs   =  2; /// and i thought i saw a two...
+        info->ksize  = sizeof(T);
+        info->mstart = null;
+        p            = &info->mstart;
+    }
+    public:
+    ///
     ptr() : info(null) { }
-    ///
-    static ptr<T> alloc() {
-        size_t asz = sizeof(Alloc) - sizeof(void *) + sizeof(T);
-        ptr<T>   p = {
-             .info = (Alloc *)calloc(asz, 1) };
-        ///
-        p.info.type  = Id<T>();
-        p.info.refs  = 1;
-        p.info.ksize = 1;
-        return p;
-    }
-    
-    ///
-    static ptr<T> array(size_t sz) {
-        assert(sz <= INT_MAX);
-        size_t asz = sizeof(Alloc) - sizeof(void *) + sizeof(T) * sz;
-        ptr<T>   p = {
-             .info = (Alloc *)calloc(asz, 1) };
-        ///
-        p.info.type  = Id<T>();
-        p.info.refs  = 1;
-        p.info.ksize = int(sz);
-        return p;
-    }
-    
     ///
     ptr(const ptr<T> &ref) : info(ref.info) {
         if (info)
             info->refs++;
+    }
+    
+    ptr(T *v) {
+        size_t   asz = sizeof(Alloc);
+        info         = (Alloc *)calloc(asz, 1);
+        info->type   = Id<T>();
+        info->refs   =  1;
+        info->ksize  = -1;
+        info->mstart = v; /// imported pointer [mode]
     }
     
     ///
@@ -189,10 +184,9 @@ struct ptr {
         info->type   = Id<T>();
         info->refs   =  2; /// and i thought i saw a two...
         info->ksize  = -1;
-        info->mstart = v; /// imported pointer.
+        info->mstart = v; /// imported pointer [mode]
         return *this;
     }
-    
     ///
     /// todo: should be recycled based on patterns up to 4-8, 64 in each. its just a queue usage
     ~ptr() {
@@ -210,7 +204,9 @@ struct ptr {
         return (T *)(info ? (info->ksize > 0) ? &info->mstart : info->mstart : null);
         
     }
-    T* operator->()       { return  effective(); }
+    ///
+    T *operator &()       { return  effective(); }
+    T *operator->()       { return  effective(); }
     inline operator T *() { return  effective(); }
     inline operator T &() { return *effective(); }
     
@@ -220,3 +216,54 @@ struct ptr {
         return *ptr()[index];
     }
 };
+
+/*
+
+template <typename T>
+struct DLNode {
+    DLNode  *next = null,
+            *prev = null;
+    T    *payload = null;
+    uint8_t  data[1];
+    ///
+    static T *alloc() {
+        DLNode<T> *b = calloc(1, sizeof(DLNode<T>) + sizeof(T));
+         b->payload  = b->data; /// this is a reasonable way to verify some integrity, and we can debug this crazy train
+        *b->payload  = T();
+        return b;
+    }
+};
+
+template <typename T>
+struct DList {
+    DLNode<T> *first = null;
+    DLNode<T> *last = null;
+};
+
+/// the smart pointer with baked in arrays and a bit of indirection.
+template <typename T>
+struct list:ptr<DList<T>> {
+    DList<T> *m;
+    /// -------------------
+    list() { alloc(m); }
+    T *push() {
+        DLNode<T> *n = DLNode<T>::alloc();
+        ///
+        if (m->last)
+            m->last->next = n;
+        ///
+        n->prev = m->last;
+        m->last = n;
+        ///
+        if (!m->first)
+            m->first = n;
+        ///
+        return T();
+    }
+    void pop() {
+        // release taht memory
+        
+    }
+};
+
+*/

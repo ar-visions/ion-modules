@@ -76,7 +76,8 @@ struct PipelineData {
         UniformData                ubo;             /// we must broadcast this buffer across to all of the swap uniforms
         VertexData                 vbo;             ///
         IndexData                  ibo;
-        vec<VkVertexInputAttributeDescription> attr;
+        //vec<VkVertexInputAttributeDescription> attr;
+        vec<Attrib>                attr;
         VkDescriptorSetLayout      set_layout;
         bool                       enabled = true;
         map<std::string, Texture>  tx;

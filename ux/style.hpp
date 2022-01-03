@@ -20,9 +20,15 @@ struct StBlock {
     StBlock          *parent = null;
     vec<StQualifier>  quals;
     vec<StPair>       pairs;
-    vec<StBlock>      blocks;
+    vec<ptr<StBlock>> blocks; // one idea was to make a container for smart pointer allocated objects.  if they use the info standard they may.
     double match(node *n);
     size_t score(node *n);
+    
+    StBlock() { }
+    StBlock(StBlock &ref) {
+        int test = 0;
+        test++;
+    }
     
     size_t count(str &s) {
         for (auto &p:pairs)
@@ -39,16 +45,17 @@ struct StBlock {
 };
 
 struct Style {
-    ///
-    static map<path_t, Style>         cache;
-    static map<str, vec<StBlock *>>   members;
-    ptr<vec<StBlock>>                 root;
+    static map<path_t, Style>          cache;
+    static map<str, vec<ptr<StBlock>>> members;
+    vec<ptr<StBlock>>                  root;
     ///
     Style(nullptr_t n = null)         { }
     Style(str &code);
-    void cache_members();
-    static void init(path_t path = "style");
+   ~Style();
     ///
-    static Style load(path_t path);
+    void          cache_members();
+    static void   init(path_t path = "style");
+    static void   unload();
+    static Style  load(path_t path);
     static Style *for_class(const char *);
 };

@@ -213,7 +213,7 @@ void PipelineData::Memory::update(size_t frame_id) {
         VkRenderPass(device), VkFramebuffer(frame), // handles
         {{0,0}, device.extent},         // viewport
         uint32_t(clear_values.size()),
-                 clear_values };        // clear color
+                 clear_values.data() };        // clear color
 
     /// gather some rendering ingredients
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
@@ -224,7 +224,7 @@ void PipelineData::Memory::update(size_t frame_id) {
     VkDeviceSize   offsets[] = {0};
     vkCmdBindVertexBuffers(cmd, 0, 1, a_vbo.data(), offsets);
     vkCmdBindIndexBuffer(cmd, ibo, 0, ibo.buffer.type_size == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, desc_sets, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, desc_sets.data(), 0, nullptr);
     
     /// flip around an ibo and toss it in the oven
     uint32_t sz_draw = ibo.size();

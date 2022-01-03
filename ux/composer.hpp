@@ -1,5 +1,9 @@
 #pragma once
 
+#if !defined(NDEBUG)
+#include <dx/watch.hpp>
+#endif
+
 /// composer is the abstract for managing component instancing, bindings & rendition
 struct Composer {
     Interface    *ux;
@@ -146,8 +150,7 @@ struct Composer {
                 /// root element is initialized with the window size
                 child->path = rectd { 0.0, 0.0, double(ux->sz.x), double(ux->sz.y) };
             }
-            child->parent   = parent;
-            child->standard_style();
+            child->parent = parent;
             child->standard_bind();
             child->bind();
             
@@ -163,10 +166,15 @@ struct Composer {
                     child->umount();
                 child->parent = null;
                 delete child;
+                child = null;
                *p_child = null;
             }
             return true;
         }
+        
+        /// style reload, the watcher is going to knock out the style handles when it changes.
+        if (!child->style)
+             child->style = Style::for_class(child->class_name);
         
         /// initialize unbound check
         var d_null = nullptr;
@@ -283,6 +291,7 @@ struct Composer {
         if (node_updated)
             child->changed(changed);
         
+        /// perform this just for root
         if (!parent && child) {
             // set style if conditions are met:
             // -> node added, removed
@@ -300,6 +309,20 @@ struct Composer {
         /// ----------------------------------------
         Element  e = fn();
         update(null, &root, e);
+/// start watching after style is loaded; perform reload on [captains log] supplemental changes
+#if !defined(NDEBUG)
+        ///
+        static auto css_watch = Watch::spawn("style", {".css"}, [root=root](bool init, vec<PathOp> &paths) {
+            if (!init) {
+                Style::unload();
+                root->exec([](node *n) {
+                    n->style = null;
+                    for (auto &[k,m]:n->externals)
+                        m->style_value_set(null);
+                });
+            }
+        });
+#endif
         rectd rect = { real(0), real(0), real(sz->x), real(sz->y) };
         root->path = rect;
         /// ----------------------------------------

@@ -140,7 +140,7 @@ public:
         return !operator==(b);
     }
     inline operator T *() {
-        return data();
+        return data(); /// as a boolean operation, its a bit lame
     }
 };
 

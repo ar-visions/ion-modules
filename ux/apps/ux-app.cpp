@@ -1,6 +1,10 @@
 #include <ux/app.hpp>
 #include <ux/button.hpp>
 
+// macOS doesnt support notifications [/kicks dirt]; get working on Linux and roll into Watch (file, dir)
+//#include <sys/inotify.h>
+
+
 /*
 struct Car:node {
     declare(Car);

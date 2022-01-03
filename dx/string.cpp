@@ -109,12 +109,12 @@ str str::replace(str from, str to, bool all) const {
     return str;
 }
 
-str str::substr(size_t start, size_t len) const {
-    return s.substr(start, len);
+str str::substr(int start, size_t len) const {
+    return start > 0 ? s.substr(size_t(start), len) : s.substr(size_t(std::max(0, int(s.length()) + start)), len);
 }
 
-str str::substr(size_t start) const {
-    return s.substr(start);
+str str::substr(int start) const {
+    return start > 0 ? s.substr(size_t(start)) : s.substr(size_t(std::max(0, int(s.length()) + start)));
 }
 /*
 str::operator var() {
@@ -236,6 +236,7 @@ str str::format(str t, std::vector<var> p) {
     return t;
 }
 
+/// trim white space
 str str::trim() const {
     auto   start  = s.begin();
     while (start != s.end() && std::isspace(*start))

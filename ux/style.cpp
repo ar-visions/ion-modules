@@ -1,24 +1,22 @@
 #include <ux/node.hpp>
 #include <ux/style.hpp>
 #include <ux/node.hpp>
+//#include <regex> in time.
 
-map<path_t, Style>       Style::cache   = {};
-map<str, vec<StBlock *>> Style::members = {};
+map<path_t, Style> Style::cache            = {};
+map<str, vec<ptr<StBlock>>> Style::members = {};
 
 struct StBlock;
 
 /// -------------------------------------------------
 size_t    Style_members_count(str &s)              { return (Style::members.count(s)); }
-vec<StBlock *> &Style_members(str &s)              { return Style::members[s]; }
+vec<ptr<StBlock>> &Style_members(str &s)           { return Style::members[s]; }
 double          StBlock_match(StBlock *b, node *n) { return b->match(n); }
 StPair*         StBlock_pair (StBlock *b, str  &s) { return b->pair(s);  }
-size_t StPair_instances_count(StPair *p, Type &t)  {
-    return p->instances.count(t);
-}
-
+size_t StPair_instances_count(StPair *p, Type &t)  { return p->instances.count(t); }
 
 StPair *Style_pair(Member *member) {
-    vec<struct StBlock *> &blocks     = Style_members(member->name);
+    vec<ptr<struct StBlock>> &blocks  = Style_members(member->name);
     struct StPair         *match      = null;
     double                 best_score = 0;
     ///
@@ -144,42 +142,40 @@ str parse_likely(char *v) {
     return str(start, std::distance(start, v));
 }
 
-/// any reason for 'unload' ?
 void Style::cache_members() {
-    std::function<void(StBlock &b)> cache_b;
-    cache_b = [&](StBlock &b) -> void {
-        for (auto &p:b.pairs) {
-            bool            found = false;
-            vec<StBlock *> &cache = Style::members[p.member];
+    std::function<void(ptr<StBlock> &b)> cache_b;
+    cache_b = [&](ptr<StBlock> &b) -> void {
+        for (auto &p:b->pairs) {
+            bool found = false;
+            vec<ptr<StBlock>> &cache = Style::members[p.member];
             if (p.member == "bg") {
                 int test = 0;
                 test++;
             }
             ///
             for (auto &cb:cache)
-                found |= cb == &b;
+                found |= cb == b;
             if (!found)
-                cache += &b;
+                cache += b;
         }
-        for (StBlock &s:b.blocks)
+        for (ptr<StBlock> &s:b->blocks)
             cache_b(s);
     };
     if (root)
-        for (StBlock &b:*root)
+        for (ptr<StBlock> &b:root)
             cache_b(b);
 }
 
 Style::Style(str &code) {
     ///
     if (code) {
-        root = new vec<StBlock>();
         for (char *sc = (char *)code.cstr(); ws(sc); sc++) {
-            std::function<void(StBlock &)> parse_block;
+            std::function<void(ptr<StBlock> &)> parse_block;
             ///
-            parse_block = [&](StBlock &block) {
+            parse_block = [&](ptr<StBlock> &block) {
                 ws(sc);
                 console.assertion(*sc == '.' || isalpha(*sc), "expected Type, or .name");
-                block.quals = parse_qualifiers(&sc);
+                block->quals = parse_qualifiers(&sc);
                 ws(++sc);
                 ///
                 while (*sc && *sc != '}') {
@@ -188,11 +184,13 @@ Style::Style(str &code) {
                     char *start = sc;
                     console.assertion(scan_to(sc, {';', '{', '}'}), "expected member expression or qualifier");
                     if (*sc == '{') {
-                        block.blocks += StBlock { .parent = &block };
+                        /// lets blend the vector and the smart pointer.
+                        /// 
+                        block->blocks += ptr<StBlock>(new StBlock());
+                        ptr<StBlock> &b = block->blocks[block->blocks.size() - 1];
+                        b->parent = &block;
                         /// parse sub-block
-                        auto &b = block.blocks[block.blocks.size() - 1];
                         sc = start;
-                        b.quals = parse_qualifiers(&sc);
                         parse_block(b);
                         assert(*sc == '}');
                         ws(++sc);
@@ -203,34 +201,54 @@ Style::Style(str &code) {
                         console.assertion(scan_to(cur, {':'}) && (cur < sc), "expected [member:]value;");
                         str  member = str(start, std::distance(start, cur));
                         ws(++cur);
-                        
+
                         /// read value
                         char *vstart = cur;
                         console.assertion(scan_to(cur, {';'}), "expected member:[value;]");
-                        str  value  = str(vstart, std::distance(vstart, cur));
+                        str  value  = str(vstart, std::distance(vstart, cur)).trim();
+                        if (value.substr(0, 1) == "\"" && value.substr(-1, 1) == "\"") {
+                            char *cstr = (char *)value.cstr();
+                            value = var::parse_quoted(&cstr, value.len());
+                        }
                         
                         /// check
                         console.assertion(member, "member cannot be blank");
                         console.assertion(value,  "value cannot be blank");
-                        block.pairs += StPair { member, value }; // this is going to realloc, so do it afterwards unless you want a disaster. disahsteh
+                        block->pairs += StPair { member, value }; // this is going to realloc, so do it afterwards unless you want a disaster. disahsteh
                         ws(++sc);
                     }
                 }
                 console.assertion(!*sc || *sc == '}', "expected closed-brace");
             };
             ///
-            *root += StBlock { .parent = null };
-            parse_block((*root)[root->size() - 1]);
+            root += ptr<StBlock>(new StBlock());
+            /// a list or node container allocator pattern is superior to this one.
+            /// you could even have dislike containers using it, they would use the same pointer protocol and data structure.
+            /// for now i want to leave this as-is but i dont particularly enjoy the encapsulation for all of the items and vectors of them.
+            /// templated typedefs would shim it a bit but with more names
+            parse_block(root[root.size() - 1]);
         }
         /// store blocks by member, the interface into all style: Style::members[name]
         cache_members();
     }
 }
 
+void Style::unload() {
+    console.log("zoooool.");
+    members = {};
+    cache   = {};
+}
+
+Style::~Style() {
+    console.log("destructor.");
+}
+
 Style Style::load(path_t path) {
-    str    code  = str::read_file(path);
-    Style  style = Style(code);
-    return style;
+    if (cache.count(path) == 0) {
+        str    code  = str::read_file(path);
+        cache[path]  = Style(code);
+    }
+    return cache[path];
 }
 
 Style *Style::for_class(const char *class_name) {
@@ -276,11 +294,11 @@ double StBlock::match(node *n) {
         ///
         while (n) { /// we have to get the best score for this block, and we are not.
             auto sc = block->score(n);
+            n = n->parent;
             if (sc == 0 && is_root) {
                 score = 0;
                 break;
             } else if (sc > 0) {
-                n = n->parent;
                 score += double(sc) / ++div;
                 break;
             }

@@ -118,7 +118,7 @@ Device::Device(GPU &p_gpu, bool aa) {
         "VK_KHR_portability_subset"
     };
     VkDeviceCreateInfo ci {};
-#ifndef NDEBUG
+#if !defined(NDEBUG)
     //ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME; # not supported on macOS with molten-vk
     static const char *debug   = "VK_LAYER_KHRONOS_validation";
     ci.enabledLayerCount       = 1;
@@ -126,10 +126,10 @@ Device::Device(GPU &p_gpu, bool aa) {
 #endif
     ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     ci.queueCreateInfoCount    = uint32_t(qcreate.size());
-    ci.pQueueCreateInfos       = qcreate;
+    ci.pQueueCreateInfos       = qcreate.data();
     ci.pEnabledFeatures        = &features;
     ci.enabledExtensionCount   = uint32_t(ext.size());
-    ci.ppEnabledExtensionNames = ext;
+    ci.ppEnabledExtensionNames = ext.data();
 
     auto res = vkCreateDevice(gpu, &ci, nullptr, &device);
     assert(res == VK_SUCCESS);

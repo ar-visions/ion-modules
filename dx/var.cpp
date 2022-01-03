@@ -13,7 +13,7 @@ int var::shape_volume(std::vector<int> &sh) {
 }
 
 void _log(str t, std::vector<var> a, bool error) {
-#ifndef NDEBUG
+#if !defined(NDEBUG)
     t = str::format(t, a);
     auto &out = error ? std::cout : std::cerr;
     out << std::string(t) << std::endl << std::flush;

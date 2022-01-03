@@ -38,7 +38,6 @@ struct Member {
     size_t   cache      = 0;
     size_t   peer_cache = 0xffffffff;
     Member  *bound_to   = null;
-    bool     style_init = false;
     ///
     virtual void *ptr() { return null; }
     ///
@@ -74,10 +73,12 @@ struct Member {
     virtual bool operator==(Member &m) {
         return bound_to == &m && peer_cache == m.peer_cache;
     }
+    
+    virtual void style_value_set(void *ptr) { }
 };
 
 size_t Style_members_count(str &s);
-vec<struct StBlock *> &Style_members(str &s);
+vec<ptr<struct StBlock>> &Style_members(str &s);
 double StBlock_match(struct StBlock *, struct node *);
 struct StPair* StBlock_pair (struct StBlock *b, str  &s);
 size_t StPair_instances_count(struct StPair *p, Type &t);
@@ -107,7 +108,7 @@ struct node {
     Binds          binds;
     int32_t        flags;
     map<std::string, PipelineData> objects;
-    Style         *style;
+    Style         *style = null;
     
     ///
     map<str, Member *> contextuals;
@@ -136,7 +137,7 @@ struct node {
         /// extern, intern, context and such could override; only to disable most likely
         /// perhaps you may want intern to use the style only if its default is null
         void style_value_set(void *ptr) {
-            style_value = ptr ? (T *)ptr : null;
+            style_value = ptr ? (T *)ptr : null; // text-label testable here with member.name
         }
         
         void init() {
@@ -165,18 +166,29 @@ struct node {
                 
                 /// recompute style on this node:member
                 lambdas[type].compute_style = [](Member &m) -> void {
-                    if (m.name == "bg") {
-                        console.log(m.name);
-                        int test = 0; // members_count needs to be 1, with p: value: #ff0 str
+                    if (m.name == "text-label") {
+                        int test = 0;
                         test++;
                     }
                     StPair *p = Style_members_count(m.name) ? Style_pair(&m) : null;
                     MType<T,MT> &mm = (MType<T,MT> &)m;
+                    if (m.name == "text-label") {
+                        int test = 0;
+                        test++;
+                    }
                     if (p && p->instances.count(m.type) == 0) {
                         var conv = p->value;
                         p->instances.set(m.type, new T(conv));
                     }
+                    if (m.name == "text-label") {
+                        int test = 0;
+                        test++;
+                    }
                     mm.style_value_set(p ? p->instances.get<T>(m.type) : null);
+                    if (m.name == "text-label") {
+                        int test = 0;
+                        test++;
+                    }
                 };
                 
                 /// direct set

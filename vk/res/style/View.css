@@ -1,21 +1,20 @@
-/* no expressions for now, just selectors by id, class, member states (booleans, any op possible with ==, !=, >, < etc) */
-/* no ampersand unless we can optimize for that kind of thing */
-
-Button {
-    region:10l 22t 40r 390b;
-    fill-color:#333;
-    text-color:#222;
-    text-label:"This is a label!";
+View {
+    Button {
+        region:10l 22t 10r 10b;
+        fill-color:#f3f;
+        text-color:#222;
+        text-label:"This is a label 22...";
+    }
 }
 
+/*
 Button:active {
     fill-color:#f5f;
     text-color:#fff;
 }
+*/
 
-Button:hover {
-    fill-color:#44a;
+Button:active {
+    fill-color:#fff;
     text-color:#fff;
 }
-
-
