@@ -17,18 +17,14 @@ size_t StPair_instances_count(StPair *p, Type &t)  { return p->instances.count(t
 
 StPair *Style_pair(Member *member) {
     vec<ptr<struct StBlock>> &blocks  = Style_members(member->name);
-    struct StPair         *match      = null;
-    double                 best_score = 0;
+    struct StPair *match      = null;
+    double         best_score = 0;
     ///
     /// find top style pair for this member
     for (auto ptr:blocks) {
         StBlock *block = ptr;
-        if (member->name == "bg") {
-            int test = 0;
-            test++;
-        }
         double score = block->match(member->node);
-        if (score > best_score) {
+        if (score > 0 && score >= best_score) {
             match = block->pair(member->name);
             best_score = score;
         }
@@ -50,8 +46,8 @@ static bool ws(char *&cursor) {
 }
 
 static bool scan_to(char *&cursor, vec<char> chars) {
-    bool sl = false;
-    bool qt = false;
+    bool sl  = false;
+    bool qt  = false;
     bool qt2 = false;
     for (; *cursor; cursor++) {
         if (!sl) {
@@ -74,6 +70,7 @@ static vec<StQualifier> parse_qualifiers(char **p) {
     char *start = *p;
     char *end   = null;
     char *scan  =  start;
+    
     /// read ahead to {
     do {
         if (!*scan || *scan == '{') {
@@ -127,8 +124,13 @@ static vec<StQualifier> parse_qualifiers(char **p) {
                     break;
                 }
             }
-            if (!is_op)
+            if (!is_op) {
                 v.state  = tail;
+                int test = 0;
+                test++;
+                if (v.state) {
+                }
+            }
         }
         result += v;
     }
@@ -146,23 +148,23 @@ void Style::cache_members() {
     std::function<void(ptr<StBlock> &b)> cache_b;
     cache_b = [&](ptr<StBlock> &b) -> void {
         for (auto &p:b->pairs) {
-            bool found = false;
-            vec<ptr<StBlock>> &cache = Style::members[p.member];
+            bool  found = false;
+            auto &cache = Style::members[p.member];
             if (p.member == "bg") {
                 int test = 0;
                 test++;
             }
             ///
             for (auto &cb:cache)
-                found |= cb == b;
+                 found |= cb == b;
             if (!found)
-                cache += b;
+                 cache += b;
         }
-        for (ptr<StBlock> &s:b->blocks)
+        for (auto &s:b->blocks)
             cache_b(s);
     };
     if (root)
-        for (ptr<StBlock> &b:root)
+        for (auto &b:root)
             cache_b(b);
 }
 
@@ -172,7 +174,8 @@ Style::Style(str &code) {
         for (char *sc = (char *)code.cstr(); ws(sc); sc++) {
             std::function<void(ptr<StBlock> &)> parse_block;
             ///
-            parse_block = [&](ptr<StBlock> &block) {
+            parse_block = [&](auto &block) {
+                StBlock &bl = *block;
                 ws(sc);
                 console.assertion(*sc == '.' || isalpha(*sc), "expected Type, or .name");
                 block->quals = parse_qualifiers(&sc);
@@ -184,14 +187,14 @@ Style::Style(str &code) {
                     char *start = sc;
                     console.assertion(scan_to(sc, {';', '{', '}'}), "expected member expression or qualifier");
                     if (*sc == '{') {
-                        /// lets blend the vector and the smart pointer.
-                        /// 
-                        block->blocks += ptr<StBlock>(new StBlock());
-                        ptr<StBlock> &b = block->blocks[block->blocks.size() - 1];
-                        b->parent = &block;
+                        ///
+                        bl.blocks += new StBlock();
+                        auto &ptr_b = block->blocks[bl.blocks.size() - 1];
+                        StBlock  &b = ptr_b;
+                        b.parent    = &block;
                         /// parse sub-block
                         sc = start;
-                        parse_block(b);
+                        parse_block(ptr_b);
                         assert(*sc == '}');
                         ws(++sc);
                         ///
@@ -201,27 +204,39 @@ Style::Style(str &code) {
                         console.assertion(scan_to(cur, {':'}) && (cur < sc), "expected [member:]value;");
                         str  member = str(start, std::distance(start, cur));
                         ws(++cur);
-
                         /// read value
                         char *vstart = cur;
+                        /// split the value and param
+                        ///     one of the params is transition
+                        ///         time transition_curve (W3C standard set)
+                    
                         console.assertion(scan_to(cur, {';'}), "expected member:[value;]");
-                        str  value  = str(vstart, std::distance(vstart, cur)).trim();
-                        if (value.substr(0, 1) == "\"" && value.substr(-1, 1) == "\"") {
-                            char *cstr = (char *)value.cstr();
-                            value = var::parse_quoted(&cstr, value.len());
+                        ///
+                        /// this should use the regex standard api, will convert when its feasible.
+                        str  cb_value = str(vstart, std::distance(vstart, cur)).trim();
+                        str       end = cb_value.substr(-1, 1);
+                        bool       qs = cb_value.substr( 0, 1) == "\"";
+                        bool       qe = cb_value.substr(-1, 1) == "\"";
+                        if (qs && qe) {
+                            auto cstr = (char *)cb_value.cstr();
+                            cb_value  = var::parse_quoted(&cstr, cb_value.len());
                         }
+                        int         i = cb_value.index_of(",");
+                        str     param = i >= 0 ? cb_value.substr(i + 1).trim() : "";
+                        str     value = i >= 0 ? cb_value.substr(0, i).trim()  : cb_value;
+                        StTrans trans = param  ? StTrans(param) : null;
                         
                         /// check
                         console.assertion(member, "member cannot be blank");
                         console.assertion(value,  "value cannot be blank");
-                        block->pairs += StPair { member, value }; // this is going to realloc, so do it afterwards unless you want a disaster. disahsteh
+                        block->pairs += StPair { member, value, trans }; // look at my three member pair.
                         ws(++sc);
                     }
                 }
                 console.assertion(!*sc || *sc == '}', "expected closed-brace");
             };
             ///
-            root += ptr<StBlock>(new StBlock());
+            root += new StBlock();
             /// a list or node container allocator pattern is superior to this one.
             /// you could even have dislike containers using it, they would use the same pointer protocol and data structure.
             /// for now i want to leave this as-is but i dont particularly enjoy the encapsulation for all of the items and vectors of them.
@@ -264,17 +279,13 @@ size_t StBlock::score(node *n) {
         bool   id_reject  = q.id    && !id_match;
         bool  type_match  = q.type  && q.type == n->class_name;
         bool type_reject  = q.type  && !type_match;
-        ///if (q.oper) {
-        /// ---- support ops ---- just need to know if we are putting expressions in style (most likely)
-        /// i think everything should be 'expression', if it has dynamic params then the type can tell us that
-        ///}
         bool state_match  = q.state && n->state<bool>(q.state);
         bool state_reject = q.state && !state_match;
         ///
         if (!id_reject && !type_reject && !state_reject) {
-            double sc = size_t(   id_match) << 2 |
-                        size_t( type_match) << 1 |
-                        size_t(state_match) << 0;
+            double sc = size_t(   id_match) << 1 |
+                        size_t( type_match) << 0 |
+                        size_t(state_match) << 2;
             best_sc = std::max(sc, best_sc);
         }
     }

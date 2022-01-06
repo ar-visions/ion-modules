@@ -103,34 +103,45 @@ bool node::process() {
 node::~node() { }
 
 void node::standard_bind() {
-    contextual<str>    ("id",            m.id,            "");
-    /// ------------------------------------------------------------
-    external <int>     ("tab-index",     m.tab_index,     -1);
-    /// ------------------------------------------------------------
-    external <str>     ("text-label",    m.text.label,    "");
-    external <AlignV2> ("text-align",    m.text.align,    AlignV2 { Align::Middle, Align::Middle });
-    external <rgba>    ("text-color",    m.text.color,    rgba("#fff") );
-    /// ------------------------------------------------------------
-    external <rgba>    ("fill-color",    m.fill.color,    null);
-    external <double>  ("border-size",   m.border.size,   double(0));
-    external <rgba>    ("border-color",  m.border.color,  rgba("#000f"));
-    external <bool>    ("border-dash",   m.border.dash,   bool(false));
-    external <Region>  ("region",        m.region,        Region());
-    /// ------------------------------------------------------------
-    external <Fn>      ("ev-hover",      m.ev.hover,      Fn(null));
-    external <Fn>      ("ev-out",        m.ev.out,        Fn(null));
-    external <Fn>      ("ev-down",       m.ev.down,       Fn(null));
-    external <Fn>      ("ev-up",         m.ev.up,         Fn(null));
-    external <Fn>      ("ev-key",        m.ev.key,        Fn(null));
-    external <Fn>      ("ev-focus",      m.ev.focus,      Fn(null));
-    external <Fn>      ("ev-blur",       m.ev.blur,       Fn(null));
-    /// ------------------------------------------------------------
-    internal <bool>    ("captured",      m.captured,      false); /// cannot style these internals, they are used within style as read-only 'state'
-    internal <bool>    ("focused",       m.focused,       false); /// so to add syntax to css you just add internals, boolean and other ops should be supported
-    /// ------------------------------------------------------------
-    internal <vec2>    ("cursor",        m.cursor,        vec2(null));
-    internal <bool>    ("active",        m.active,        false);
-    internal <bool>    ("hover",         m.hover,         false);
+    contextual<str>        ("id",               m.id,              "");
+    /// --------------------------------------------------------------------------
+    external <int>         ("tab-index",        m.tab_index,       -1);
+    /// --------------------------------------------------------------------------
+    external <str>         ("text-label",       m.text.label,      "");
+    external <AlignV2>     ("text-align",       m.text.align,      AlignV2 { Align::Middle, Align::Middle });
+    external <rgba>        ("text-color",       m.text.color,      rgba("#fff") );
+    external <real>        ("text-offset",      m.text.offset,     real(0));
+    /// --------------------------------------------------------------------------
+    external <rgba>        ("fill-color",       m.fill.color,      null);
+    external <real>        ("fill-offset",      m.fill.offset,     real(0));
+    external <double>      ("border-size",      m.border.size,     double(0));
+    external <rgba>        ("border-color",     m.border.color,    rgba("#000f"));
+    external <bool>        ("border-dash",      m.border.dash,     bool(false));
+    external <real>        ("border-offset",    m.border.offset,   real(0));
+    external <Cap>         ("border-cap",       m.border.cap,      Cap(Cap::Round));
+    external <Join>        ("border-join",      m.border.join,     Join(Join::Round));
+    external <Region>      ("region",           m.region,          Region());
+    /// --------------------------------------------------------------------------
+    external <Fn>          ("ev-hover",         m.ev.hover,         Fn(null));
+    external <Fn>          ("ev-out",           m.ev.out,           Fn(null));
+    external <Fn>          ("ev-down",          m.ev.down,          Fn(null));
+    external <Fn>          ("ev-up",            m.ev.up,            Fn(null));
+    external <Fn>          ("ev-key",           m.ev.key,           Fn(null));
+    external <Fn>          ("ev-focus",         m.ev.focus,         Fn(null));
+    external <Fn>          ("ev-blur",          m.ev.blur,          Fn(null));
+    /// --------------------------------------------------------------------------
+    external <real>    ("radius",           m.radius.val,       std::numeric_limits<real>::quiet_NaN());
+    external <real>    ("radius-tl",        m.radius.tl,        std::numeric_limits<real>::quiet_NaN());
+    external <real>    ("radius-tr",        m.radius.tr,        std::numeric_limits<real>::quiet_NaN());
+    external <real>    ("radius-bl",        m.radius.bl,        std::numeric_limits<real>::quiet_NaN());
+    external <real>    ("radius-br",        m.radius.br,        std::numeric_limits<real>::quiet_NaN());
+    /// --------------------------------------------------------------------------
+    internal <bool>    ("captured",         m.captured,         false); /// cannot style these internals, they are used within style as read-only 'state'
+    internal <bool>    ("focused",          m.focused,          false); /// so to add syntax to css you just add internals, boolean and other ops should be supported
+    /// --------------------------------------------------------------------------
+    internal <vec2>    ("cursor",           m.cursor,           vec2(null));
+    internal <bool>    ("hover",            m.hover,            false);
+    internal <bool>    ("active",           m.active,           false);
 }
 
 void node::bind() { }
@@ -175,20 +186,25 @@ node *node::focused() {
 
 void node::draw(Canvas &canvas) {
     canvas.save();
-    Border &b = m.border;
-    if (b.color() && b.size() > 0.0) {
-        canvas.color(b.color());
-        canvas.stroke_sz(b.size());
-        rectd p = rectd(path).offset(1.0);
-        // offset border.
-        // we want path offset, if we can get it from skia that would be wonderful news
-        // save us.
-        canvas.stroke(p);
+    canvas.cap(m.border.cap());
+    canvas.join(m.border.join());
+
+    if (m.fill.color()) {
+        canvas.color(m.fill.color());
+        canvas.fill(paths.fill);
     }
+    ///
     if (m.text) {
         canvas.color(m.text.color);
-        canvas.text(m.text.label, path, m.text.align, {0.0, 0.0}, true);
+        canvas.text(m.text.label, paths.border, m.text.align, { 0.0, 0.0 }, true);
     }
+    ///
+    if (m.border.color() && m.border.size() > 0.0) {
+        canvas.color(m.border.color());
+        canvas.stroke_sz(m.border.size());
+        canvas.stroke(paths.border);
+    }
+    ///
     canvas.restore();
 }
 
@@ -201,7 +217,7 @@ void delete_node(node *n) {
 }
 
 rectd node::calculate_rect(node *child) {
-    return child->m.region()(path);
+    return child->m.region()(paths.rect);
 }
 
 rectd Region::operator()(node *n, node *rel) const {

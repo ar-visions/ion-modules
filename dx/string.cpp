@@ -110,11 +110,11 @@ str str::replace(str from, str to, bool all) const {
 }
 
 str str::substr(int start, size_t len) const {
-    return start > 0 ? s.substr(size_t(start), len) : s.substr(size_t(std::max(0, int(s.length()) + start)), len);
+    return start >= 0 ? s.substr(size_t(start), len) : s.substr(size_t(std::max(0, int(s.length()) + start)), len);
 }
 
 str str::substr(int start) const {
-    return start > 0 ? s.substr(size_t(start)) : s.substr(size_t(std::max(0, int(s.length()) + start)));
+    return start >= 0 ? s.substr(size_t(start)) : s.substr(size_t(std::max(0, int(s.length()) + start)));
 }
 /*
 str::operator var() {
@@ -190,11 +190,11 @@ bool str::operator!() const {
 }
 
 bool str::operator==(const char *cstr) const {
-    return s == cstr;
+    return strcmp(s.c_str(), cstr) == 0;
 }
 
 bool str::operator!=(const char *cstr) const {
-    return s != cstr;
+    return strcmp(s.c_str(), cstr) != 0;
 }
 
 bool str::operator==(std::string str) const {

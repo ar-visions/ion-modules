@@ -26,10 +26,13 @@ public:
     vec(nullptr_t n) { }
     /*
     vec(vec<var> &d) {
+        /// simple, using var conversion
+        /// you can get 'away' with string conv only for style but i do nooot want to have 2 io stream types
         a.reserve(d.size());
         for (auto &dd: d)
             a += dd;
     }*/
+    
     static vec<T> import(std::vector<T> v) {
         vec<T> a(v.size());
         for (auto &i: v)
@@ -98,11 +101,18 @@ public:
         }
         return null;
     }
+    static inline vec<T> *new_import(var &a) {
+        assert(a == Type::Array);
+        vec<T> *v = new vec<T>(a.size());
+        for (auto &i: *a.a)
+            *v += T(i);
+        return v;
+    }
     static inline vec<T> import(var &a) {
         assert(a == Type::Array);
         vec<T> v(a.size());
         for (auto &i: *a.a)
-            v += i;
+            v += T(i);
         return v;
     }
     inline void operator +=   (T v) { a.push_back(v);       }

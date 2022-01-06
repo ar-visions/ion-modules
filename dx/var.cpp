@@ -46,6 +46,7 @@ std::string var::parse_numeric(char **cursor) {
     return result;
 }
 
+/// \\ = \ ... \x = \x
 std::string var::parse_quoted(char **cursor, size_t max_len) {
     const char *first = *cursor;
     if (*first != '"')

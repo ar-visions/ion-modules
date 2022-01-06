@@ -131,7 +131,7 @@ struct Region:io {
                             char b[2] = { char(toupper(c)), 0 };
                             return str(b, 2);
                         } else
-                            listen = isspace(c);
+                            listen = isspace(c) || isnumber(c) || c == '-';
                     }
                     return str(null);
                 };

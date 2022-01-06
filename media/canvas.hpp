@@ -62,7 +62,7 @@ struct TextMetrics {
            cap_height = 0;
 };
 
-struct Blending:io {
+struct Blending:io { /// anything we serialize is an io class
     enum Type {
         Clear,
         Src,        Dst,
@@ -91,33 +91,104 @@ struct Blending:io {
     io_define(Blending, type >= Clear);
 };
 
+struct Cap:io {
+    enum Type {
+        None,
+        Blunt,
+        Round
+    } value;
+    Cap(nullptr_t n = null) { }
+    Cap(Cap &c)             { value = c.value; }
+    Cap(Type t): value(t)   { }
+    Cap(var &v)             {
+        str s = v;
+        value = s == "round" ? Round :
+                s == "blunt" ? Blunt : None;
+    }
+    bool operator==(Type t) { return value == t; }
+    operator bool () { return value != None; }
+    bool operator!() { return value == None; }
+    Cap &operator=(const Cap &c) {
+        if (&c != this)
+            value = c.value;
+        return *this;
+    }
+    operator   var() {
+        return str(value == Round ? "round" :
+                   value == Blunt ? "blunt" : "none");
+    }
+    operator Type &() { return value; }
+};
+
+
+struct Join:io {
+    enum Type {
+        None,
+        Bevel,
+        Round
+    } value;
+    Join(nullptr_t n = null) { }
+    Join(Join &j)            { value = j.value; }
+    Join(Type t): value(t)   { }
+    Join(var &v)             {
+        str s = v;
+        value = s == "round" ? Round :
+                s == "bevel" ? Bevel : None;
+    }
+    bool operator==(Type t) { return value == t; }
+    operator bool () { return value != None; }
+    bool operator!() { return value == None; }
+    Join &operator=(const Join &j) {
+        if (&j != this)
+            value = j.value;
+        return *this;
+    }
+    operator   var() {
+        return str(value == Round ? "round" :
+                   value == Bevel ? "bevel" : "none");
+    }
+    operator Type &() { return value; }
+};
+
+
+class SkPath;
+class SkPaint;
 struct Path {
-    vec<Points>   a;
-    rectd         rect;
+protected:
+    SkPath *p = null;
+    ///
+public:
+    const size_t max_offsets = 8;
+    Path    **offsets = null;
+    real            o = 0; // if this is set, we contruct a new one and store in cache
+    real      o_cache = 0; // and that cache has this member set.
+    rectd        rect;
+    ///
                Path();
-               Path(std::initializer_list<Points> v) {
-                   for (auto &points:v)
-                       a += points;
-               }
                Path(rectd r);
                Path(const Path &ref);
+              ~Path();
     Path &operator=(Path ref);
     void       copy(Path &ref);
     Path      &move(vec2 v);
     Path      &line(vec2 v);
     Path    &bezier(vec2 cp0, vec2 cp1, vec2 p);
     Path      &quad(vec2 q0, vec2 q1);
-    Path &rectangle(rectd r, vec2 rounded = {0,0}, bool left = true,
-                    bool top = true, bool right = true, bool bottom = true);
+    Path   &rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl);
+    Path &rectangle(rectd r, vec2 radius = { 0, 0 },
+                    bool r_tl = true, bool r_tr = true, bool r_br = true, bool r_bl = true);
     Path       &arc(vec2 c, double radius, double rads_from, double rads, bool move_start);
-    Path     offset(double o);
     operator  rectd &();
     vec2         xy();
-    real          w() { return rect.w; };
-    real          h() { return rect.h; };
-    real     aspect() { return rect.h / rect.w; };
-    operator  bool();
-    bool operator!();
+    real          w();
+    real          h();
+    real     aspect();
+    operator   bool();
+    bool  operator!();
+    void set_offset(real);
+    SkPath *sk_path(SkPaint *);
+    bool   contains(vec2);
+    rectd   &bounds();
 };
 
 struct ColoredGlyph {
@@ -194,6 +265,8 @@ struct ICanvasBackend {
     virtual TextMetrics measure(DrawState &, str &s) { assert(false); }
     
     // generically handled
+    virtual void        cap(DrawState &, Cap::Type)  { } /// no-op for terminal
+    virtual void       join(DrawState &, Join::Type) { } /// no-op for terminal
     virtual void       font(DrawState &, Font  &f);
     virtual void      color(DrawState &, rgba  &);
     virtual void   gaussian(DrawState &, vec2  &, rectd);
@@ -228,6 +301,8 @@ public:
     vec2i         sz();
     void      stroke(Path  &path);
     void        fill(Path  &path);
+    void         cap(Cap::Type cap);
+    void        join(Join::Type join);
     void        clip(Path  &path);
     void      stroke(rectd &path);
     void        fill(rectd &path);

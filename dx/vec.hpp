@@ -18,6 +18,13 @@ struct Vector {
 };
 
 template <typename T>
+static inline T decimal(T x, size_t dp) {
+    T sc = std::pow(10, dp);
+    return std::round(x * sc) / sc;
+}
+
+
+template <typename T>
 struct Vec4;
 
 template <typename T>
@@ -28,6 +35,10 @@ struct Vec2: Vector<T> {
     Vec2(T x, T y) : x(x), y(y) { }
     
     Vec4<T> xxyy();
+    
+    friend auto operator<<(std::ostream& os, Vec2<T> const& m) -> std::ostream& {
+        return os << "[" << decimal(m.x, 4) << "," << decimal(m.y, 4) << "]";
+    }
     
     static Vec2<T> &null() {
         static Vec2<T> *n = nullptr;
@@ -64,6 +75,9 @@ struct Vec2: Vector<T> {
             v_max    = v_max.max(v);
         }
     }
+    
+    T xs() { return x * x; }
+    T ys() { return y * y; }
     
     inline Vec2<T> abs() {
         if constexpr (std::is_same_v<T, int>)
@@ -338,6 +352,10 @@ struct Rect: Vector<T> {
         auto x1 = std::max(p1.x, p1.x);
         auto y1 = std::max(p1.y, p1.y);
         *this   = { x0, y0, x1 - x0, y1 - y0 };
+    }
+    
+    operator bool() {
+        return !std::isnan(x) && !std::isnan(y) && w > 0 && h > 0;
     }
     
     inline Rect<T> offset(T a) const {

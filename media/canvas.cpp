@@ -16,6 +16,7 @@
 #include <core/SkSurface.h>
 #include <core/SkFontMgr.h>
 #include <core/SkFontMetrics.h>
+#include <core/SkPathMeasure.h>
 #include <core/SkTextBlob.h>
 #include <effects/SkGradientShader.h>
 #include <effects/SkImageFilters.h>
@@ -113,22 +114,7 @@ struct Context2D:ICanvasBackend {
         set_size(sz);
     }
     
-    void clear(DrawState &ds) {
-        sk_canvas->clear(sk_color(ds.color));
-    }
-    
-    void clear(DrawState &ds, rgba &c) {
-        sk_canvas->clear(sk_color(c));
-    }
-    
-    void font(DrawState &ds, Font &f) {
-        
-    }
-    
-    void flush(DrawState &ds) {
-        sk_canvas->flush();
-    }
-    
+    void font(DrawState &ds, Font &f) { }
     void save(DrawState &ds) {
         State *s    = new State;
         State *prev = (State *)(ds.b_state);
@@ -139,26 +125,23 @@ struct Context2D:ICanvasBackend {
             s->ps = SkPaint { };
         }
         ds.b_state = s;
+        sk_canvas->save();
     }
-
-    void restore(DrawState &ds) {
+    
+    void    clear(DrawState &ds) { sk_canvas->clear(sk_color(ds.color)); }
+    void    clear(DrawState &ds, rgba &c) { sk_canvas->clear(sk_color(c)); }
+    void    flush(DrawState &ds) { sk_canvas->flush(); }
+    void  restore(DrawState &ds) {
         delete (State *)ds.b_state;
+        sk_canvas->restore();
     }
-    
-    void *data() {
-        return null; // todo: SkImageSnapshot
-    }
-
-    void set_size(vec2i sz_new) {
-        sz = sz_new;
-    }
-    
-    vec2i size() {
-        return sz;
-    }
+    void    *data()              { return null; }
+    void set_size(vec2i sz_new)  { sz = sz_new; }
+    vec2i    size()              { return sz; }
     
     /// console would just think of everything in char units. like it is.
     /// measuring text would just be its length, line height 1.
+    
     TextMetrics measure(DrawState &ds, str &text) {
         SkFontMetrics mx;
         SkFont     &font = *ds.font.handle();
@@ -179,21 +162,27 @@ struct Context2D:ICanvasBackend {
     /// it effectively knocks out several redundancies to allow some components to be consolidated with style difference alone
 
     str ellipsis(DrawState &ds, str &text, rectd &rect, TextMetrics &tm) {
-        const str el = "…";
+        const str el = "...";
         str       cur, *p = &text;
         int       trim = p->len();
-        for (;;) {
-            tm = measure(ds, *p);
-            if (tm.w <= rect.w || trim <= 1)
-                break;
-            if (tm.w > rect.w && trim > 1) {
-                cur = text.substr(0, --trim) + el;
-                p   = &cur;
+        tm             = measure(ds, (str &)el);
+        
+        if (tm.w >= rect.w)
+            trim = 0;
+        else
+            for (;;) {
+                tm = measure(ds, *p);
+                if (tm.w <= rect.w || trim == 0)
+                    break;
+                if (tm.w > rect.w && trim >= 1) {
+                    cur = text.substr(0, --trim) + el;
+                    p   = &cur;
+                }
             }
-        }
-        return cur;
+        return (trim == 0) ? "" : (p == &text) ? text : cur;
     }
     
+    /// the lines are most definitely just text() calls, it should be up to the user to perform multiline
     void text(DrawState &ds, str &text, rectd &rect, Vec2<Align> &align, vec2 &offset, bool ellip) {
         State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
@@ -201,23 +190,23 @@ struct Context2D:ICanvasBackend {
         if (ds.opacity != 1.0f)
             ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
         SkFont  &f = *ds.font.handle();
-        auto    tb = SkTextBlob::MakeFromText(text.cstr(),
-            text.len(), (const SkFont &)f, SkTextEncoding::kUTF8);
         vec2   pos = { 0, 0 };
         str  stext;
         str *ptext = &text;
         TextMetrics tm;
         if (ellip) {
             stext  = ellipsis(ds, text, rect, tm);
-            ptext  = &text;
+            ptext  = &stext;
         } else
             tm     = measure(ds, *ptext);
+        ///
+        auto    tb = SkTextBlob::MakeFromText(ptext->cstr(), ptext->len(), (const SkFont &)f, SkTextEncoding::kUTF8);
         ///
         pos.x = (align.x == Align::End)    ? rect.x + rect.w     - tm.w :
                 (align.x == Align::Middle) ? rect.x + rect.w / 2 - tm.w / 2 :
                                              rect.x;
         pos.y = (align.y == Align::End)    ? rect.y + rect.h     - tm.h :
-                (align.y == Align::Middle) ? rect.y + rect.h / 2 - tm.h / 2 :
+                (align.y == Align::Middle) ? rect.y + rect.h / 2 - tm.h / 2 - ((-tm.descent + tm.ascent) / 1.66) :
                                              rect.y;
         sk_canvas->drawTextBlob(
             tb, SkScalar(pos.x + offset.x),
@@ -230,11 +219,45 @@ struct Context2D:ICanvasBackend {
 
     void stroke(DrawState &ds, rectd &rect) {
     }
+    
+    void cap(DrawState &ds, Cap::Type c) {
+        State *s = (State *)ds.b_state;
+        ///
+        s->ps.setStrokeCap(c == Cap::Blunt ? SkPaint::kSquare_Cap :
+                           c == Cap::Round ? SkPaint::kRound_Cap  :
+                                             SkPaint::kButt_Cap);
+    }
+    
+    void join(DrawState &ds, Join::Type j) {
+        State *s = (State *)ds.b_state;
+        ///
+        s->ps.setStrokeJoin(j == Join::Bevel ? SkPaint::kBevel_Join :
+                            j == Join::Round ? SkPaint::kRound_Join  :
+                                               SkPaint::kMiter_Join);
+    }
+    
+    // we are to put everything in path.
+    void fill(DrawState &ds, Path &path) {
+        State   *s = (State *)ds.b_state;
+        SkPaint ps = SkPaint(s->ps);
+        ///
+        ps.setAntiAlias(!path.rect);
+        ps.setColor(sk_color(ds.color));
 
+        ///
+        if (ds.opacity != 1.0f)
+            ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
+        
+        /// path checks if there is an offset, keeps cache
+        sk_canvas->drawPath(*path.sk_path(&ps), ps);
+    }
+    
     void fill(DrawState &ds, rectd &rect) {
         State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
+        ///
         ps.setColor(sk_color(ds.color));
+        ///
         if (ds.opacity != 1.0f)
             ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
         SkRect   r = SkRect {
@@ -488,6 +511,7 @@ Canvas::Canvas(vec2i sz, Canvas::Type type, var *result) : type(type),
 void  Canvas::restore() {
      state = states.top();
      states.pop();
+     /// needs a backend function: todo.
      assert(states.size() >= 1);
 }
 
@@ -516,6 +540,9 @@ void  Canvas::stroke(rectd &rect)       { backend->stroke   (state, rect);      
 void  Canvas::clear()                   { backend->clear    (state);                       }
 void  Canvas::clear(rgba c)             { backend->clear    (state, c);                    }
 void  Canvas::flush()                   { backend->flush    (state);                       }
+void  Canvas::cap(Cap::Type t)          { backend->cap      (state, t);                    }
+void  Canvas::join(Join::Type t)        { backend->join     (state, t);                    }
+
 bool  Canvas::operator==(Type   t)       { return type == t;                               }
 str   Canvas::ansi_color(rgba c, bool t) { return backend->ansi_color(c, t);               }
 void  Canvas::text(str text, rectd rect, Vec2<Align> align, vec2 offset, bool ellipsis) {
@@ -533,61 +560,263 @@ Path &Path::operator=(Path ref) {
 }
 
 void Path::copy(Path &ref) {
-    a = ref.a;
+    if (ref.p)
+        p = new SkPath(*ref.p);
     rect = ref.rect;
 }
 
-Path &Path::move(vec2 v) {
-    a += Points {{ v }};
-    return *this;
-}
-
-Path &Path::line(vec2 v) {
-    if (a.size() == 0)
-        a += Points {{ v }};
-    else
-        a.back() += v;
-    return *this;
-}
-
-Path &Path::rectangle(rectd r, vec2 rounded, bool left, bool top, bool right, bool bottom) {
-    assert(a.size() == 0);
-    if (rounded.x == 0 && rounded.y == 0 && left && top && right && bottom)
+Path &Path::rectangle(rectd r, vec2 radius, bool r_tl, bool r_tr, bool r_br, bool r_bl) {
+    if ((radius.x == 0 && radius.y == 0) || !(r_tl || r_tr || r_br || r_bl))
         rect = r;
     else {
-        assert(false);
+        vec2 tl = r.xy();
+        vec2 tr = vec2(tl.x + r.w, tl.y);
+        vec2 br = vec2(tl.x + r.w, tl.y + r.h);
+        vec2 bl = vec2(tl.x, tl.y + r.h);
+        return rect_v4(
+            vec4(tl.x, tl.y, r_tl ? radius.x : 0, r_tl ? radius.y : 0),
+            vec4(tr.x, tr.y, r_tr ? radius.x : 0, r_tr ? radius.y : 0),
+            vec4(br.x, br.y, r_br ? radius.x : 0, r_br ? radius.y : 0),
+            vec4(bl.x, bl.y, r_bl ? radius.x : 0, r_bl ? radius.y : 0));
     }
     return *this;
 }
 
-Path &Path::arc(vec2 center, double radius, double rads_from, double rads, bool move_start) {
+Path::~Path() {
+    if (offsets) {
+        for (int i = 0; i < max_offsets; i++)
+            delete offsets[i];
+        free(offsets);
+    }
+    delete p;
+}
+
+Path &Path::move(vec2 v) {
+    if (!p) p = new SkPath();
+    p->moveTo ( v.x,  v.y);
     return *this;
 }
 
-Path &Path::bezier(vec2 cp0, vec2 cp1, vec2 p) {
+Path &Path::line(vec2 v) {
+    if (!p) p = new SkPath();
+    p->lineTo ( v.x,  v.y);
+    return *this;
+}
+
+Path &Path::bezier(vec2 p0, vec2 p1, vec2 v) {
+    if (!p) p = new SkPath();
+    p->cubicTo(p0.x, p0.y, p1.x, p1.y, v.x, v.y);
     return *this;
 }
 
 Path &Path::quad(vec2 q0, vec2 q1) {
+    if (!p) p = new SkPath();
+    p->quadTo(q0.x, q0.y, q1.x, q1.y);
     return *this;
 }
 
-Path Path::offset(double o) {
-    return Path(*this);
+/// using degrees, everywhere...
+Path &Path::arc(vec2 c, double r, double d_from, double d, bool m) {
+    if (!p) p = new SkPath();
+    if (d  > 360.0)
+        d -= 360.0 * std::floor(d / 360.0);
+    if (d >= 360.0)
+        d  =   0.0;
+    auto rect = SkRect { SkScalar(c.x - r), SkScalar(c.y - r),
+                         SkScalar(c.x + r), SkScalar(c.y + r) };
+    p->arcTo(rect, d_from, d, m);
+    return *this;
 }
 
-vec2 Path::xy() {
-    if (rect)
-        return rect.xy();
-    assert(a.size());
-    assert(a[0].size());
-    return a[0][0];
+Path &Path::rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl) {
+    /// --------------------------
+    /// tl_p tl_x            tr_x tr_p
+    /// tl_y                      tr_y
+    /// bl_y                      br_y
+    /// bl_p bl_x            br_x br_p
+    /// --------------------------
+    vec2 p_tl  = tl.xy();
+    vec2 v_tl  = tr.xy() - p_tl;
+    real l_tl  = sqrt(v_tl.xs() + v_tl.ys());
+    vec2 d_tl  = v_tl / l_tl;
+    /// ---------------------
+    vec2 p_tr  = tr.xy();
+    vec2 v_tr  = br.xy() - p_tr;
+    real l_tr  = sqrt(v_tr.xs() + v_tr.ys());
+    vec2 d_tr  = v_tr / l_tr;
+    ///
+    vec2 p_br  = br.xy();
+    vec2 v_br  = bl.xy() - p_br;
+    real l_br  = sqrt(v_br.xs() + v_br.ys());
+    vec2 d_br  = v_br / l_br;
+    ///
+    vec2 p_bl  = bl.xy();
+    vec2 v_bl  = tl.xy() - p_bl;
+    real l_bl  = sqrt(v_bl.xs() + v_bl.ys());
+    vec2 d_bl  = v_bl / l_bl;
+    ///
+    vec2 r_tl  = { std::min(tl.w, l_tl / 2.0), std::min(tl.z, l_bl / 2.0) };
+    vec2 r_tr  = { std::min(tr.w, l_tr / 2.0), std::min(tr.z, l_br / 2.0) };
+    vec2 r_br  = { std::min(br.w, l_br / 2.0), std::min(br.z, l_tr / 2.0) };
+    vec2 r_bl  = { std::min(bl.w, l_bl / 2.0), std::min(bl.z, l_tl / 2.0) };
+    
+    /// pos +/- [ dir * scale ]
+    vec2 tl_x = p_tl + d_tl * r_tl;
+    vec2 tl_y = p_tl - d_bl * r_tl;
+    ///
+    vec2 tr_x = p_tr - d_tl * r_tr;
+    vec2 tr_y = p_tr + d_tr * r_tr;
+    ///
+    vec2 br_x = p_br + d_br * r_br;
+    vec2 br_y = p_br + d_bl * r_br;
+    ///
+    vec2 bl_x = p_bl - d_br * r_bl;
+    vec2 bl_y = p_bl - d_tr * r_bl;
+    ///
+    vec2 cp0, cp1;
+    move(tl_x);
+    line(tr_x);
+    ///
+    bezier((p_tr + tr_x) / 2.0,
+           (p_tr + tr_y) / 2.0, tr_y);
+    line(br_y);
+    ///
+    bezier((p_br + br_y) / 2.0,
+           (p_br + br_x) / 2.0, br_x);
+    line(bl_x);
+    ///
+    bezier((p_bl + bl_x) / 2.0,
+           (p_bl + bl_y) / 2.0, bl_y);
+    line(tl_y);
+    ///
+    bezier((p_tl + tl_y) / 2.0,
+           (p_tl + tl_x) / 2.0, tl_x);
+    ///
+    return *this;
+}
+
+/// the offset is read only, less we read it back from skia (data is opaque i believe)
+void Path::set_offset(real o) {
+    this->o = o;
+}
+
+bool Path::contains(vec2 v) {
+    return p ? p->contains(v.x, v.y) : rect.contains(v);
 }
 
 Path::operator bool() {
-    return a.size() || rect;
+    return p || rect;
 }
 
 bool Path::operator!() {
     return !(operator bool());
+}
+
+rectd &Path::bounds() {
+    if (!rect) {
+        SkRect r = p->getBounds(); /// invalidate rect on updates
+        rect.x = r.fLeft;
+        rect.y = r.fTop;
+        rect.w = r.fRight  - r.fLeft;
+        rect.h = r.fBottom - r.fTop;
+    }
+    return rect;
+}
+
+real Path::w()      { return bounds().w; };
+real Path::h()      { return bounds().h; };
+real Path::aspect() { return bounds().h / bounds().w; };
+vec2 Path::xy()     {
+    bounds();
+    return rect.xy();
+}
+
+/// dont mind the params
+SkPath *Path::sk_path(SkPaint *paint) {
+    if (!std::isnan(o) && o != 0) {
+        assert(p);
+        if (!offsets)
+             offsets = (Path **)calloc(max_offsets, sizeof(Path *));
+        Path *output = null;
+        for (int   i = 0; i < max_offsets; i++) {
+            Path *offset = offsets[i];
+            if (offset && offset->o_cache == o) {
+                output = offset;
+                break;
+            }
+        }
+        if (!output) {
+            const int l     = max_offsets - 1;
+            delete offsets[l];
+            offsets[l]      = new Path();
+            output          = offsets[l];
+            output->p       = new SkPath(*p);
+            output->o_cache = o;
+            //SkPath *u_path = output->p;
+            
+            ///
+            SkPath  fpath;
+            SkPaint cp = SkPaint(*paint);
+            cp.setStyle(SkPaint::kStroke_Style);
+            cp.setStrokeWidth(std::abs(o) * 2);
+            cp.setStrokeJoin(SkPaint::kRound_Join);
+            cp.getFillPath((const SkPath &)*p, &fpath);
+            /// todo: the negative offset needs a path selection
+            /// unfortunately the path verbs and path points dont line up in skia
+            /// 
+            if (o < 0) {
+                output->p->reverseAddPath(fpath);
+                output->p->setFillType(SkPathFillType::kWinding );
+                /*
+                skia has an incomplete api around path management and sub sections.  its quite incomplete.
+                the following code doesnt line up the te amount of points so i dont know how to stride through the ops */
+                //------------
+                //SkPathMeasure pm = { *output->p, false, 1.0 };
+                /*
+                SkPath                        *u_path = output->p;
+                SkSTArray<16, GrGLubyte, true> verbs;
+                SkSTArray<16, SkPoint, true>   points;
+                int n_verbs  = u_path->countVerbs();
+                int n_points = u_path->countPoints();
+                verbs.resize_back (n_verbs);
+                points.resize_back(n_points);
+                u_path->getPoints (&points[0], n_points);
+                u_path->getVerbs  ( &verbs[0], n_verbs);
+                
+                int ip = 0;
+                for (int i = 0; i < n_verbs; i++) {
+                    enum SkPath::Verb vb = (enum SkPath::Verb)verbs[i];
+                    switch (vb) {
+                    case SkPath::kMove_Verb: // 1
+                        ip += 1;
+                        break;
+                    case SkPath::kLine_Verb: // 1
+                        ip += 2;
+                        break;
+                    case SkPath::kCubic_Verb: // 3
+                        ip += 3;
+                        break;
+                    case SkPath::kQuad_Verb: // 4
+                        ip += 4;
+                        break;
+                    case SkPath::kClose_Verb: // 0
+                        ip += 0;
+                        break;
+                    default:
+                        assert(false);
+                        break;
+                    }
+                }
+                assert(n_points == ip);
+                */
+            } else
+                output->p->addPath(fpath);
+
+            //output->p->toggleInverseFillType();
+            ///
+        }
+        return output->p;
+    }
+    assert(p);
+    return p;
 }

@@ -24,7 +24,7 @@ void Interface::draw(node *root) {
     std::function<void(node *)> recur;
                                 recur = [&](node *n) {
         canvas.save();
-        canvas.translate(n->path.xy());
+        canvas.translate(n->paths.rect.xy());
         n->draw(canvas);
         for (auto &[id, m]: n->mounts)
             recur(m);

@@ -83,6 +83,9 @@ struct Shaders {
         return map == ref.map;
     }
     
+    operator bool()  { return  map.size(); }
+    bool operator!() { return !map.size(); }
+    
     /// group=shader
     Shaders(str v) { /// str is the only interface in it.  everything else is just too messy for how simple the map is
         auto sp = v.split(",");

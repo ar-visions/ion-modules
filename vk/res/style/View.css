@@ -1,20 +1,22 @@
-View {
-    Button {
-        region:10l 22t 10r 10b;
-        fill-color:#f3f;
-        text-color:#222;
-        text-label:"This is a label 22...";
-    }
+Button {
+    radius:      2;
+    fill-offset: 0;
+    region:      50x 50y 50r 50b;
+    fill-color:  #f00;
+    text-color:  #222;
+    text-label:  "This is a label 22...";
+    fill-image:  "ion-mods.png";
+    fill-offset: 50;
 }
 
-/*
-Button:active {
-    fill-color:#f5f;
+Button:hover {
+    fill-color:#aaa, 200ms ease;
     text-color:#fff;
 }
-*/
 
 Button:active {
-    fill-color:#fff;
+    fill-color:#00f;
     text-color:#fff;
+    fill-offset:50;
 }
+

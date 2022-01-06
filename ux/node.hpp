@@ -94,6 +94,7 @@ struct node {
         Captured    = 2,
         StateUpdate = 4
     };
+    ///
     const char    *selector   = "";
     const char    *class_name = "";
     node          *parent     = null;
@@ -101,7 +102,15 @@ struct node {
     vec<Element>   elements; /// used to check differences
     Element        element; /// use shared ptr in element
     std::queue<Fn> queue;
-    Path           path;
+    ///
+    struct Paths {
+        real  last_sg; /// sorry boys, gotta be here..
+        rectd rect;    ///
+        Path  fill;    /// Composer is setting this based on the current respective offsets and radius
+        Path  border;  ///
+        Path  child;   /// each one should be scalable, rotatable, and translatable ///
+    } paths;
+    ///
     bool           mounted    = false;
     node          *root       = nullptr;
     vec2           scroll     = {0,0};
@@ -109,7 +118,6 @@ struct node {
     int32_t        flags;
     map<std::string, PipelineData> objects;
     Style         *style = null;
-    
     ///
     map<str, Member *> contextuals;
     map<str, Member *> internals;
@@ -165,31 +173,26 @@ struct node {
                 };
                 
                 /// recompute style on this node:member
-                lambdas[type].compute_style = [](Member &m) -> void {
-                    if (m.name == "text-label") {
-                        int test = 0;
-                        test++;
-                    }
-                    StPair *p = Style_members_count(m.name) ? Style_pair(&m) : null;
-                    MType<T,MT> &mm = (MType<T,MT> &)m;
-                    if (m.name == "text-label") {
-                        int test = 0;
-                        test++;
-                    }
-                    if (p && p->instances.count(m.type) == 0) {
-                        var conv = p->value;
-                        p->instances.set(m.type, new T(conv));
-                    }
-                    if (m.name == "text-label") {
-                        int test = 0;
-                        test++;
-                    }
-                    mm.style_value_set(p ? p->instances.get<T>(m.type) : null);
-                    if (m.name == "text-label") {
-                        int test = 0;
-                        test++;
-                    }
-                };
+                if constexpr (MT == Extern)
+                    lambdas[type].compute_style = [](Member &m) -> void {
+                        StPair *p = Style_members_count(m.name) ? Style_pair(&m) : null;
+                        MType<T,MT> &mm = (MType<T,MT> &)m;
+                        if (p && p->instances.count(m.type) == 0) {
+                            var conv = p->value; /// should only be done on changes, and we should have a cache (likely)
+                            /// we need to get the contained type?
+                            /// this p->value is vec<Attrib> ... eh. we clearly need to branch here.
+                            /// dumb founded.
+                            /// it is sorta cool that you can definte an attrib array in style lol.
+                            ///
+                            if constexpr (is_vec<T>()) // forget why we removed the var import from constructor level, but i am rolling with it.
+                                p->instances.set(m.type, T::new_import(conv)); // vec<Attrib>::new_import(var)
+                            else
+                                p->instances.set(m.type, new T(conv));
+                        }
+                        mm.style_value_set(p ? p->instances.get<T>(m.type) : null);
+                    };
+                else
+                    lambdas[type].compute_style = null;
                 
                 /// direct set
                 lambdas[type].type_set = [](Member &m, void *pv) -> void {
@@ -293,6 +296,9 @@ struct node {
         Extern<double>  size;
         Extern<rgba>    color;
         Extern<bool>    dash;
+        Extern<real>    offset;
+        Extern<Cap>     cap;
+        Extern<Join>    join;
         operator bool() { return size() > 0 && color().a > 0; }
     };
     
@@ -300,14 +306,15 @@ struct node {
         Extern<str>     label;
         Extern<rgba>    color;
         Extern<AlignV2> align;
+        Extern<real>    offset;
         operator bool() { return label() && color().a > 0; }
     };
     
     struct Fill {
         Extern<rgba>    color;
-        operator bool()  {
-            return color().a > 0;
-        }
+        Extern<real>    offset;
+        Extern<Image>   image;
+        operator bool() { return offset() > 0 && color().a > 0; }
     };
     
     template <typename T>
@@ -337,11 +344,11 @@ struct node {
         externals[name] = &m;
     }
     
-    vec2 offset() { /// untested
+    vec2 offset() {
         node *n = this;
         vec2  o = { 0, 0 };
         while (n) {
-            rectd &rect = n->path;
+            rectd &rect = n->paths.rect;
             o  -= rect.xy();
             o  += n->scroll;
             n   = n->parent;
@@ -373,7 +380,27 @@ struct node {
         Text           text;
         Fill           fill;
         Border         border;
+        Fill           child;
         Extern<Region> region;
+        struct Radius {
+            enum Side { TL, TR, BR, BL };
+            Extern<real> val;
+            Extern<real> tl;
+            Extern<real> tr;
+            Extern<real> br;
+            Extern<real> bl;
+            operator bool() { return val() > 0 || tl() > 0 || tr() > 0 || br() > 0 || bl() > 0; }
+            real operator()(Side side) {
+                real v = std::isnan(val()) ? 0 : val();
+                switch (side) {
+                    case TL: return std::isnan(tl()) ? v : tl();
+                    case TR: return std::isnan(tr()) ? v : tr();
+                    case BL: return std::isnan(bl()) ? v : bl();
+                    case BR: return std::isnan(br()) ? v : br();
+                }
+                return 0;
+            }
+        } radius;
         Intern<bool>   captured;
         Intern<bool>   focused;
         Intern<vec2>   cursor;

@@ -137,6 +137,12 @@ struct PipelineMap {
         map<str, PipelineData> part;
     };
     std::shared_ptr<Data> data;
+
+    //inline map<str, PipelineData>::iterator begin() { return data->part.begin(); }
+    //inline map<str, PipelineData>::iterator end()   { return data->part.end();   }
+    
+    operator bool() { return !!data; }
+    inline map<str, PipelineData> &map() { return data->part; }
 };
 
 /// model dx (using pipeline dx)

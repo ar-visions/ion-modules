@@ -14,11 +14,14 @@ struct Composer {
     
     vec<node *> select_at(vec2 cur, bool active = true) {
         auto inside = root->select([&](node *n) {
-            rectd &bb = n->path;
             real    x = cur.x, y = cur.y;
             vec2    o = n->offset();
             vec2  rel = { x - o.x, y - o.y };
-            bool   in = (x >= bb.x) && (y >= bb.y) && (x < bb.x + bb.w) && (y < bb.y + bb.h);
+            bool   in = n->paths.fill.contains(cur);
+            n->m.cursor = in ? vec2(x, y) : vec2(null);
+            if (str(n->class_name) == str("Button")) {
+                std::cout << "valuez:" << vec2(x, y) << std::endl;
+            }
             return (in && (!active || !n->m.active())) ? n : null;
         });
         auto  actives = root->select([&](node *n) {
@@ -84,10 +87,17 @@ struct Composer {
         /// nullify cursor values
         vec<node *> prev_cursor;
         root->exec([&](node *n) {
+            std::cout << "n.m.cursor = " << n->m.cursor() << std::endl;
             if (n->m.cursor()) {
                 prev_cursor += n;
-                if (n->m.cursor())
-                    n->m.cursor = vec2(null);
+                n->m.cursor = vec2(null);
+                if (n->m.cursor()) {
+                    int test = 0;
+                    test++;
+                } else {
+                    int test = 0;
+                    test++;
+                }
             }
         });
         /// select all within cursor, including active
@@ -148,7 +158,8 @@ struct Composer {
             child->root   = parent ? parent->root : child;
             if (!parent) {
                 /// root element is initialized with the window size
-                child->path = rectd { 0.0, 0.0, double(ux->sz.x), double(ux->sz.y) };
+                /// use routine on paths to determine if mouse is inside.
+                child->paths.rect = rectd { 0.0, 0.0, double(ux->sz.x), double(ux->sz.y) };
             }
             child->parent = parent;
             child->standard_bind();
@@ -297,9 +308,8 @@ struct Composer {
             // -> node added, removed
             // -> state change at all in the entire tree
             child->exec([&](node *n) {
-                for (auto &[name, member]: n->externals) {
+                for (auto &[name, member]: n->externals)
                     member->fn->compute_style(*member); /// no internals, they read only makes them ideal for state match
-                }
             });
         }
         return node_updated;
@@ -309,10 +319,11 @@ struct Composer {
         /// ----------------------------------------
         Element  e = fn();
         update(null, &root, e);
-/// start watching after style is loaded; perform reload on [captains log] supplemental changes
+        
+/// style reload on modification
 #if !defined(NDEBUG)
-        ///
-        static auto css_watch = Watch::spawn("style", {".css"}, [root=root](bool init, vec<PathOp> &paths) {
+        static auto css_watch = Watch::spawn(
+                "style", {".css"}, [root=root](bool init, vec<PathOp> &paths) {
             if (!init) {
                 Style::unload();
                 root->exec([](node *n) {
@@ -324,17 +335,51 @@ struct Composer {
         });
 #endif
         rectd rect = { real(0), real(0), real(sz->x), real(sz->y) };
-        root->path = rect;
-        /// ----------------------------------------
-        root->select([&](node *n) {
-            if (n != root) {
-                Region &region = n->m.region;
-                n->path = region(n, n->parent);
+        bool force = (root->paths.rect != rect);
+        if (force) {
+            root->paths.rect = rect;
+            force = true;
+        }
+        ///
+        root->exec([&](node *n) {
+            Region &region = n->m.region;
+            rectd &r       = n->paths.rect = (n == root ? rect : region(n, n->parent));
+            real TL = n->m.radius(node::Members::Radius::TL);
+            real TR = n->m.radius(node::Members::Radius::TR);
+            real BR = n->m.radius(node::Members::Radius::BR);
+            real BL = n->m.radius(node::Members::Radius::BL);
+            real fo = n->m.fill.offset;
+            real bo = n->m.border.offset;
+            real co = n->m.child.offset;
+            real sg = -1234 + (TL) + (TR * 100) + (BR * 10000) + (BL * 1000000) + (fo * 50) + (bo * 5000) + (co * 500000);
+            if (force || n->paths.last_sg != sg) {
+                n->paths.last_sg  = sg;
+                if (n->m.radius) {
+                    vec2 v00 = r.xy();
+                    vec2 v10 = v00 + vec2 { r.w,   0 };
+                    vec2 v11 = v00 + vec2 { r.w, r.h };
+                    vec2 v01 = v00 + vec2 {   0, r.h };
+                    vec4 x00 = vec4(v00.x, v00.y, TL, TL);
+                    vec4 x10 = vec4(v10.x, v10.y, TR, TR);
+                    vec4 x11 = vec4(v11.x, v11.y, BR, BR);
+                    vec4 x01 = vec4(v01.x, v01.y, BL, BL);
+                    n->paths.fill   = Path();
+                    n->paths.fill.rect_v4(x00, x10, x11, x01);
+                    n->paths.border = n->paths.fill;
+                    n->paths.child  = n->paths.fill;
+                } else {
+                    n->paths.rect   = r;
+                    n->paths.fill   = r;
+                    n->paths.border = r;
+                    n->paths.child  = r;
+                }
+                n->paths.fill.set_offset(fo);
+                n->paths.border.set_offset(bo);
+                n->paths.child.set_offset(co);
             }
             return null;
         });
         ux->draw(root);
-        /// ----------------------------------------
     }
     
     vec<node *> query(std::function<node *(node *)> fn) {

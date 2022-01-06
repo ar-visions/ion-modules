@@ -12,7 +12,6 @@ struct Object:node {
         Extern<Shaders>     shaders;
         Extern<UniformData> ubo;
         Extern<vec<Attrib>> attr;
-        /// --------------------- cross the streams?
         Intern<str>         sval;
         Intern<int>         ivar;
         Intern<PipelineMap> pmap;
@@ -40,8 +39,10 @@ struct Object:node {
     }
     
     Element render() { /// no reference returned, so it wont do a thing except push this pipeline
+        ///
+        ///
         auto &device = Vulkan::device();
-        for (auto &[group, pipeline]: m)
+        for (auto &[group, pipeline]: m.pmap().map()) // cannot seem to reduce this down
             device.render.push(pipeline);
         return null;
     }

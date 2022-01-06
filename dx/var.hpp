@@ -451,17 +451,18 @@ public:
     };
     inline operator       float() {
         var &v = var::resolve(*this);
-        /// minor convenience with check
         if (v.t == Type::Ref) return float(*v.n_value.vref);
         assert( v.t == Type::f32 || v.t == Type::f64);
-        return (v.t == Type::f32) ? *(float    *)v.n : float(*(double *)v.n);
+        return (v.t == Type::f32) ? *(float *)v.n :
+               (v.t == Type::f64) ?   float(*(double *)v.n) :
+               (v.t == Type::Str) ?   float(std::stod(*v.s)) : 0.0;
     }
     inline operator      double() {
         var &v = var::resolve(*this);
-        /// minor convenience with check
         if (v.t == Type::Ref) return double(*v.n_value.vref);
-        assert( v.t == Type::f32 || v.t == Type::f64);
-        return (v.t == Type::f64) ? *(double    *)v.n : double(*(float *)v.n);
+        return (v.t == Type::f64) ? *(double *)v.n :
+               (v.t == Type::f32) ?   double(*(float *)v.n) :
+               (v.t == Type::Str) ? std::stod(*v.s) : 0.0;
     }
            operator std::string();
            operator bool();
