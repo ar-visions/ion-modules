@@ -43,7 +43,7 @@ struct StTrans {
         // time = 0
         // type = 1
         str  t_combined = sp[0];
-        Unit u =
+        
         
         // i dont have a complete list yet. plus i am in a funny mood.
         type = sp.size() >= 2 ? (sp[1] == "linear" ? Linear : (sp[1] == "cubic-out") ? CubicOut : (sp[1].substr(0, 5) == "cubic") ? CubicIn : None) : None;
