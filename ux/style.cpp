@@ -5,8 +5,15 @@
 
 map<path_t, Style> Style::cache            = {};
 map<str, vec<ptr<StBlock>>> Style::members = {};
+std::unordered_map<str, int> Unit::u_flags = {
+    { "cm", Metric   | Distance },
+    { "in", Standard | Distance },
+    { "%",  Percent },
+    { "px", 0 }
+};
 
 struct StBlock;
+
 
 /// -------------------------------------------------
 size_t    Style_members_count(str &s)              { return (Style::members.count(s)); }
@@ -124,13 +131,8 @@ static vec<StQualifier> parse_qualifiers(char **p) {
                     break;
                 }
             }
-            if (!is_op) {
+            if (!is_op)
                 v.state  = tail;
-                int test = 0;
-                test++;
-                if (v.state) {
-                }
-            }
         }
         result += v;
     }
@@ -150,11 +152,6 @@ void Style::cache_members() {
         for (auto &p:b->pairs) {
             bool  found = false;
             auto &cache = Style::members[p.member];
-            if (p.member == "bg") {
-                int test = 0;
-                test++;
-            }
-            ///
             for (auto &cb:cache)
                  found |= cb == b;
             if (!found)

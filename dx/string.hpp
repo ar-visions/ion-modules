@@ -4,6 +4,14 @@
 
 /// io is basically just decoration.  dont tell that to its face, though.
 struct str:io {
+    enum MatchType {
+        Alpha,
+        Numeric,
+        WS,
+        Printable,
+        String,
+        CIString
+    };
     std::string s;
     str(nullptr_t n = null);
     str(const char *cstr);
@@ -28,10 +36,21 @@ struct str:io {
     bool starts_with(const char *cstr)          const;
     bool   ends_with(const char *cstr)          const;
     int     index_of(const char *f)             const;
+    int     index_of(MatchType ct, const char * = null) const;
     int     index_icase(const char *f)          const;
     vec<str>   split(str delim)                 const;
     vec<str>   split(const char *delim)         const;
     vec<str>   split()                          const;
+    
+    template <typename T>
+    T map(T default_v, std::unordered_map<std::string, T> &m) {
+        return m.count(s) == 0 ? default_v : m[s];
+    }
+    template <typename T>
+    T map(std::unordered_map<std::string, T> &m) {
+        assert(m.count(s));
+        return m[s];
+    }
     
     static str format(str t, std::vector<var> p = {});
     

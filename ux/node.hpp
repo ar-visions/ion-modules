@@ -74,7 +74,7 @@ struct Member {
         return bound_to == &m && peer_cache == m.peer_cache;
     }
     
-    virtual void style_value_set(void *ptr) { }
+    virtual void style_value_set(void *ptr, StTrans *) { }
 };
 
 size_t Style_members_count(str &s);
@@ -126,11 +126,15 @@ struct node {
     /// member type-specific struct
     template <typename T, const Member::MType MT>
     struct MType:Member {
-        size_t   cache = 0;
-        T          def;
-        T        value;
-        T *style_value = null;
-
+        size_t        cache             = 0;
+        T             def;
+        T             value;
+        StTrans      *trans             = null;
+        int64_t       trans_timer_start = 0;
+        T             trans_value_start;        /// this is about as shouting as i get
+        T             trans_value_current;
+        T            *style_value       = null;
+        
         /// state cant and wont use style, not unless we want to create a feedback in spacetime
         bool state_bool()  {
             T &v = cache ? value : def;
@@ -139,13 +143,34 @@ struct node {
             else
                 return bool(v);
         }
-        static T &effective(MType<T,MT> &m) { return (m.cache != 0) ? m.value : (m.style_value ? *m.style_value : m.def); }
-        void *ptr() { return &effective(*this); }
+        
+        /// current effective value
+        T &current() {
+            T &v = (cache != 0) ? value : (style_value ? trans_value_current : def);
+            ///
+            if (trans && style_value) {
+                auto diff           = ticks() - trans_timer_start;
+                auto factor         = real(diff) / real(trans->duration.millis);
+                trans_value_current = (*trans)(trans_value_start, *style_value, factor);
+            }
+            return v;
+            
+            /// to get an address of the current value we would need to store it in cache via transition key
+        }
+        
+        /// pointer to current effective value
+        void *ptr() { return &current(); }
         
         /// extern, intern, context and such could override; only to disable most likely
         /// perhaps you may want intern to use the style only if its default is null
-        void style_value_set(void *ptr) {
-            style_value = ptr ? (T *)ptr : null; // text-label testable here with member.name
+        ///
+        void style_value_set(void *ptr, StTrans *t) {
+            if (t != trans) {
+                trans_value_start = current();
+                trans_timer_start = ticks();
+                trans             = t;
+            }
+            style_value = ptr ? (T *)ptr : null;
         }
         
         void init() {
@@ -154,12 +179,12 @@ struct node {
 
             /// release the lambdas of war
             if (lambdas.count(type) == 0) {
-                lambdas[type] = {};
+                lambdas[type]       = {};
                 
                 /// unset value, use default value
                 lambdas[type].unset = [](Member &m) -> void {
                     MType<T,MT> &mm = (MType<T,MT> &)m;
-                    mm.cache = 0;
+                    mm.cache        = 0;
                 };
                 
                 /// boolean check, used with style. members extend the syntax of style. focus is just a standard member
@@ -169,7 +194,7 @@ struct node {
                         T &v = (mm.cache != 0) ? mm.value : (mm.style_value ? *mm.style_value : mm.def);
                         return std::filesystem::exists(v);
                     } else
-                        return bool(effective(mm));
+                        return bool(mm.current());
                 };
                 
                 /// recompute style on this node:member
@@ -177,19 +202,16 @@ struct node {
                     lambdas[type].compute_style = [](Member &m) -> void {
                         StPair *p = Style_members_count(m.name) ? Style_pair(&m) : null;
                         MType<T,MT> &mm = (MType<T,MT> &)m;
+                        
+                        ///
                         if (p && p->instances.count(m.type) == 0) {
-                            var conv = p->value; /// should only be done on changes, and we should have a cache (likely)
-                            /// we need to get the contained type?
-                            /// this p->value is vec<Attrib> ... eh. we clearly need to branch here.
-                            /// dumb founded.
-                            /// it is sorta cool that you can definte an attrib array in style lol.
-                            ///
-                            if constexpr (is_vec<T>()) // forget why we removed the var import from constructor level, but i am rolling with it.
+                            var conv = p->value;
+                            if constexpr (is_vec<T>())
                                 p->instances.set(m.type, T::new_import(conv)); // vec<Attrib>::new_import(var)
                             else
                                 p->instances.set(m.type, new T(conv));
                         }
-                        mm.style_value_set(p ? p->instances.get<T>(m.type) : null);
+                        mm.style_value_set(p ? p->instances.get<T>(m.type) : null, p ? &p->trans : null);
                     };
                 else
                     lambdas[type].compute_style = null;
@@ -213,7 +235,7 @@ struct node {
                 /// io conversion
                 if constexpr (std::is_base_of<io, T>() || std::is_same_v<T, path_t>) {
                     if constexpr (!std::is_same_v<T, path_t>)
-                        lambdas[type].var_get = [](Member &m) -> var { return var(effective((MType<T,MT> &)m)); };
+                        lambdas[type].var_get = [](Member &m) -> var { return var(((MType<T,MT> &)m).current()); };
                     ///
                     lambdas[type].var_set = [&](Member &m, var &v) -> void {
                         MType<T,MT> &mm = (MType<T,MT> &)m;
@@ -263,7 +285,7 @@ struct node {
             return value;
         }
         ///
-        T &ref()           { return effective(*this); }
+        T &ref()           { return current(); }
            operator T&  () { return ref(); }
         T &operator()   () { return ref(); }
            operator bool() { return bool(ref()); }

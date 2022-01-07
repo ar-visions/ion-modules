@@ -453,7 +453,7 @@ Socket Socket::connect(str uri, bool trusted_only) {
         
     } else if (p == "http") {
         if (trusted_only) {
-            console.fatal("insecure protocol with trusted_only:true");
+            console.fault("insecure protocol with trusted_only:true");
             return null;
         }
         

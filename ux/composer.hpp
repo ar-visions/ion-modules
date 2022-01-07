@@ -214,7 +214,7 @@ struct Composer {
                     
                     /// external must be available on child
                     if (child->externals.count(bind.id) == 0)
-                        console.fatal("external:{0} not found on {1}:{2}",
+                        console.fault("external:{0} not found on {1}:{2}",
                                       {child_mname, child_cn, child_id});
                     auto & child_member = (Member &)*child->externals[child_mname];
                     auto &parent_member = (Member &)(has_int ? *parent->internals  [parent_mname] : /// internal has precedence
@@ -228,7 +228,7 @@ struct Composer {
                     /// no external/internal member exists on parent
                     str parent_id = parent->m.id;
                     str parent_cn = parent->class_name;
-                    console.fatal("{0} not found on {1}:{2}", {parent_mname, parent_cn, parent_id});
+                    console.fault("{0} not found on {1}:{2}", {parent_mname, parent_cn, parent_id});
                 }
             }
             if (unbound.count(bind.id))
@@ -329,7 +329,7 @@ struct Composer {
                 root->exec([](node *n) {
                     n->style = null;
                     for (auto &[k,m]:n->externals)
-                        m->style_value_set(null);
+                        m->style_value_set(null, null);
                 });
             }
         });

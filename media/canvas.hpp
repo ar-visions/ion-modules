@@ -179,6 +179,7 @@ public:
                     bool r_tl = true, bool r_tr = true, bool r_br = true, bool r_bl = true);
     Path       &arc(vec2 c, double radius, double rads_from, double rads, bool move_start);
     operator  rectd &();
+    bool    is_rect();
     vec2         xy();
     real          w();
     real          h();

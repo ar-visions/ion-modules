@@ -169,6 +169,38 @@ int str::index_of(const char *f) const {
     return -1;
 }
 
+int str::index_of(MatchType ct, const char *mp) const {
+    typedef std::function<bool(char &)>       Fn;
+    typedef std::unordered_map<MatchType, Fn> Map;
+    ///
+    int index = 0;
+    char *mp0 = (char *)mp;
+    if (ct == CIString) {
+        size_t sz = len();
+        mp0       = new char[sz];
+        memcpy(mp0, s.c_str(), sz);
+        mp0[sz]   = 0;
+    }
+    auto m = Map {
+        { Alpha,     [ ](char &c) { return  isalpha (c);            }},
+        { Numeric,   [ ](char &c) { return  isnumber(c);            }},
+        { WS,        [ ](char &c) { return  isspace (c);            }},
+        { Printable, [ ](char &c) { return !isspace (c);            }},
+        { String,    [&](char &c) { return  strcmp  (&c, mp0) == 0; }},
+        { CIString,  [&](char &c) { return  strcmp  (&c, mp0) == 0; }}
+    };
+    Fn &fn = m[ct];
+    for (auto c:s) {
+        index++;
+        if (fn(c))
+            return index;
+    }
+    if (ct == CIString)
+        delete mp0;
+    
+    return -1;
+}
+
 int str::index_icase(const char *f) const {
     const std::string fs = f;
     auto it = std::search(s.begin(), s.end(), fs.begin(), fs.end(), [](char ch1, char ch2) {

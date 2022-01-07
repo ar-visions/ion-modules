@@ -192,7 +192,7 @@ void SQLite::observe(str model_name) {
                         return value ? str(value[peer_key]) : str("NULL");
                     }
                 }
-                console.fatal("unsupported value: {0}", {field}); /// unsupported value
+                console.fault("unsupported value: {0}", {field}); /// unsupported value
             }
             return str(value);
         };

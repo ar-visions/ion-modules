@@ -238,6 +238,9 @@ struct Context2D:ICanvasBackend {
     
     // we are to put everything in path.
     void fill(DrawState &ds, Path &path) {
+        if (path.is_rect())
+            return fill(ds, path.rect);
+        
         State   *s = (State *)ds.b_state;
         SkPaint ps = SkPaint(s->ps);
         ///
@@ -557,6 +560,10 @@ Path &Path::operator=(Path ref) {
     if (this != &ref)
         copy(ref);
     return *this;
+}
+
+bool Path::is_rect() {
+    return !p && rect;
 }
 
 void Path::copy(Path &ref) {

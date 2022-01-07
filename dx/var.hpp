@@ -23,11 +23,7 @@
 #include <dx/type.hpp>
 
 static inline
-std::chrono::milliseconds ticks() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()
-    );
-}
+int64_t ticks() { return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); }
 
 template <class T>
 static inline T interp(T from, T to, T f) {
@@ -646,7 +642,7 @@ struct Logging {
             assert(a0);
         }
     }
-    static inline void fatal(str t, std::vector<var> a = {}) {
+    static inline void fault(str t, std::vector<var> a = {}) {
         _log(t, a, true);
         exit(1);
     }
