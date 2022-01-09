@@ -12,9 +12,9 @@ void first_data(str model, Truth &schema, vec<std::ofstream *> &odata, std::ofst
         var &d   = schema.data[i]; // store the shape on pixels in image?
         str key  = str::format("data{0}.{1}", {
             i, (schema.data[i].c == Type::ui8 ? "u8" : "f32")});
-        var dm   = var(Type::Map);
-        dm[key]  = vec<int>::import(d.shape());
-        s_shape += str(dm);
+        var dmap   = var(Type::Map);
+        dmap[key]  = vec<int>(d.shape());
+        s_shape += str(dmap);
     }
     std::string   s_index = std::string(d_index);
     o_index.write(s_index.c_str(), s_index.len());
@@ -53,7 +53,7 @@ void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
             str  aud = exists(id + ".mp4")  ? (id + ".mp4")  :
                        exists(id + ".mp3")  ? (id + ".mp3")  : "";
             
-            if (require.size() && !exists(js))
+            if (require.size() and !exists(js))
                 continue;
             ///
             /// image and audio files get their best path to resource selection here
@@ -66,7 +66,7 @@ void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
             /// continue if the required data does not exist; i believe .extension can count for files
             bool cont = false;
             for (str &r: require) {
-                if (r[0] != '.' && data["annots"].count(r) == 0) {
+                if (r[0] != '.' and data["annots"].count(r) == 0) {
                     cont = true;
                     break;
                 }

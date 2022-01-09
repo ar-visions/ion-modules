@@ -130,7 +130,9 @@ struct Context2D:ICanvasBackend {
     
     void    clear(DrawState &ds) { sk_canvas->clear(sk_color(ds.color)); }
     void    clear(DrawState &ds, rgba &c) { sk_canvas->clear(sk_color(c)); }
-    void    flush(DrawState &ds) { sk_canvas->flush(); }
+    void    flush(DrawState &ds) {
+        sk_canvas->flush();
+    }
     void  restore(DrawState &ds) {
         delete (State *)ds.b_state;
         sk_canvas->restore();
@@ -555,7 +557,10 @@ void  Canvas::text(str text, rectd rect, Vec2<Align> align, vec2 offset, bool el
 Path::Path()                    { }
 Path::Path(rectd r) : rect(r)   { }
 Path::Path(const Path &ref)     { copy((Path &)ref); }
-Path::operator rectd &()        { return rect;       }
+Path::operator rectd &()        {
+    bounds();
+    return rect;
+}
 Path &Path::operator=(Path ref) {
     if (this != &ref)
         copy(ref);
@@ -567,6 +572,8 @@ bool Path::is_rect() {
 }
 
 void Path::copy(Path &ref) {
+    delete last_offset; last_offset = null;
+    delete p;           p           = null;
     if (ref.p)
         p = new SkPath(*ref.p);
     rect = ref.rect;
@@ -590,11 +597,7 @@ Path &Path::rectangle(rectd r, vec2 radius, bool r_tl, bool r_tr, bool r_br, boo
 }
 
 Path::~Path() {
-    if (offsets) {
-        for (int i = 0; i < max_offsets; i++)
-            delete offsets[i];
-        free(offsets);
-    }
+    delete last_offset;
     delete p;
 }
 
@@ -702,13 +705,16 @@ Path &Path::rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl) {
     return *this;
 }
 
+/// we are only supporting the path use-case here.
 /// the offset is read only, less we read it back from skia (data is opaque i believe)
 void Path::set_offset(real o) {
-    this->o = o;
+    this->o    = o;
+    this->rect = null;
 }
 
 bool Path::contains(vec2 v) {
-    return p ? p->contains(v.x, v.y) : rect.contains(v);
+    SkPath *sk = last_offset ? last_offset : p; /// up to three areas here..
+    return  sk ? sk->contains(v.x, v.y)    : rect.contains(v);
 }
 
 Path::operator bool() {
@@ -721,7 +727,7 @@ bool Path::operator!() {
 
 rectd &Path::bounds() {
     if (!rect) {
-        SkRect r = p->getBounds(); /// invalidate rect on updates
+        SkRect r = p->getBounds(); /// invalidate rect on updates (such as offset op)
         rect.x = r.fLeft;
         rect.y = r.fTop;
         rect.w = r.fRight  - r.fLeft;
@@ -738,91 +744,39 @@ vec2 Path::xy()     {
     return rect.xy();
 }
 
-/// dont mind the params
+// i think caching 2 to 8 is good
+// at the moment there is a major performance degredation
 SkPath *Path::sk_path(SkPaint *paint) {
-    if (!std::isnan(o) && o != 0) {
+    if (bool(last_offset) and o_cache == o)
+        return last_offset;
+    ///
+    if (!std::isnan(o) and o != 0) {
         assert(p);
-        if (!offsets)
-             offsets = (Path **)calloc(max_offsets, sizeof(Path *));
-        Path *output = null;
-        for (int   i = 0; i < max_offsets; i++) {
-            Path *offset = offsets[i];
-            if (offset && offset->o_cache == o) {
-                output = offset;
-                break;
-            }
-        }
-        if (!output) {
-            const int l     = max_offsets - 1;
-            delete offsets[l];
-            offsets[l]      = new Path();
-            output          = offsets[l];
-            output->p       = new SkPath(*p);
-            output->o_cache = o;
-            //SkPath *u_path = output->p;
-            
-            ///
-            SkPath  fpath;
-            SkPaint cp = SkPaint(*paint);
-            cp.setStyle(SkPaint::kStroke_Style);
-            cp.setStrokeWidth(std::abs(o) * 2);
-            cp.setStrokeJoin(SkPaint::kRound_Join);
-            cp.getFillPath((const SkPath &)*p, &fpath);
-            /// todo: the negative offset needs a path selection
-            /// unfortunately the path verbs and path points dont line up in skia
-            /// 
-            if (o < 0) {
-                output->p->reverseAddPath(fpath);
-                output->p->setFillType(SkPathFillType::kWinding );
-                /*
-                skia has an incomplete api around path management and sub sections.  its quite incomplete.
-                the following code doesnt line up the te amount of points so i dont know how to stride through the ops */
-                //------------
-                //SkPathMeasure pm = { *output->p, false, 1.0 };
-                /*
-                SkPath                        *u_path = output->p;
-                SkSTArray<16, GrGLubyte, true> verbs;
-                SkSTArray<16, SkPoint, true>   points;
-                int n_verbs  = u_path->countVerbs();
-                int n_points = u_path->countPoints();
-                verbs.resize_back (n_verbs);
-                points.resize_back(n_points);
-                u_path->getPoints (&points[0], n_points);
-                u_path->getVerbs  ( &verbs[0], n_verbs);
-                
-                int ip = 0;
-                for (int i = 0; i < n_verbs; i++) {
-                    enum SkPath::Verb vb = (enum SkPath::Verb)verbs[i];
-                    switch (vb) {
-                    case SkPath::kMove_Verb: // 1
-                        ip += 1;
-                        break;
-                    case SkPath::kLine_Verb: // 1
-                        ip += 2;
-                        break;
-                    case SkPath::kCubic_Verb: // 3
-                        ip += 3;
-                        break;
-                    case SkPath::kQuad_Verb: // 4
-                        ip += 4;
-                        break;
-                    case SkPath::kClose_Verb: // 0
-                        ip += 0;
-                        break;
-                    default:
-                        assert(false);
-                        break;
-                    }
-                }
-                assert(n_points == ip);
-                */
-            } else
-                output->p->addPath(fpath);
-
-            //output->p->toggleInverseFillType();
-            ///
-        }
-        return output->p;
+        ///
+        delete last_offset;
+        last_offset = new SkPath(*p); // this is simply whats happening here, i think..
+        o_cache = o;
+        ///
+        SkPath  fpath;
+        SkPaint cp = SkPaint(*paint);
+        cp.setStyle(SkPaint::kStroke_Style);
+        cp.setStrokeWidth(std::abs(o) * 2);
+        cp.setStrokeJoin(SkPaint::kRound_Join);
+        cp.getFillPath((const SkPath &)*p, &fpath);
+        
+        auto vrbs = p->countVerbs();
+        auto pnts = p->countPoints(); // todo: void* handling in var for storage and logging are a bit broken
+                                      // fix without adding new type
+        std::cout << "p = " << (void *)p << ", pointer = " << (void *)this << " verbs = " << vrbs << ", points = " << pnts << "\n";
+        ///
+        if (o < 0) {
+            last_offset->reverseAddPath(fpath);
+            last_offset->setFillType(SkPathFillType::kWinding);
+        } else
+            last_offset->addPath(fpath);
+        ///
+        //output->p->toggleInverseFillType();
+        return last_offset;
     }
     assert(p);
     return p;

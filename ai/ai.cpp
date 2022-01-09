@@ -20,7 +20,7 @@ AI::AI(path_t p) {
     tflite::ops::builtin::BuiltinOpResolver res;
     tflite::InterpreterBuilder builder(*i->mdl, res);
     builder(&i->itr);
-    assert(i->itr != nullptr && i->itr->AllocateTensors() == kTfLiteOk);
+    assert(i->itr != nullptr and i->itr->AllocateTensors() == kTfLiteOk);
 }
 ///
 /// forward pass data

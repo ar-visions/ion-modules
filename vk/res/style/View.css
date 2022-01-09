@@ -1,22 +1,21 @@
 Button {
-    radius:      2;
-    fill-offset: 0;
-    region:      50x 50y 50r 50b;
-    fill-color:  #f00;
+    radius:      3;
+    fill-color:  #348;
+    fill-image:  "menu.png";
     text-color:  #222;
     text-label:  "This is a label 22...";
-    fill-image:  "ion-mods.png";
-    fill-offset: 50;
+    region:      250l 250t 250r 250b;
 }
+/* do this in a lambda */
 
 Button:hover {
-    fill-color:#aaa, 200ms ease;
-    text-color:#fff;
+    fill-color:#faa;
+    text-label:  "This is a label 22...";
+    fill-offset:30, 50ms ease;
 }
 
 Button:active {
-    fill-color:#00f;
-    text-color:#fff;
-    fill-offset:50;
+    fill-color:#aaf;
+    fill-offset:0, 50ms ease;
 }
 

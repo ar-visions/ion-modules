@@ -22,7 +22,7 @@ struct Align:io {
     void importer(var &data)           { type = Type(int(data)); }
     var  exporter()                    { return int(type);       }
     bool  operator==(Type t)           { return type == t;       }
-    io_define(Align, type != Undef);
+    io_shim(Align, type != Undef);
 };
 
 typedef Vec2<Align> AlignV2;
@@ -88,7 +88,7 @@ struct Blending:io { /// anything we serialize is an io class
     var exporter()                 { return int32_t(type);    }
     void importer(var &d)          { type = Type(int32_t(d)); }
     
-    io_define(Blending, type >= Clear);
+    io_shim(Blending, type >= Clear);
 };
 
 struct Cap:io {
@@ -155,20 +155,19 @@ class SkPath;
 class SkPaint;
 struct Path {
 protected:
-    SkPath *p = null;
+    SkPath *p           = null;
+    SkPath *last_offset = 0;
+    real    o_cache     = 0; // and that cache has this member set.
     ///
 public:
-    const size_t max_offsets = 8;
-    Path    **offsets = null;
-    real            o = 0; // if this is set, we contruct a new one and store in cache
-    real      o_cache = 0; // and that cache has this member set.
+    real            o   = 0; // if this is set, we contruct a new one and store in cache
     rectd        rect;
     ///
                Path();
                Path(rectd r);
-               Path(const Path &ref);
-              ~Path();
-    Path &operator=(Path ref);
+               Path(const Path &ref);  //
+              ~Path(); //
+    Path &operator=(Path ref); //
     void       copy(Path &ref);
     Path      &move(vec2 v);
     Path      &line(vec2 v);
@@ -231,7 +230,7 @@ struct DrawState {
     var  exporter()                { return null; }
     void        copy(const DrawState &r);
     
-    /// io_define(DrawState, true);
+    /// io_shim(DrawState, true);
     DrawState(nullptr_t n) : DrawState() { }
     DrawState(const DrawState &ref) { copy(ref);            }
     DrawState(var &d)            { importer(d);          }

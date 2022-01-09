@@ -48,7 +48,7 @@ struct List:node {
             return std::vector<var> { id, size, scale, final, align };
         }
         
-        io_define(Column, id);
+        io_shim(Column, id);
     };
     
     vec<Column>             columns;

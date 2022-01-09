@@ -14,7 +14,7 @@ struct Truth {
     vec<var>    data;
     ///
     Truth(nullptr_t n = nullptr) { }
-    operator bool()  { return data && label.size(); }
+    operator bool()  { return data and label.size(); }
     bool operator!() { return !(operator bool()); }
 };
 

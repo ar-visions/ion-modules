@@ -3,8 +3,8 @@
 
 str::str(nullptr_t n)                                          { }
 str::str(std::string s)    : s(s)                              { }
-str::str(const char *s)    : s(s)                              { }
-str::str(const char *s, size_t len) : s({s, len})              { }
+str::str(const char *s)    : s(s ? s : "")                              { }
+str::str(const char *s, size_t len) : s({s ? s : "", s ? len : 0})              { }
 
 str::str(vec<char> &v) {
     s = std::string((const char *)v.data(), v.size());
@@ -191,9 +191,9 @@ int str::index_of(MatchType ct, const char *mp) const {
     };
     Fn &fn = m[ct];
     for (auto c:s) {
-        index++;
         if (fn(c))
             return index;
+        index++;
     }
     if (ct == CIString)
         delete mp0;
@@ -222,11 +222,19 @@ bool str::operator!() const {
 }
 
 bool str::operator==(const char *cstr) const {
-    return strcmp(s.c_str(), cstr) == 0;
+    if (!cstr)
+        return s.length() == 0;
+    const char *s0 = s.c_str();
+    for (size_t i = 0; ;i++)
+        if (s0[i] != cstr[i])
+            return false;
+        else if (s0[i] == 0 || cstr[i] == 0)
+            break;
+    return true;
 }
 
 bool str::operator!=(const char *cstr) const {
-    return strcmp(s.c_str(), cstr) != 0;
+    return !operator==(cstr);
 }
 
 bool str::operator==(std::string str) const {

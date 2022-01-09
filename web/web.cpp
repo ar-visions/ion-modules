@@ -41,7 +41,7 @@ str URI::encode(str s) {
     
     for (int i = 0; i < len; i++) {
         const char c = s[i];
-        bool a = ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'));
+        bool a = ((c >= 'A' and c <= 'Z') || (c >= 'a' and c <= 'z') || (c >= '0' and c <= '9'));
         if (!a)
              a = chars.index_of(c) != 0;
         if (!a) {
@@ -70,9 +70,9 @@ str URI::decode(str e) {
     auto    v = vec<char>(sz * 4 + 1);
     size_t  i = 0;
     auto is_hex = [](const char c) {
-        return ((c >= '0' && c <= '9') ||
-                (c >= 'a' && c <= 'f') ||
-                (c >= 'A' && c <= 'F'));
+        return ((c >= '0' and c <= '9') ||
+                (c >= 'a' and c <= 'f') ||
+                (c >= 'A' and c <= 'F'));
     };
     while (i < sz) {
         const char c0 = e[i];
@@ -163,7 +163,7 @@ var Web::read_content(Socket sc, Args& headers) {
     const char      *cl = "Content-Length";
   //const char      *ce = "Content-Encoding";
     int            clen = headers.count(cl) ?  str(headers[cl]).integer() : -1;
-    bool        chunked = headers.count(te) && headers[te] == var("chunked");
+    bool        chunked = headers.count(te) and headers[te] == var("chunked");
     ssize_t content_len = clen;
     ssize_t        rlen = 0;
     const ssize_t r_max = 1024;
@@ -171,9 +171,9 @@ var Web::read_content(Socket sc, Args& headers) {
     int            iter = 0;
     vec<uint8_t> v_data;
     ///
-    assert(!(clen >= 0 && chunked));
+    assert(!(clen >= 0 and chunked));
     ///
-    if (!(!chunked && clen == 0)) {
+    if (!(!chunked and clen == 0)) {
         do {
             if (chunked) {
                 if (iter++ > 0) {
@@ -210,12 +210,7 @@ var Web::read_content(Socket sc, Args& headers) {
                     break;
                 }
             }
-        } while (!error && chunked && content_len != 0);
-    }
-    static int test = 0;
-    if (++test == 2) {
-        int test = 0;
-        test++;
+        } while (!error and chunked and content_len != 0);
     }
     return error ? var(null) : var(v_data);
 }
@@ -241,7 +236,7 @@ vec<path_t> files(path_t p, vec<str> exts = {}) {
     vec<path_t> v;
     if (std::filesystem::is_directory(p)) {
         for (const auto &f: std::filesystem::directory_iterator(p))
-            if (f.is_regular_file() && (!exts || exts.index_of(f.path().string()) >= 0))
+            if (f.is_regular_file() and (!exts || exts.index_of(f.path().string()) >= 0))
                 v += f.path();
     } else if (exists(p))
         v += p;
@@ -338,7 +333,7 @@ vec<char> Socket::read_until(str s, int max_len) {
         size_t sz = rbytes.size();
         if (!read(&rbytes[sz - 1], 1))
             return vec<char> { };
-        if (sz >= slen && memcmp(&rbytes[sz - slen], s.cstr(), slen) == 0)
+        if (sz >= slen and memcmp(&rbytes[sz - slen], s.cstr(), slen) == 0)
             break;
         if (sz == max_len)
             return vec<char> { };

@@ -27,8 +27,8 @@ typedef std::function<void(Member &, void *)> MFnArb;
 struct Member {
     enum MType {
         Undefined,
-        Context, // context is a direct value at member, such as id
-        Intern, // ??? Split into State, and Override; Override keeps Extern or Intern function; overrides the value processing
+        Context,
+        Intern,
         Extern
     };
     ///
@@ -60,14 +60,10 @@ struct Member {
     ///
     void operator=(const str &s) {
         var v = s;
-        console.log("1. name = {0}", {name}); /// for context we certainly dont
         if (fn && fn->var_set)
             fn->var_set(*this, v);
     }
     ///
-    // we need a way to inline set and obtain from style as well
-    // the style value is a mere pointer
-    // fn_type_set not called via update, and this specific call is only when its assigned by binding
     void operator=(Member &v);
     ///
     virtual bool operator==(Member &m) {
@@ -82,33 +78,32 @@ vec<ptr<struct StBlock>> &Style_members(str &s);
 double StBlock_match(struct StBlock *, struct node *);
 struct StPair* StBlock_pair (struct StBlock *b, str  &s);
 size_t StPair_instances_count(struct StPair *p, Type &t);
-/// only need to do this on members that will be different
 StPair *Style_pair(Member *member);
 
 struct Style;
 
 struct node {
-    /// not preferred but Members must access them
     enum Flags {
-        Focused     = 1,
-        Captured    = 2,
-        StateUpdate = 4
+        Focused      = 1,
+        Captured     = 2,
+        StateUpdate  = 4,
+        StyleAnimate = 8
     };
     ///
     const char    *selector   = "";
     const char    *class_name = "";
     node          *parent     = null;
     map<std::string, node *> mounts;
-    vec<Element>   elements; /// used to check differences
-    Element        element; /// use shared ptr in element
+    vec<Element>   elements; /// elements cache
+    Element        element;  ///
     std::queue<Fn> queue;
     ///
     struct Paths {
-        real  last_sg; /// sorry boys, gotta be here..
-        rectd rect;    ///
-        Path  fill;    /// Composer is setting this based on the current respective offsets and radius
-        Path  border;  ///
-        Path  child;   /// each one should be scalable, rotatable, and translatable ///
+        real       last_sg; /// identity for the last region-based rect update
+        rectd      rect;
+        Path       fill;
+        Path       border;
+        Path       child;
     } paths;
     ///
     bool           mounted    = false;
@@ -126,17 +121,55 @@ struct node {
     /// member type-specific struct
     template <typename T, const Member::MType MT>
     struct MType:Member {
+        struct StyleValue {
+            ///
+            public:
+                T            *selected;
+                StTrans      *trans        = null;
+                bool          manual_trans = false;
+                int64_t       timer_start  = 0;
+                T             value_start;
+                T             value;
+            ///
+            bool transitioning() const {
+                return (!trans || trans->type == StTrans::None) ? false :
+                        (timer_start + trans->duration.millis) > ticks();
+            }
+            ///
+            real transition_pos() const {
+                return (!trans || trans->type == StTrans::None) ? 1.0 :
+                         std::clamp((ticks() - timer_start) / real(trans->duration.millis), real(0.0), real(1.0));
+            }
+            ///
+            void manual_transition(bool manual) { manual_trans = manual; }
+            ///
+            void auto_update() {
+                if (transitioning() && !manual_trans)
+                    value = (*trans)(value_start, *selected, transition_pos());
+            }
+            ///
+            inline void changed(T snapshot, T *style_selection, StTrans *t) {
+                if (t != trans) {
+                    value_start = snapshot;
+                    timer_start = ticks();
+                    trans       = t;
+                }
+                selected = style_selection;
+            }
+            operator bool() { return selected != null; }
+            T &operator()(T &def) {
+                return transitioning() ? value : selected ? *selected : def;
+            }
+            
+        };
         size_t        cache             = 0;
         T             def;
         T             value;
-        StTrans      *trans             = null;
-        int64_t       trans_timer_start = 0;
-        T             trans_value_start;        /// this is about as shouting as i get
-        T             trans_value_current;
-        T            *style_value       = null;
+        StyleValue    style; // .value, .selected
         
         /// state cant and wont use style, not unless we want to create a feedback in spacetime
-        bool state_bool()  {
+        /// great. scott.
+        bool state_bool() {
             T &v = cache ? value : def;
             if constexpr (std::is_same_v<T, std::filesystem::path>)
                 return std::filesystem::exists(v);
@@ -146,16 +179,8 @@ struct node {
         
         /// current effective value
         T &current() {
-            T &v = (cache != 0) ? value : (style_value ? trans_value_current : def);
-            ///
-            if (trans && style_value) {
-                auto diff           = ticks() - trans_timer_start;
-                auto factor         = real(diff) / real(trans->duration.millis);
-                trans_value_current = (*trans)(trans_value_start, *style_value, factor);
-            }
-            return v;
-            
-            /// to get an address of the current value we would need to store it in cache via transition key
+            style.auto_update();
+            return (cache != 0) ? value : style(def);
         }
         
         /// pointer to current effective value
@@ -165,12 +190,10 @@ struct node {
         /// perhaps you may want intern to use the style only if its default is null
         ///
         void style_value_set(void *ptr, StTrans *t) {
-            if (t != trans) {
-                trans_value_start = current();
-                trans_timer_start = ticks();
-                trans             = t;
-            }
-            style_value = ptr ? (T *)ptr : null;
+            T &cur = current();
+            style.changed(cur, (ptr ? (T *)ptr : (T *)null), t);
+            if (style.transitioning())
+                node->root->flags |= node::StyleAnimate;
         }
         
         void init() {
@@ -191,7 +214,7 @@ struct node {
                 lambdas[type].get_bool = [](Member &m) -> bool {
                     MType<T,MT> &mm = (MType<T,MT> &)m;
                     if constexpr (std::is_same_v<T, std::filesystem::path>) {
-                        T &v = (mm.cache != 0) ? mm.value : (mm.style_value ? *mm.style_value : mm.def);
+                        T &v = (mm.cache != 0) ? mm.value : mm.style(mm.def);
                         return std::filesystem::exists(v);
                     } else
                         return bool(mm.current());
@@ -202,14 +225,19 @@ struct node {
                     lambdas[type].compute_style = [](Member &m) -> void {
                         StPair *p = Style_members_count(m.name) ? Style_pair(&m) : null;
                         MType<T,MT> &mm = (MType<T,MT> &)m;
-                        
                         ///
                         if (p && p->instances.count(m.type) == 0) {
-                            var conv = p->value;
-                            if constexpr (is_vec<T>())
-                                p->instances.set(m.type, T::new_import(conv)); // vec<Attrib>::new_import(var)
-                            else
-                                p->instances.set(m.type, new T(conv));
+                            if constexpr (is_vec<T>()) {
+                                var conv = p->value;
+                                p->instances.set(m.type, T::new_import(conv));
+                            } else {
+                                if constexpr (is_strable<T>())
+                                    p->instances.set(m.type, new T(p->value));
+                                else {
+                                    var conv = p->value;
+                                    p->instances.set(m.type, new T(conv));
+                                }
+                            }
                         }
                         mm.style_value_set(p ? p->instances.get<T>(m.type) : null, p ? &p->trans : null);
                     };
@@ -226,9 +254,8 @@ struct node {
                             mm.cache++;
                         }
                     } else {
-                        // handle transitions here
-                        mm.value = *v; // 2 level terniary used for style or default; a value overrides both
-                        mm.cache++;    // we need a 'set_value'
+                        mm.value = *v;
+                        mm.cache++;
                     }
                 };
                 
@@ -545,3 +572,5 @@ struct node {
 struct Group:node {
     declare(Group);
 };
+
+/// not much more amazement fits within 575 lines. this line is outside of that count. it is not amazing.

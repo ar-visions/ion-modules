@@ -8,8 +8,16 @@ map<str, vec<ptr<StBlock>>> Style::members = {};
 std::unordered_map<str, int> Unit::u_flags = {
     { "cm", Metric   | Distance },
     { "in", Standard | Distance },
+    { "x",  Distance },
+    { "y",  Distance },
+    { "l",  Distance },
+    { "r",  Distance },
+    { "t",  Distance },
+    { "b",  Distance },
+    { "w",  Distance },
+    { "h",  Distance },
     { "%",  Percent },
-    { "px", 0 }
+    { "px", Distance }
 };
 
 struct StBlock;

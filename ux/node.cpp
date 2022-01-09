@@ -81,7 +81,7 @@ bool node::processing() {
 }
 
 bool node::process() {
-    bool active = false;
+    bool active = (flags & node::StyleAnimate) != 0;
     var zero;
     assert(!parent);
     for (auto &[id, n]:mounts) {
@@ -97,6 +97,7 @@ bool node::process() {
             return null;
         });
     }
+    flags &= ~node::StyleAnimate;
     return active;
 }
 
@@ -130,18 +131,20 @@ void node::standard_bind() {
     external <Fn>          ("ev-focus",         m.ev.focus,         Fn(null));
     external <Fn>          ("ev-blur",          m.ev.blur,          Fn(null));
     /// --------------------------------------------------------------------------
-    external <real>    ("radius",           m.radius.val,       std::numeric_limits<real>::quiet_NaN());
-    external <real>    ("radius-tl",        m.radius.tl,        std::numeric_limits<real>::quiet_NaN());
-    external <real>    ("radius-tr",        m.radius.tr,        std::numeric_limits<real>::quiet_NaN());
-    external <real>    ("radius-bl",        m.radius.bl,        std::numeric_limits<real>::quiet_NaN());
-    external <real>    ("radius-br",        m.radius.br,        std::numeric_limits<real>::quiet_NaN());
+    external <real>        ("radius",           m.radius.val,       std::numeric_limits<real>::quiet_NaN());
+    external <real>        ("radius-tl",        m.radius.tl,        std::numeric_limits<real>::quiet_NaN());
+    external <real>        ("radius-tr",        m.radius.tr,        std::numeric_limits<real>::quiet_NaN());
+    external <real>        ("radius-bl",        m.radius.bl,        std::numeric_limits<real>::quiet_NaN());
+    external <real>        ("radius-br",        m.radius.br,        std::numeric_limits<real>::quiet_NaN());
     /// --------------------------------------------------------------------------
-    internal <bool>    ("captured",         m.captured,         false); /// cannot style these internals, they are used within style as read-only 'state'
-    internal <bool>    ("focused",          m.focused,          false); /// so to add syntax to css you just add internals, boolean and other ops should be supported
+    internal <bool>        ("captured",         m.captured,         false); /// cannot style these internals, they are used within style as read-only 'state'
+    internal <bool>        ("focused",          m.focused,          false); /// so to add syntax to css you just add internals, boolean and other ops should be supported
     /// --------------------------------------------------------------------------
-    internal <vec2>    ("cursor",           m.cursor,           vec2(null));
-    internal <bool>    ("hover",            m.hover,            false);
-    internal <bool>    ("active",           m.active,           false);
+    internal <vec2>        ("cursor",           m.cursor,           vec2(null));
+    internal <bool>        ("hover",            m.hover,            false);
+    internal <bool>        ("active",           m.active,           false);
+    ///
+    m.region.style.manual_transition(true);
 }
 
 void node::bind() { }
@@ -184,6 +187,16 @@ node *node::focused() {
     })(this);
 }
 
+/*
+void draw(Canvas &canvas) {
+    canvas.color(m.fill.color);
+    canvas.fill(paths.fill);
+    canvas.color(m.text.color);
+    canvas.scale(1.0);
+    canvas.text(node::m.text.label, paths.border, node::m.text.align, { 0, 0 }, true);
+}
+*/
+
 void node::draw(Canvas &canvas) {
     canvas.save();
     canvas.cap(m.border.cap());
@@ -191,7 +204,9 @@ void node::draw(Canvas &canvas) {
 
     if (m.fill.color()) {
         canvas.color(m.fill.color());
-        canvas.fill(paths.fill);
+        // case: class_name:Button, frame 1, should be fill-radius:16
+        // also ideally we shouldnt crash if we have no radius
+        canvas.fill(paths.fill); // style not loaded on first frame, looks like.
     }
     ///
     if (m.text) {
@@ -217,9 +232,18 @@ void delete_node(node *n) {
 }
 
 rectd node::calculate_rect(node *child) {
+    auto &reg = child->m.region;
+    if (reg.style.transitioning()) {
+        root->flags      |= node::StyleAnimate;
+        Region    &reg0   =  reg.style.value_start;
+        Region    &reg1   = *reg.style.selected;
+        rectd      rect0  = reg0(paths.rect);
+        rectd      rect1  = reg1(paths.rect);
+        real       p      = reg.style.transition_pos();
+        real       i      = 1.0 - p;
+        return (rect0 * i) + (rect1 * p);
+    } else if (reg.style.selected) {
+        reg.style.value = *reg.style.selected;
+    }
     return child->m.region()(paths.rect);
-}
-
-rectd Region::operator()(node *n, node *rel) const {
-    return (rel ? rel : n->root)->calculate_rect(n);
 }

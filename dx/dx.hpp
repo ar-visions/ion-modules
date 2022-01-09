@@ -1,6 +1,101 @@
 #pragma once
 #include <dx/var.hpp>
 
+template <typename T>
+struct FlagsOf:io {
+    uint32_t flags = 0;
+    FlagsOf(nullptr_t = null)           { }
+    FlagsOf(T f) : flags(uint32_t(f))   { }
+    bool operator()  (T c) { return (flags & c) == c; }
+    void operator += (T f) { flags |=  f; }
+    void operator -= (T f) { flags &= ~f; }
+    operator var() { return flags; }
+    FlagsOf(var &v) {
+    }
+};
+
+///
+/// we want transitions on Region.
+///     what is the most generally productive way to do it?
+///     i think Region should be a user of Unit.  Coord, see ya?
+///
+struct Unit:io {
+    enum UFlag {
+        Standard = 1,
+        Metric   = 2,
+        Percent  = 4,
+        Time     = 8,
+        Distance = 16
+    };
+    
+    ///
+    static std::unordered_map<str, int> u_flags;
+    str            type   = null;
+    real           value  = std::numeric_limits<real>::quiet_NaN();
+    int64_t        millis = 0;
+    FlagsOf<UFlag> flags  = null;
+    
+    /// 
+    void init() {
+        if (type && !std::isnan(value)) {
+            if (type == "s" || type == "ms") {
+                millis = int64_t(type == "s" ? value * 1000.0 : value);
+                flags += Time;
+            }
+        }
+        if (type && u_flags.count(type))
+            flags += UFlag(u_flags[type]);
+    }
+    
+    ///
+    Unit(const char *s = null) : Unit(str(s)) { }
+    Unit(var &v) {
+        value  = v["value"];
+        type   = v["type"];
+        init();
+    }
+    
+    ///
+    Unit(str s) {
+        int  i = s.index_of(str::Numeric);
+        int  a = s.index_of(str::Alpha);
+        if (i >= 0 || a >= 0) {
+            if (a == -1) {
+                value = s.substr(i).trim().real();
+            } else {
+                if (a > i) {
+                    if (i >= 0)
+                        value = s.substr(0, a).trim().real();
+                    type  = s.substr(a).trim().to_lower();
+                } else {
+                    type  = s.substr(0, a).trim().to_lower();
+                    value = s.substr(a).trim().real();
+                }
+            }
+        }
+        init();
+    }
+    
+    ///
+    bool operator==(const char *s) { return type == s; }
+    
+    ///
+    void assert_types(vec<str> &types, bool allow_none) {
+        console.assertion((allow_none && !type) || types.index_of(type) >= 0, "unit not recognized");
+    }
+    ///
+    operator str  &() { return type;  }
+    operator real &() { return value; }
+    
+    operator var() {
+        return Args {
+            {"type", type},
+            {"value", value}
+        };
+    }
+};
+
+
 struct Raw {
     std::vector<std::string> fields;
     std::vector<std::string> values;

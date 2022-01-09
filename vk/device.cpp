@@ -354,8 +354,6 @@ void Device::create_render_pass() {
     /// seems like tx_depth is not created with a 'depth' format, or improperly being associated to a color format
     ///
     assert(vkCreateRenderPass(device, &rpi, nullptr, &render_pass) == VK_SUCCESS);
-    int test = 0;
-    test++;
 }
 
 VkCommandBuffer Device::begin() {

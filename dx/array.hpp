@@ -26,12 +26,17 @@ public:
     vec(nullptr_t n) { }
     /*
     vec(vec<var> &d) {
-        /// simple, using var conversion
-        /// you can get 'away' with string conv only for style but i do nooot want to have 2 io stream types
         a.reserve(d.size());
         for (auto &dd: d)
             a += dd;
     }*/
+    
+    vec(var &d) {
+        size_t sz = d.size();
+        a.reserve(sz);
+        if (sz) for (var &row:*d.a.get())
+            a.push_back(row);
+    }
     
     static vec<T> import(std::vector<T> v) {
         vec<T> a(v.size());
@@ -39,9 +44,11 @@ public:
             a += i;
         return a;
     }
+    
     void resize(size_t sz, T v = T()) {
         a.resize(sz, v);
     }
+    
     int count(T v) {
         int r = 0;
         for (auto &i: a)
@@ -49,17 +56,20 @@ public:
                 r++;
         return r;
     }
+    
     void shuffle() {
         std::vector<std::reference_wrapper<const T>> v(a.begin(), a.end());
         std::shuffle(v.begin(), v.end(), Rand::e);
         std::vector<T> sh { v.begin(), v.end() };
         a.swap(sh);
     }
+    
     vec(const T *d, size_t sz) { // todo: remove
         a.reserve(sz);
         for (size_t i = 0; i < sz; i++)
             a.push_back(d[i]);
     }
+    
     operator var() {
         if constexpr (std::is_same_v<T,  int8_t> || std::is_same_v<T,  uint8_t> ||
                       std::is_same_v<T, int16_t> || std::is_same_v<T, uint16_t> ||
@@ -106,13 +116,6 @@ public:
         vec<T> *v = new vec<T>(a.size());
         for (auto &i: *a.a)
             *v += T(i);
-        return v;
-    }
-    static inline vec<T> import(var &a) {
-        assert(a == Type::Array);
-        vec<T> v(a.size());
-        for (auto &i: *a.a)
-            v += T(i);
         return v;
     }
     inline void operator +=   (T v) { a.push_back(v);       }
@@ -165,3 +168,13 @@ struct is_func                   : std::false_type {};
 
 template<typename T>
 struct is_func<std::function<T>> : std::true_type  {};
+
+
+
+template<typename>
+struct is_strable                : std::false_type {};
+
+template<> struct is_strable<str>    : std::true_type  {};
+
+
+

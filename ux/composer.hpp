@@ -12,6 +12,12 @@ struct Composer {
     Args          args;
     vec2i        *sz;
     
+    /// before 3d, we want to test region transition.
+    ///
+    /// there was the faint idea of using the state of a peer, or child, to influence your own.
+    /// that the latter is very requested, former not as much
+    /// a child state effecting its parent should definitely be allowed.. why the busiwork, eh?
+    ///     -
     vec<node *> select_at(vec2 cur, bool active = true) {
         auto inside = root->select([&](node *n) {
             real    x = cur.x, y = cur.y;
@@ -19,9 +25,6 @@ struct Composer {
             vec2  rel = { x - o.x, y - o.y };
             bool   in = n->paths.fill.contains(cur);
             n->m.cursor = in ? vec2(x, y) : vec2(null);
-            if (str(n->class_name) == str("Button")) {
-                std::cout << "valuez:" << vec2(x, y) << std::endl;
-            }
             return (in && (!active || !n->m.active())) ? n : null;
         });
         auto  actives = root->select([&](node *n) {
@@ -91,13 +94,6 @@ struct Composer {
             if (n->m.cursor()) {
                 prev_cursor += n;
                 n->m.cursor = vec2(null);
-                if (n->m.cursor()) {
-                    int test = 0;
-                    test++;
-                } else {
-                    int test = 0;
-                    test++;
-                }
             }
         });
         /// select all within cursor, including active
@@ -131,8 +127,6 @@ struct Composer {
     }
     
     void resize(Window &w) {
-        int test = 0;
-        test++;
     }
     
     void key(Window &w, int key, int scan, int action, int mod) { /// make action an enum across the app
@@ -336,43 +330,35 @@ struct Composer {
 #endif
         rectd rect = { real(0), real(0), real(sz->x), real(sz->y) };
         bool force = (root->paths.rect != rect);
-        if (force) {
-            root->paths.rect = rect;
-            force = true;
-        }
         ///
         root->exec([&](node *n) {
-            Region &region = n->m.region;
-            rectd &r       = n->paths.rect = (n == root ? rect : region(n, n->parent));
-            real TL = n->m.radius(node::Members::Radius::TL);
-            real TR = n->m.radius(node::Members::Radius::TR);
-            real BR = n->m.radius(node::Members::Radius::BR);
-            real BL = n->m.radius(node::Members::Radius::BL);
-            real fo = n->m.fill.offset;
-            real bo = n->m.border.offset;
-            real co = n->m.child.offset;
-            real sg = -1234 + (TL) + (TR * 100) + (BR * 10000) + (BL * 1000000) + (fo * 50) + (bo * 5000) + (co * 500000);
+            rectd &r = n->paths.rect = (n == root ? rect : n->parent->calculate_rect(n));
+            real  TL = n->m.radius(node::Members::Radius::TL);
+            real  TR = n->m.radius(node::Members::Radius::TR);
+            real  BR = n->m.radius(node::Members::Radius::BR);
+            real  BL = n->m.radius(node::Members::Radius::BL); /// we likely need a region.set_relative(), just a rectd ref is fine.
+            real  fo = n->m.fill.offset;
+            real  bo = n->m.border.offset;
+            real  co = n->m.child.offset;
+            real  sg = -1234 + (TL) + (TR * 100) + (BR * 1000) + (BL * 10000) + (fo * 50) + (bo * 500) + (co * 5000);
+                  sg += (1     * 12)    * r.x;
+                  sg += (10    * 321)   * r.y;
+                  sg += (1000  * 1234)  * r.w;
+                  sg += (10000 * 54321) * r.h;
             if (force || n->paths.last_sg != sg) {
                 n->paths.last_sg  = sg;
-                if (n->m.radius) {
-                    vec2 v00 = r.xy();
-                    vec2 v10 = v00 + vec2 { r.w,   0 };
-                    vec2 v11 = v00 + vec2 { r.w, r.h };
-                    vec2 v01 = v00 + vec2 {   0, r.h };
-                    vec4 x00 = vec4(v00.x, v00.y, TL, TL);
-                    vec4 x10 = vec4(v10.x, v10.y, TR, TR);
-                    vec4 x11 = vec4(v11.x, v11.y, BR, BR);
-                    vec4 x01 = vec4(v01.x, v01.y, BL, BL);
-                    n->paths.fill   = Path();
-                    n->paths.fill.rect_v4(x00, x10, x11, x01);
-                    n->paths.border = n->paths.fill;
-                    n->paths.child  = n->paths.fill;
-                } else {
-                    n->paths.rect   = r;
-                    n->paths.fill   = r;
-                    n->paths.border = r;
-                    n->paths.child  = r;
-                }
+                vec2 v00 = r.xy();
+                vec2 v10 = v00 + vec2 { r.w,   0 };
+                vec2 v11 = v00 + vec2 { r.w, r.h };
+                vec2 v01 = v00 + vec2 {   0, r.h };
+                vec4 x00 = vec4(v00.x, v00.y, TL, TL);
+                vec4 x10 = vec4(v10.x, v10.y, TR, TR);
+                vec4 x11 = vec4(v11.x, v11.y, BR, BR);
+                vec4 x01 = vec4(v01.x, v01.y, BL, BL);
+                n->paths.fill   = Path();
+                n->paths.fill.rect_v4(x00, x10, x11, x01);
+                n->paths.border = n->paths.fill;
+                n->paths.child  = n->paths.fill;
                 n->paths.fill.set_offset(fo);
                 n->paths.border.set_offset(bo);
                 n->paths.child.set_offset(co);

@@ -358,7 +358,7 @@ struct Rect: Vector<T> {
         return !std::isnan(x) && !std::isnan(y) && w > 0 && h > 0;
     }
     
-    inline Rect<T> offset(T a) const {
+    inline Rect<T> offset(T a) const { /// rename to something else
         return { x - a, y - a, w + (a * 2), h + (a * 2) };
     }
     
@@ -378,8 +378,12 @@ struct Rect: Vector<T> {
     }
     bool    operator== (const Rect<T> &r) { return x == r.x && y == r.y && w == r.w && h == r.h; }
     bool    operator!= (const Rect<T> &r) { return !operator==(r); }
-    Rect<T> operator * (T r) { return { x * r, y * y, w * r, h * r }; }
-    Rect<T> operator / (T r) { return { x / r, y / y, w / r, h / r }; }
+    ///
+    Rect<T> operator + (Rect<T> r)        { return { x + r.x, y + r.y, w + r.w, h + r.h }; }
+    Rect<T> operator - (Rect<T> r)        { return { x - r.x, y - r.y, w - r.w, h - r.h }; }
+    ///
+    Rect<T> operator * (T r) { return { x * r, y * r, w * r, h * r }; }
+    Rect<T> operator / (T r) { return { x / r, y / r, w / r, h / r }; }
     operator Rect<int>()     { return {    int(x),    int(y),    int(w),    int(h) }; }
     operator Rect<float>()   { return {  float(x),  float(y),  float(w),  float(h) }; }
     operator Rect<double>()  { return { double(x), double(y), double(w), double(h) }; }

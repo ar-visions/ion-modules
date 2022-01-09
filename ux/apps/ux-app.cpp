@@ -5,23 +5,13 @@
 // macOS doesnt support notifications [/kicks dirt]; get working on Linux and roll into Watch (file, dir)
 //#include <sys/inotify.h>
 
-/// lets get this Car node rendering.
-
+/// transitions work, transition code improved..
 /*
-/// It was the best term; its an indication of standardization of view and action
+/// best term; its an indication of standardization of view and common tasks, and behaviour of management
 struct Shell:node {
-    /// dock view set. mimmicks OS but that is ok for our targets
-    /// difference maker is the menu reveals more info about the dock items.
-    ///
-    /// does it need to be combining two things in that way
-    /// menu items from dock?
-    /// it may not be enough really
-    /// i dont want to copy something it has to be based on an idea thats essentially unique.
-    /// one thing is for sure we wont have a shitload of views in our prototypical app
-    /// whats important is just a central menu, not more than one, ever.
-    /// no dialogs.. none of that unless its in-app purchase
-    ///s
-};*/
+};
+
+*/
 
 struct Car:node {
     declare(Car);

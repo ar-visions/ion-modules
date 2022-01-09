@@ -602,7 +602,7 @@ public:
     }
 };
 
-#define io_define(C,E) \
+#define io_shim(C,E) \
     C(nullptr_t n) : C()       { }                      \
     C(const C &ref)            { copy(ref);            }\
     C(var &d)                  { importer(d);          }\
