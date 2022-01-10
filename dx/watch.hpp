@@ -27,7 +27,7 @@ protected:
     bool         safe = false;
     bool    canceling = false;
     const int polling = 1000;
-    path_t       path;
+    vec<path_t> paths;
     Fn          watch;
     vec<PathOp>   ops;
     int          iter = 0;
@@ -37,11 +37,11 @@ protected:
 public:
     ///
     /// initialize, modified, created, deleted
-    static Watch &spawn(path_t path, std::vector<const char *> exts,
+    static Watch &spawn(vec<path_t> paths, std::vector<const char *> exts,
                         std::function<void(bool, vec<PathOp> &)> watch) {
         ///
         Watch *pw = new Watch();
-        pw->path  = path;
+        pw->paths = paths;
         pw->watch = watch;
         pw->exts  = exts;
         ///
@@ -56,7 +56,7 @@ public:
                     v.found = false;
                 
                 /// populate modified and created
-                resources(w.path, w.exts, [&](path_t &p) {
+                for (auto &path:w.paths) resources(path, w.exts, [&](path_t &p) {
                     auto ftime = std::filesystem::last_write_time(p);
                     if (w.pstate.count(p) == 0) {
                         PathOp::Op op = (w.iter == 0) ? PathOp::None : PathOp::Created;

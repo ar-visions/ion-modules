@@ -298,14 +298,14 @@ struct Composer {
     }
     
     void render() {
-        /// ----------------------------------------
         Element  e = fn();
         update(null, &root, e);
         
-/// style reload on modification
 #if !defined(NDEBUG)
+        /// style reload on modification, when debugging. this applies to style, images and vectors
+        /// it will also apply to shaders and 3D objects
         static auto css_watch = Watch::spawn(
-                "style", {".css"}, [root=root](bool init, vec<PathOp> &paths) {
+                {"style","images"}, {".css",".png",".svg"}, [root=root](bool init, vec<PathOp> &paths) {
             if (!init) {
                 Style::unload();
                 root->exec([](node *n) {
@@ -316,11 +316,45 @@ struct Composer {
             }
         });
 #endif
-        rectd rect = { real(0), real(0), real(sz->x), real(sz->y) };
-        bool force = (root->paths.rect != rect);
+        rectd   rect = { real(0), real(0), real(sz->x), real(sz->y) };
+        bool resized = (root->paths.rect != rect);
+        if (resized)
+            root->paths.rect = rect;
         ///
-        root->exec([&](node *n) {
-            rectd &r = n->paths.rect = (n == root ? rect : n->parent->calculate_rect(n));
+        root->exec([&](node *n) -> node* {
+            node *rn = n->parent ? n->parent : root;
+            ///
+            struct RegionRect {
+                node::Extern<Region> &reg;
+                node           *n;
+                rectd          &rect;
+                rectd          &result;
+            };
+            ///
+            vec<RegionRect> rr = {
+                { n->m.region,            rn, rn->paths.rect, n->paths.rect },
+                { n->m.fill.image_region, n,  n->image_rect,  n->image_rect },
+                { n->m.text.region,       n,  n->text_rect,   n->text_rect  }
+            };
+            ///
+            int index = 0;
+            for (auto &x:rr) {
+                /// we need a list of rect types, and the addresses to store their interpolated results in
+                if (x.reg.style.transitioning()) {
+                    root->flags      |= node::StyleAnimate;
+                    Region    &reg0   =  x.reg.style.value_start;
+                    Region    &reg1   = *x.reg.style.selected;
+                    rectd      rect0  =  x.n->region_rect(index, reg0, x.rect, n); // this is where its called
+                    rectd      rect1  =  x.n->region_rect(index, reg1, x.rect, n); // output this for Button image_region rect
+                    real       p      =  x.reg.style.transition_pos();
+                    real       i      =  1.0 - p;
+                    x.result          = (rect0 * i) + (rect1 * p);
+                } else
+                    x.result          = x.n->region_rect(index, x.reg, x.rect, n);
+                index++;
+            }
+            ///
+            rectd &r = n->paths.rect;
             real  TL = n->m.radius(node::Members::Radius::TL);
             real  TR = n->m.radius(node::Members::Radius::TR);
             real  BR = n->m.radius(node::Members::Radius::BR);
@@ -333,7 +367,10 @@ struct Composer {
                   sg += (10    * 321)   * r.y;
                   sg += (1000  * 1234)  * r.w;
                   sg += (10000 * 54321) * r.h;
-            if (force || n->paths.last_sg != sg) {
+            ///
+            /// region replaces padding margin and whatever nonsense
+            /// wha we need is an image rect updated
+            if (resized || n->paths.last_sg != sg) {
                 n->paths.last_sg  = sg;
                 vec2 v00 = r.xy();
                 vec2 v10 = v00 + vec2 { r.w,   0 };
@@ -353,6 +390,7 @@ struct Composer {
             }
             return null;
         });
+        ///
         ux->draw(root);
     }
     

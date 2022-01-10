@@ -1,19 +1,18 @@
 Button {
-    radius:      3;
+    radius:      0;
     fill-color:  #348;
-    fill-image:  "menu.png";
+    image:       "menu.png";
+    image-region: 10l 10t 10r 10b;
     text-color:  #222;
-    text-label:  "This is a label 22...";
-    region:      250l 250t 250r 250b;
+    text-label:  "This is a label 22z...";
+    region:      0l 0t 70w 0b;
 }
 
 Button:hover {
     fill-color:#faa;
-    fill-offset:30, 50ms ease;
 }
 
 Button:active {
     fill-color:#aaf;
-    fill-offset:0, 50ms ease;
 }
 

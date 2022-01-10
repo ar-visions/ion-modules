@@ -113,6 +113,7 @@ struct node {
     int32_t        flags;
     map<std::string, PipelineData> objects;
     Style         *style = null;
+    rectd     image_rect, text_rect;
     ///
     map<str, Member *> contextuals;
     map<str, Member *> internals;
@@ -375,6 +376,7 @@ struct node {
     struct Text {
         Extern<str>     label;
         Extern<rgba>    color;
+        Extern<Region>  region; /// these three should be good. (region, align, offset)
         Extern<AlignV2> align;
         Extern<real>    offset;
         operator bool() { return label() && color().a > 0; }
@@ -384,6 +386,7 @@ struct node {
         Extern<rgba>    color;
         Extern<real>    offset;
         Extern<Image>   image;
+        Extern<Region>  image_region;
         Extern<AlignV2> align; // repeat, rotate, scale, translate
         operator bool() { return offset() > 0 && color().a > 0; }
     };
@@ -508,10 +511,10 @@ struct node {
     node           *select_first(std::function<node *(node *)> fn);
     vec<node *>     select(std::function<node *(node *)> fn);
     void            exec(std::function<void(node *)> fn);
-    virtual rectd   calculate_rect(node *child);
     void            focus();
     void            blur();
     node           *focused();
+    virtual rectd   region_rect(int index, Region &reg, rectd &src, node *n);
     
     int             u_next_id = 0;
     

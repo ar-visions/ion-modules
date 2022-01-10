@@ -39,8 +39,8 @@ struct Region:io {
             switch (Sides(index++)) {
                 case L: x0 = (s == "x" || s == "l") ? v : x1 - v; break;
                 case T: y0 = (s == "y" || s == "t") ? v : y1 - v; break;
-                case R: x1 = (s == "x" || s == "l") ? v : x1 - v; break;
-                case B: y1 = (s == "y" || s == "t") ? v : y1 - v; break;
+                case R: x1 = (s == "w") ? x0 + v : ((s == "x" || s == "l") ? v : x1 - v); break;
+                case B: y1 = (s == "h") ? y0 + v : ((s == "y" || s == "t") ? v : y1 - v); break;
             }
         }
         return rectd { x0, y0, std::max(0.0, x1-x0), std::max(0.0, y1-y0) };

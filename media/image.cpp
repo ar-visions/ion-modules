@@ -8,8 +8,12 @@ Image::Image(nullptr_t n) { }
 Image::Image(var &pixels) : pixels(pixels) {
     /// not so fast bugs.
     if (pixels == Type::Str) {
-        bool no_ext = path_t(pixels).extension().string().size() == 0;
-        *this = Image(path_t(str::format("images/{0}{1}", {pixels, (no_ext ? str {".png"} : str {""})})), Format::Rgba);
+        bool no_ext = path_t(pixels).extension() == "";
+        path_t path = str::format("images/{0}{1}", {pixels, (no_ext ? str {".png"} : str {""})});
+        /// when done in this fashion, we keep a cache of them.  this var can easily change and we dont want to reload
+        /// for local image resources this is a bit nothing to maintain
+        /// you would only want to store for like domains, otherwise you empty
+        *this = Image(path, Format::Rgba);
     }
 }
 

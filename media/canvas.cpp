@@ -185,27 +185,23 @@ struct Context2D:ICanvasBackend {
     }
     
     virtual void image(DrawState &ds, Image &image, rectd &rect, Vec2<Align> &align, vec2 &offset) {
-        return;
         State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
         vec2   pos = { 0, 0 };
         vec2i  isz = image.size();
         
-        
         ps.setColor(sk_color(ds.color));
         if (ds.opacity != 1.0f)
             ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
-        ///
+        /// cache management; 
         if (!image.pixels.attachments()) {
             SkBitmap bm;
             rgba    *px = image.pixels.data<rgba>();
-            
+            /// photoshop
             SkImageInfo info = SkImageInfo::Make(isz.x, isz.y, kBGRA_8888_SkColorType, kUnpremul_SkAlphaType);
             bm.installPixels(info, px, image.stride());
-            /// allocate a smart pointer (with wrapper)... delete it when you dont need it.
-            /// smarter than smart.
-            sk_sp<SkImage> *im = new sk_sp<SkImage>(SkImage::MakeFromBitmap(bm));
-            image.pixels.attach("sk-image", null, [im](var &) { delete im; });
+            sk_sp<SkImage> *im = new sk_sp<SkImage>(SkImage::MakeFromBitmap(bm)); /// smarter than smart.
+            image.pixels.attach("sk-image", im, [im](var &) { delete im; });
         }
         ///
         pos.x = (align.x == Align::End)    ? rect.x + rect.w     - isz.x :
@@ -215,7 +211,7 @@ struct Context2D:ICanvasBackend {
                 (align.y == Align::Middle) ? rect.y + rect.h / 2 - isz.y / 2 :
                                              rect.y;
         sk_canvas->drawImage(
-            (SkImage *)image.pixels["sk-image"].n_value.vstar,
+            ((sk_sp<SkImage> *)image.pixels["sk-image"].n_value.vstar)->get(),
             SkScalar(pos.x + offset.x),
             SkScalar(pos.y + offset.y), SkSamplingOptions(), &ps);
     }

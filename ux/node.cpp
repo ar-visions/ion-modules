@@ -112,10 +112,12 @@ void node::standard_bind() {
     external <AlignV2>     ("text-align",       m.text.align,      AlignV2 { Align::Middle, Align::Middle });
     external <rgba>        ("text-color",       m.text.color,      rgba("#fff") );
     external <real>        ("text-offset",      m.text.offset,     real(0));
+    external <Region>      ("text-region",      m.text.region,     null);
     /// --------------------------------------------------------------------------
     external <rgba>        ("fill-color",       m.fill.color,      null);
     external <real>        ("fill-offset",      m.fill.offset,     real(0));
-    external <Image>       ("fill-image",       m.fill.image,      null);
+    external <Image>       ("image",            m.fill.image,        null);
+    external <Region>      ("image-region",     m.fill.image_region, null);
     external <double>      ("border-size",      m.border.size,     double(0));
     external <rgba>        ("border-color",     m.border.color,    rgba("#000f"));
     external <bool>        ("border-dash",      m.border.dash,     bool(false));
@@ -146,6 +148,7 @@ void node::standard_bind() {
     internal <bool>        ("active",           m.active,          false);
     ///
     m.region.style.manual_transition(true);
+    m.fill.image_region.style.manual_transition(true);
 }
 
 void node::bind() { }
@@ -238,19 +241,6 @@ void delete_node(node *n) {
     delete n;
 }
 
-rectd node::calculate_rect(node *child) {
-    auto &reg = child->m.region;
-    if (reg.style.transitioning()) {
-        root->flags      |= node::StyleAnimate;
-        Region    &reg0   =  reg.style.value_start;
-        Region    &reg1   = *reg.style.selected;
-        rectd      rect0  = reg0(paths.rect);
-        rectd      rect1  = reg1(paths.rect);
-        real       p      = reg.style.transition_pos();
-        real       i      = 1.0 - p;
-        return (rect0 * i) + (rect1 * p);
-    } else if (reg.style.selected) {
-        reg.style.value = *reg.style.selected;
-    }
-    return child->m.region()(paths.rect);
+rectd node::region_rect(int index, Region &reg, rectd &src, node *n) {
+    return reg(src);
 }
