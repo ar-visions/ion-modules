@@ -15,6 +15,9 @@ struct Attrib {
     Attrib(Type t, VkFormat f, Texture tx): type(t), format(f), tx(tx) { }
     // texture data needs to be a ref pass-through of the data, cast will suffice
     Attrib(var &v) {
+        /// we can now load this from string, or var
+        /// its not good enough to just throw the session info around, we need enough to create it.
+        ///
     }
     operator var() {
         return Args {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <dx/nan.hpp>
 #include <dx/array.hpp>
 #include <stdexcept>
 #include <cstdlib>
@@ -30,7 +31,7 @@ struct Vec4;
 template <typename T>
 struct Vec2: Vector<T> {
     alignas(T) T x, y;
-    Vec2(nullptr_t n = nullptr) : x(std::numeric_limits<T>::quiet_NaN()) { }
+    Vec2(nullptr_t n = nullptr) : x(dx::nan<T>()) { }
     Vec2(T x)      : x(x), y(x) { }
     Vec2(T x, T y) : x(x), y(y) { }
     
@@ -53,7 +54,7 @@ struct Vec2: Vector<T> {
     
     Vec2(var &d) {
         if (d.size() < 2) {
-            x = std::numeric_limits<T>::quiet_NaN();
+            x = dx::nan<T>();
         } else if (d == Type::Array) {
             x = T(d[size_t(0)]);
             y = T(d[size_t(1)]);
@@ -185,7 +186,7 @@ struct Vec2: Vector<T> {
 template <typename T>
 struct Vec3: Vector<T> {
     alignas(T) T x, y, z;
-    Vec3(nullptr_t n = nullptr) : x(std::numeric_limits<T>::quiet_NaN()) { }
+    Vec3(nullptr_t n = nullptr) : x(dx::nan<T>()) { }
     Vec3(T x) : x(x), y(x), z(x) { }
     Vec3(T x, T y, T z) : x(x), y(y), z(z) { }
     
@@ -262,10 +263,7 @@ template <typename T>
 struct Vec4: Vector<T> {
     alignas(T) T x, y, z, w;
     Vec4(nullptr_t n = nullptr) {
-        if constexpr (std::is_same_v<T, int>)
-            x = std::numeric_limits<T>::quiet_NaN();
-        else
-            x = std::numeric_limits<T>::quiet_NaN();
+        x = dx::nan<T>();
     }
     Vec4(T x)                  : x(x),   y(x),   z(x),   w(x)   { }
     Vec4(T x, T y, T z, T w)   : x(x),   y(y),   z(z),   w(w)   { }

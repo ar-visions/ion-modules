@@ -158,6 +158,9 @@ public:
 };
 
 template<typename>
+struct serializable              : std::true_type {};
+
+template<typename>
 struct is_vec                    : std::false_type {};
 
 template<typename T>

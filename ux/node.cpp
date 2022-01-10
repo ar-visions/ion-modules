@@ -104,17 +104,18 @@ bool node::process() {
 node::~node() { }
 
 void node::standard_bind() {
-    contextual<str>        ("id",               m.id,              "");
+    contextual<str>        ("id",               m.id,              str(""));
     /// --------------------------------------------------------------------------
     external <int>         ("tab-index",        m.tab_index,       -1);
     /// --------------------------------------------------------------------------
-    external <str>         ("text-label",       m.text.label,      "");
+    external <str>         ("text-label",       m.text.label,      str(""));
     external <AlignV2>     ("text-align",       m.text.align,      AlignV2 { Align::Middle, Align::Middle });
     external <rgba>        ("text-color",       m.text.color,      rgba("#fff") );
     external <real>        ("text-offset",      m.text.offset,     real(0));
     /// --------------------------------------------------------------------------
     external <rgba>        ("fill-color",       m.fill.color,      null);
     external <real>        ("fill-offset",      m.fill.offset,     real(0));
+    external <Image>       ("fill-image",       m.fill.image,      null);
     external <double>      ("border-size",      m.border.size,     double(0));
     external <rgba>        ("border-color",     m.border.color,    rgba("#000f"));
     external <bool>        ("border-dash",      m.border.dash,     bool(false));
@@ -123,26 +124,26 @@ void node::standard_bind() {
     external <Join>        ("border-join",      m.border.join,     Join(Join::Round));
     external <Region>      ("region",           m.region,          Region());
     /// --------------------------------------------------------------------------
-    external <Fn>          ("ev-hover",         m.ev.hover,         Fn(null));
-    external <Fn>          ("ev-out",           m.ev.out,           Fn(null));
-    external <Fn>          ("ev-down",          m.ev.down,          Fn(null));
-    external <Fn>          ("ev-up",            m.ev.up,            Fn(null));
-    external <Fn>          ("ev-key",           m.ev.key,           Fn(null));
-    external <Fn>          ("ev-focus",         m.ev.focus,         Fn(null));
-    external <Fn>          ("ev-blur",          m.ev.blur,          Fn(null));
+    external <Fn>          ("ev-hover",         m.ev.hover,        null);
+    external <Fn>          ("ev-out",           m.ev.out,          null);
+    external <Fn>          ("ev-down",          m.ev.down,         null);
+    external <Fn>          ("ev-up",            m.ev.up,           null);
+    external <Fn>          ("ev-key",           m.ev.key,          null);
+    external <Fn>          ("ev-focus",         m.ev.focus,        null);
+    external <Fn>          ("ev-blur",          m.ev.blur,         null);
     /// --------------------------------------------------------------------------
-    external <real>        ("radius",           m.radius.val,       std::numeric_limits<real>::quiet_NaN());
-    external <real>        ("radius-tl",        m.radius.tl,        std::numeric_limits<real>::quiet_NaN());
-    external <real>        ("radius-tr",        m.radius.tr,        std::numeric_limits<real>::quiet_NaN());
-    external <real>        ("radius-bl",        m.radius.bl,        std::numeric_limits<real>::quiet_NaN());
-    external <real>        ("radius-br",        m.radius.br,        std::numeric_limits<real>::quiet_NaN());
+    external <real>        ("radius",           m.radius.val,      dx::nan<real>());
+    external <real>        ("radius-tl",        m.radius.tl,       dx::nan<real>());
+    external <real>        ("radius-tr",        m.radius.tr,       dx::nan<real>());
+    external <real>        ("radius-bl",        m.radius.bl,       dx::nan<real>());
+    external <real>        ("radius-br",        m.radius.br,       dx::nan<real>());
     /// --------------------------------------------------------------------------
-    internal <bool>        ("captured",         m.captured,         false); /// cannot style these internals, they are used within style as read-only 'state'
-    internal <bool>        ("focused",          m.focused,          false); /// so to add syntax to css you just add internals, boolean and other ops should be supported
+    internal <bool>        ("captured",         m.captured,        false); /// cannot style these internals, they are used within style as read-only 'state'
+    internal <bool>        ("focused",          m.focused,         false); /// so to add syntax to css you just add internals, boolean and other ops should be supported
     /// --------------------------------------------------------------------------
-    internal <vec2>        ("cursor",           m.cursor,           vec2(null));
-    internal <bool>        ("hover",            m.hover,            false);
-    internal <bool>        ("active",           m.active,           false);
+    internal <vec2>        ("cursor",           m.cursor,          vec2(null));
+    internal <bool>        ("hover",            m.hover,           false);
+    internal <bool>        ("active",           m.active,          false);
     ///
     m.region.style.manual_transition(true);
 }
@@ -207,6 +208,12 @@ void node::draw(Canvas &canvas) {
         // case: class_name:Button, frame 1, should be fill-radius:16
         // also ideally we shouldnt crash if we have no radius
         canvas.fill(paths.fill); // style not loaded on first frame, looks like.
+    }
+    // image-multiply: #ffff [a multiply color, but not like multiply overlay]
+
+    auto &image = m.fill.image();
+    if (image) {
+        canvas.image(image, paths.fill.bounds(), m.fill.align, vec2(0,0));
     }
     ///
     if (m.text) {

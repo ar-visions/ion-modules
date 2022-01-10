@@ -94,6 +94,7 @@ struct var {
         Encode   = 1,
         Compact  = 2,
         ReadOnly = 4,
+        DestructAttached = 8
     };
     
     struct TypeFlags {
@@ -118,6 +119,7 @@ struct var {
         double  vf64;
         var    *vref;
         node   *vnode;
+        void   *vstar;
     };
     u                   n_value = { 0 };
     Fn                       fn;
@@ -156,6 +158,10 @@ public:
     void write(std::ofstream &f, enum Format format = Binary);
     void write(path_t p, enum Format format = Binary);
     var(nullptr_t p);
+    var(Type::Specifier t, void *v) : t(t) {
+        assert(t == Type::Arb);
+        n_value.vstar = (void *)v;
+    }
     var(Type::Specifier t = Type::Undefined, Type::Specifier c = Type::Undefined, size_t count = 0);
     var(Type::Specifier t, u *n) : t(t), n((u *)n) { }
     var(Type::Specifier t, std::string str);
@@ -169,7 +175,18 @@ public:
     
     std::vector<int> shape();
     void set_shape(std::vector<int> v_shape);
-    
+    void attach(std::string name, void *arb, std::function<void(var &)> fn) {
+        map()[name]        = var { Type::Arb, arb };
+        map()[name].flags |= DestructAttached;
+        map()[name].fn     = fn;
+    }
+    size_t attachments() {
+        size_t r = 0;
+        for (auto &[k,v]:map())
+            if (v.flags & DestructAttached)
+                r++;
+        return r;
+    }
     var tag(::map<std::string, var> m);
     var(std::ifstream &f, enum var::Format format);
     //var(str templ, vec<var> arr);

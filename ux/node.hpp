@@ -122,14 +122,16 @@ struct node {
     template <typename T, const Member::MType MT>
     struct MType:Member {
         struct StyleValue {
+           
             ///
             public:
-                T            *selected;
+            str name;
+                T            *selected     = null;
                 StTrans      *trans        = null;
                 bool          manual_trans = false;
                 int64_t       timer_start  = 0;
-                T             value_start;
-                T             value;
+                T             value_start  = T();
+                T             value        = T();
             ///
             bool transitioning() const {
                 return (!trans || trans->type == StTrans::None) ? false :
@@ -148,21 +150,32 @@ struct node {
                     value = (*trans)(value_start, *selected, transition_pos());
             }
             ///
-            inline void changed(T snapshot, T *style_selection, StTrans *t) {
+            /// text-label has style_selection "legit str" and snapshot is some farse.
+            /// the Type on StTrans is random data, otherwise seems to be initialized correctly
+            ///
+            inline void changed(T &snapshot, T *style_selection, StTrans *t) {
+                if (name == "text-label") {
+                    int test = 0;
+                    test++;
+                }
                 if (t != trans) {
-                    value_start = snapshot;
+                    value_start = snapshot; /// why is this invalid?
                     timer_start = ticks();
                     trans       = t;
                 }
                 selected = style_selection;
+                if (name == "text-label") {
+                    int test = 0;
+                    test++;
+                }
             }
             operator bool() { return selected != null; }
             T &operator()(T &def) {
-                return transitioning() ? value : selected ? *selected : def;
+                return transitioning() ? value : (selected ? *selected : def);
             }
             
         };
-        size_t        cache             = 0;
+        size_t        cache = 0;
         T             def;
         T             value;
         StyleValue    style; // .value, .selected
@@ -179,6 +192,7 @@ struct node {
         
         /// current effective value
         T &current() {
+            style.name = name;
             style.auto_update();
             return (cache != 0) ? value : style(def);
         }
@@ -188,9 +202,16 @@ struct node {
         
         /// extern, intern, context and such could override; only to disable most likely
         /// perhaps you may want intern to use the style only if its default is null
-        ///
         void style_value_set(void *ptr, StTrans *t) {
+            if (name == "text-label") { // right when the test code goes in, it starts to work. maybe no one will notice.
+                int test = 0;
+                test++;
+            }
             T &cur = current();
+            if (name == "text-label") {
+                int test = 0;
+                test++;
+            }
             style.changed(cur, (ptr ? (T *)ptr : (T *)null), t);
             if (style.transitioning())
                 node->root->flags |= node::StyleAnimate;
@@ -363,6 +384,7 @@ struct node {
         Extern<rgba>    color;
         Extern<real>    offset;
         Extern<Image>   image;
+        Extern<AlignV2> align; // repeat, rotate, scale, translate
         operator bool() { return offset() > 0 && color().a > 0; }
     };
     

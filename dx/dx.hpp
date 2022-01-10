@@ -1,5 +1,6 @@
 #pragma once
 #include <dx/var.hpp>
+#include <dx/nan.hpp>
 
 template <typename T>
 struct FlagsOf:io {
@@ -14,11 +15,6 @@ struct FlagsOf:io {
     }
 };
 
-///
-/// we want transitions on Region.
-///     what is the most generally productive way to do it?
-///     i think Region should be a user of Unit.  Coord, see ya?
-///
 struct Unit:io {
     enum UFlag {
         Standard = 1,
@@ -31,7 +27,7 @@ struct Unit:io {
     ///
     static std::unordered_map<str, int> u_flags;
     str            type   = null;
-    real           value  = std::numeric_limits<real>::quiet_NaN();
+    real           value  = dx::nan<real>();
     int64_t        millis = 0;
     FlagsOf<UFlag> flags  = null;
     

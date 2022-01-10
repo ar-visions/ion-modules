@@ -40,7 +40,7 @@ struct StTrans {
                 { "ease-out",  EaseOut  },
                 { "cubic",     CubicIn  },
                 { "cubic-in",  CubicIn  },
-                { "cubic-out", CubicOut }
+                { "cubic-out", CubicOut } /// throw all of them from W3C in. when you are feeling at ease
             };
             type = s1.map<Curve>(None, m);
         } else if (sp.size() == 1) {
@@ -52,7 +52,7 @@ struct StTrans {
         }
     }
     
-    StTrans(nullptr_t n = null) { }
+    StTrans(nullptr_t n = null):type(None) { }
     
     real pos(real tf) const {
         real x = std::clamp(tf, 0.0, 1.0);
@@ -93,7 +93,7 @@ struct StBlock {
     StBlock          *parent = null;
     vec<StQualifier>  quals;
     vec<StPair>       pairs;
-    vec<ptr<StBlock>> blocks; // one idea was to make a container for smart pointer allocated objects.  if they use the info standard they may.
+    vec<ptr<StBlock>> blocks;
     double match(node *n);
     size_t score(node *n);
     

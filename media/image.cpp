@@ -5,7 +5,13 @@
 #include "stb_image_write.h"
 
 Image::Image(nullptr_t n) { }
-Image::Image(var &pixels) : pixels(pixels) { }
+Image::Image(var &pixels) : pixels(pixels) {
+    /// not so fast bugs.
+    if (pixels == Type::Str) {
+        bool no_ext = path_t(pixels).extension().string().size() == 0;
+        *this = Image(path_t(str::format("images/{0}{1}", {pixels, (no_ext ? str {".png"} : str {""})})), Format::Rgba);
+    }
+}
 
 Image::Image(path_t p, Image::Format f) {
     bool  rgba = (f == Format::Rgba);
@@ -17,13 +23,12 @@ Image::Image(path_t p, Image::Format f) {
 
 Image::Image(vec2i sz, Format f) {
     auto g = f == Gray;
-    pixels = {g ? Type::ui8 :
-                  Type::ui32,
+    pixels = {g ? Type::ui8 : Type::ui32,
               std::vector<int> { sz.y, sz.x, g ? 1 : 4 }};
 }
 
 Image::Image(vec2i sz, rgba clr) {
-    pixels = {Type::ui32, std::vector<int>{ sz.y, sz.x, 4 }};
+    pixels = { Type::ui32, std::vector<int>{ sz.y, sz.x, 4 }};
 }
 
 Image::Format Image::format() {
@@ -134,10 +139,10 @@ Image Image::crop(recti r) {
 }
 
 Image::~Image() {
-    //if (pixels && pixels.d.use_count() == 1)
-    //    stbi_image_free((stbi_uc *)pixels.d.get());
+    /// we dont know who struck first, us, or them...
+    /// we do know it was us, who invalidated the cache.
+    /// im not sure why this function is here, and i am standing like keano [massively dumb-founded].
 }
 
 Image::operator bool()  { return pixels; }
 bool Image::operator!() { return !(operator bool()); }
-

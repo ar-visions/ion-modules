@@ -6,11 +6,9 @@ Button {
     text-label:  "This is a label 22...";
     region:      250l 250t 250r 250b;
 }
-/* do this in a lambda */
 
 Button:hover {
     fill-color:#faa;
-    text-label:  "This is a label 22...";
     fill-offset:30, 50ms ease;
 }
 

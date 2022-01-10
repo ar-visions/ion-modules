@@ -525,8 +525,8 @@ var::operator bool() {
         case Type::f32:   return *((float    *)v.n) > 0;
         case Type::f64:   return *((double   *)v.n) > 0;
         case Type::Str:   return      v.s->length() > 0;
-        case Type::Map:   return        v.m->size() > 0;
-        case Type::Array: return        v.a->size() > 0;
+        case Type::Map:   return        v.m and v.m->size() > 0;
+        case Type::Array: return        v.d  or v.a->size() > 0;
         case Type::Ref:   return v.n_value.vref ? bool(v.n_value.vref) : bool(v.n);
         default:
             break;
@@ -930,7 +930,10 @@ void var::notify_delete() {
     observer->fn_change(Binding::Delete, v, snull, vnull);
 }
 
-var::~var() { }
+var::~var() {
+    if (flags & DestructAttached)
+        fn(*this); // arb value
+}
 
 var:: var(str s) : t(Type::Str), s(new std::string(s.s)) { }
 

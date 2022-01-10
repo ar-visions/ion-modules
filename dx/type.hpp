@@ -42,7 +42,7 @@ struct Type {
         Bool,
         
         /// high level types.. they got trouble on another level
-        Str, Map, Array, Ref, Node, Lambda, Any,
+        Str, Map, Array, Ref, Arb, Node, Lambda, Any,
         
         /// and the mighty general
         Struct

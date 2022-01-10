@@ -216,12 +216,7 @@ int Vulkan::main(Composer *composer) {
         if (composer->root)
             w.set_title(composer->root->m.text.label);
         ///
-        if (!composer->process())
-            glfwWaitEventsTimeout(0.00001);
-        else {
-            std::cout << "animating!\n";
-            glfwWaitEventsTimeout(0.00001);
-        }
+        glfwWaitEventsTimeout(composer->process() ? 1.0 / 60.0 : 1.0);
     });
     return 0;
 }

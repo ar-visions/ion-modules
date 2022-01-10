@@ -184,6 +184,42 @@ struct Context2D:ICanvasBackend {
         return (trim == 0) ? "" : (p == &text) ? text : cur;
     }
     
+    virtual void image(DrawState &ds, Image &image, rectd &rect, Vec2<Align> &align, vec2 &offset) {
+        return;
+        State   *s = (State *)ds.b_state; // backend state (this)
+        SkPaint ps = SkPaint(s->ps);
+        vec2   pos = { 0, 0 };
+        vec2i  isz = image.size();
+        
+        
+        ps.setColor(sk_color(ds.color));
+        if (ds.opacity != 1.0f)
+            ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
+        ///
+        if (!image.pixels.attachments()) {
+            SkBitmap bm;
+            rgba    *px = image.pixels.data<rgba>();
+            
+            SkImageInfo info = SkImageInfo::Make(isz.x, isz.y, kBGRA_8888_SkColorType, kUnpremul_SkAlphaType);
+            bm.installPixels(info, px, image.stride());
+            /// allocate a smart pointer (with wrapper)... delete it when you dont need it.
+            /// smarter than smart.
+            sk_sp<SkImage> *im = new sk_sp<SkImage>(SkImage::MakeFromBitmap(bm));
+            image.pixels.attach("sk-image", null, [im](var &) { delete im; });
+        }
+        ///
+        pos.x = (align.x == Align::End)    ? rect.x + rect.w     - isz.x :
+                (align.x == Align::Middle) ? rect.x + rect.w / 2 - isz.x / 2 :
+                                             rect.x;
+        pos.y = (align.y == Align::End)    ? rect.y + rect.h     - isz.y :
+                (align.y == Align::Middle) ? rect.y + rect.h / 2 - isz.y / 2 :
+                                             rect.y;
+        sk_canvas->drawImage(
+            (SkImage *)image.pixels["sk-image"].n_value.vstar,
+            SkScalar(pos.x + offset.x),
+            SkScalar(pos.y + offset.y), SkSamplingOptions(), &ps);
+    }
+    
     /// the lines are most definitely just text() calls, it should be up to the user to perform multiline
     void text(DrawState &ds, str &text, rectd &rect, Vec2<Align> &align, vec2 &offset, bool ellip) {
         State   *s = (State *)ds.b_state; // backend state (this)
@@ -246,7 +282,7 @@ struct Context2D:ICanvasBackend {
         State   *s = (State *)ds.b_state;
         SkPaint ps = SkPaint(s->ps);
         ///
-        ps.setAntiAlias(!path.rect);
+        ps.setAntiAlias(!path.is_rect());
         ps.setColor(sk_color(ds.color));
 
         ///
@@ -553,7 +589,13 @@ str   Canvas::ansi_color(rgba c, bool t) { return backend->ansi_color(c, t);    
 void  Canvas::text(str text, rectd rect, Vec2<Align> align, vec2 offset, bool ellipsis) {
     backend->text(state, text, rect, align, offset, ellipsis);
 }
-
+// todo: [node] transition the text from align changes (not at all different from the region transition)
+// perform transitions on icon svg, it would be incredible to have more control there with
+// load simple svg format.. can support simple unioned shapes. no funny business.
+// the idea would be to give access to names where you can set their props by style sheet.
+void  Canvas::image(Image &image, rectd rect, Vec2<Align> align, vec2 offset) {
+    backend->image(state, image, rect, align, offset);
+}
 Path::Path()                    { }
 Path::Path(rectd r) : rect(r)   { }
 Path::Path(const Path &ref)     { copy((Path &)ref); }
@@ -727,7 +769,7 @@ bool Path::operator!() {
 
 rectd &Path::bounds() {
     if (!rect) {
-        SkRect r = p->getBounds(); /// invalidate rect on updates (such as offset op)
+        SkRect r = p->computeTightBounds(); /// 'getBounds' has a segfault on valid input feature so i am trying this one
         rect.x = r.fLeft;
         rect.y = r.fTop;
         rect.w = r.fRight  - r.fLeft;
@@ -744,8 +786,6 @@ vec2 Path::xy()     {
     return rect.xy();
 }
 
-// i think caching 2 to 8 is good
-// at the moment there is a major performance degredation
 SkPath *Path::sk_path(SkPaint *paint) {
     if (bool(last_offset) and o_cache == o)
         return last_offset;
@@ -754,7 +794,7 @@ SkPath *Path::sk_path(SkPaint *paint) {
         assert(p);
         ///
         delete last_offset;
-        last_offset = new SkPath(*p); // this is simply whats happening here, i think..
+        last_offset = new SkPath(*p);
         o_cache = o;
         ///
         SkPath  fpath;
@@ -765,8 +805,7 @@ SkPath *Path::sk_path(SkPaint *paint) {
         cp.getFillPath((const SkPath &)*p, &fpath);
         
         auto vrbs = p->countVerbs();
-        auto pnts = p->countPoints(); // todo: void* handling in var for storage and logging are a bit broken
-                                      // fix without adding new type
+        auto pnts = p->countPoints();
         std::cout << "p = " << (void *)p << ", pointer = " << (void *)this << " verbs = " << vrbs << ", points = " << pnts << "\n";
         ///
         if (o < 0) {

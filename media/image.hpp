@@ -9,7 +9,8 @@ struct Image {
         Gray,
         Rgba
     };
-    
+    var pixels; /// our only member. so proud. [how many members does var have?] ... so proud.
+
     Image(nullptr_t n = null);
     Image(path_t, Format);
     Image(var &);
@@ -100,7 +101,6 @@ struct Image {
                 pixel<uint8_t>(tx.x + 0, tx.y + 1) * (1.0 - blend.x) * (      blend.y);
     }
     
-    
     template <typename T>
     inline T &pixel(int x, int y) {
         auto   &sh = pixels.sh;
@@ -112,9 +112,7 @@ struct Image {
         return data[(orig.y + yp) * sh[1] + (orig.x + xp)];
     }
     
-    var  pixels;
-    
-    inline void set_each(std::function<rgba(rgba &, int, int)> fn) {
+    inline void filter(std::function<rgba(rgba &, int, int)> fn) {
         assert(pixels.c == Type::ui32 || pixels.c == Type::i32);
         auto    sh = pixels.shape();
         assert(sh[2] == 4);
@@ -127,7 +125,7 @@ struct Image {
         }
     }
     
-    inline void set_each(std::function<uint8_t(uint8_t &, int, int)> fn) {
+    inline void filter(std::function<uint8_t(uint8_t &, int, int)> fn) {
         assert(pixels.c == Type::ui8 || pixels.c == Type::i8);
         auto    sh = pixels.shape();
         assert(sh[2] == 1);

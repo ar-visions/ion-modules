@@ -259,6 +259,7 @@ struct ICanvasBackend {
     virtual void *     data()                     { return null; }
     virtual vec2i      size()                     { return null; }
     virtual void       text(DrawState &, str &, rectd &, Vec2<Align> &, vec2 &, bool) { }
+    virtual void      image(DrawState &, Image &, rectd &, Vec2<Align> &, vec2 &)     { }
     virtual void    texture(DrawState &, Image *im);
     virtual void      clear(DrawState &);
     virtual void      clear(DrawState &, rgba &)   { }
@@ -319,6 +320,7 @@ public:
     void        font(Font &f); /// need notes for this one.
     TextMetrics measure(str s);
     void        text(str, rectd, Vec2<Align>, vec2, bool);
+    void       image(Image &, rectd, Vec2<Align>, vec2);
     void       flush();
     void   stroke_sz(double sz);
     void  font_scale(double sc);

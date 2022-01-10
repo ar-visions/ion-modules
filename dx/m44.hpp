@@ -44,7 +44,7 @@ struct Matrix44:Vector<T> {
         a[3] = v3;
     }
     
-    Matrix44(nullptr_t n) : Matrix44() { m[0] = std::numeric_limits<double>::quiet_NaN(); }
+    Matrix44(nullptr_t n) : Matrix44() { m[0] = dx::nan<double>(); }
     void copy(Matrix44<T> &ref)        { memcpy(m, ref.m, sizeof(m)); }
     Matrix44(Matrix44<T> &ref)         { copy(ref); }
     Matrix44(const Matrix44<T> &ref)   { copy((const Matrix44<T> &)ref); }

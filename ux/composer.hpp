@@ -12,12 +12,6 @@ struct Composer {
     Args          args;
     vec2i        *sz;
     
-    /// before 3d, we want to test region transition.
-    ///
-    /// there was the faint idea of using the state of a peer, or child, to influence your own.
-    /// that the latter is very requested, former not as much
-    /// a child state effecting its parent should definitely be allowed.. why the busiwork, eh?
-    ///     -
     vec<node *> select_at(vec2 cur, bool active = true) {
         auto inside = root->select([&](node *n) {
             real    x = cur.x, y = cur.y;
@@ -90,7 +84,6 @@ struct Composer {
         /// nullify cursor values
         vec<node *> prev_cursor;
         root->exec([&](node *n) {
-            std::cout << "n.m.cursor = " << n->m.cursor() << std::endl;
             if (n->m.cursor()) {
                 prev_cursor += n;
                 n->m.cursor = vec2(null);
@@ -126,14 +119,11 @@ struct Composer {
             }
     }
     
-    void resize(Window &w) {
-    }
+    void resize(Window &w) { }
     
-    void key(Window &w, int key, int scan, int action, int mod) { /// make action an enum across the app
-    }
+    void key(Window &w, int key, int scan, int action, int mod) { }
     
-    void character(Window &win, uint32_t c) {
-    }
+    void character(Window &win, uint32_t c) { }
     
     bool process() {
         return root ? root->process() : true;
@@ -141,12 +131,10 @@ struct Composer {
 
     Composer(Interface *ux, FnRender fn, Args &args) : ux(ux), fn(fn), args(args) { }
 
-    /// this is the update.
     bool update(node *parent, node **p_child, Element &e) {
         node *child       = *p_child;
         bool node_updated = false;
         
-        ///
         if (!child) {
             child         = (*p_child = e.factory());
             child->root   = parent ? parent->root : child;
