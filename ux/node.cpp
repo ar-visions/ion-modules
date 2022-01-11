@@ -109,13 +109,14 @@ void node::standard_bind() {
     external <int>         ("tab-index",        m.tab_index,       -1);
     /// --------------------------------------------------------------------------
     external <str>         ("text-label",       m.text.label,      str(""));
-    external <AlignV2>     ("text-align",       m.text.align,      AlignV2 { Align::Middle, Align::Middle });
+    external <VAlign>      ("text-align",       m.text.align,      VAlign { Align::Middle, Align::Middle });
     external <rgba>        ("text-color",       m.text.color,      rgba("#fff") );
     external <real>        ("text-offset",      m.text.offset,     real(0));
     external <Region>      ("text-region",      m.text.region,     null);
     /// --------------------------------------------------------------------------
     external <rgba>        ("fill-color",       m.fill.color,      null);
     external <real>        ("fill-offset",      m.fill.offset,     real(0));
+    external <VAlign>      ("image-align",      m.fill.align,      VAlign(null));
     external <Image>       ("image",            m.fill.image,        null);
     external <Region>      ("image-region",     m.fill.image_region, null);
     external <double>      ("border-size",      m.border.size,     double(0));
@@ -191,37 +192,20 @@ node *node::focused() {
     })(this);
 }
 
-/*
-void draw(Canvas &canvas) {
-    canvas.color(m.fill.color);
-    canvas.fill(paths.fill);
-    canvas.color(m.text.color);
-    canvas.scale(1.0);
-    canvas.text(node::m.text.label, paths.border, node::m.text.align, { 0, 0 }, true);
-}
-*/
-
 void node::draw(Canvas &canvas) {
-    canvas.save();
-    canvas.cap(m.border.cap());
-    canvas.join(m.border.join());
-
     if (m.fill.color()) {
         canvas.color(m.fill.color());
-        // case: class_name:Button, frame 1, should be fill-radius:16
-        // also ideally we shouldnt crash if we have no radius
-        canvas.fill(paths.fill); // style not loaded on first frame, looks like.
+        canvas.fill(paths.fill);
     }
-    // image-multiply: #ffff [a multiply color, but not like multiply overlay]
-
+    ///
     auto &image = m.fill.image();
-    if (image) {
-        canvas.image(image, paths.fill.bounds(), m.fill.align, vec2(0,0));
-    }
+    if (image)
+        canvas.image(image, image_rect, (vec2 &)m.fill.align(), vec2(0,0));
+    
     ///
     if (m.text) {
         canvas.color(m.text.color);
-        canvas.text(m.text.label, paths.border, m.text.align, { 0.0, 0.0 }, true);
+        canvas.text(m.text.label, paths.border, (vec2 &)m.text.align(), { 0.0, 0.0 }, true);
     }
     ///
     if (m.border.color() && m.border.size() > 0.0) {
@@ -229,8 +213,6 @@ void node::draw(Canvas &canvas) {
         canvas.stroke_sz(m.border.size());
         canvas.stroke(paths.border);
     }
-    ///
-    canvas.restore();
 }
 
 str node::format_text() {

@@ -17,15 +17,96 @@ struct Align:io {
         Middle,
         End
     } type;
+    real custom = 0;
                Align(Type t = Undef) : type(t) { }
     void        copy(const Align &ref) { type = ref.type;        }
     void importer(var &data)           { type = Type(int(data)); }
     var  exporter()                    { return int(type);       }
     bool  operator==(Type t)           { return type == t;       }
+    real scale() const {
+        switch (type) {
+            case Undef:  return 0.0;
+            case Start:  return 0.0;
+            case Middle: return 0.5;
+            case End:    return 1.0;
+        }
+        return 0.0;
+    }
     io_shim(Align, type != Undef);
 };
 
 typedef Vec2<Align> AlignV2;
+
+struct VAlign:io {
+    vec2 v = { 0, 0 };
+    VAlign(nullptr_t n = null) { }
+    void init(str &d0, str &d1) {
+        static str l = "left";
+        static str m = "middle";
+        static str t = "top";
+        static str r = "right";
+        static str b = "bottom";
+        ///
+        if (d0 == l)
+            v.x = 0;
+        else if (d0 == r)
+            v.x = 1;
+        else if (d0 == m)
+            v.x = 0.5;
+        else if (d1 == l)
+            v.x = 0;
+        else if (d1 == r)
+            v.x = 1;
+        else if (d1 == m)
+            v.x = 0.5;
+        else
+            v.x = str(d0).real();
+        ///
+        if (d1 == t)
+            v.y = 0;
+        else if (d1 == b)
+            v.y = 1;
+        else if (d1 == m)
+            v.y = 0.5;
+        else if (d0 == t)
+            v.y = 0;
+        else if (d0 == b)
+            v.y = 1;
+        else if (d0 == m)
+            v.y = 0.5;
+        else
+            v.y = str(d1).real();
+    }
+    VAlign(str v) { // conv to ref?
+        auto sp = v.split();
+        str d0 = sp.size()      ? sp[0] : "left";
+        str d1 = sp.size() >= 2 ? sp[1] : "top";
+        init(d0, d1);
+    }
+    VAlign(real x, real y) : v(x, y) { }
+    VAlign(Align ax, Align ay) {
+        v.x = ax.scale();
+        v.y = ay.scale();
+    }
+    VAlign(var &d) {
+        str d0 = d.size()      ? str(d[size_t(0)]) : "left";
+        str d1 = d.size() >= 2 ? str(d[size_t(1)]) : "top";
+        init(d0, d1);
+    }
+    VAlign operator*(real sc) {
+        return VAlign(v.x * sc, v.y * sc);
+    }
+    VAlign operator+(VAlign a) {
+        return VAlign(v.x + a.v.x, v.y + a.v.y);
+    }
+    
+    operator  var  () { return v; }
+    operator vec2 &() { return v; }
+    operator bool  () { return true;  }
+    bool operator! () { return !(operator bool()); }
+};
+
+template<> struct is_strable<VAlign> : std::true_type  {};
 
 struct Filter {
     enum Type {
@@ -258,8 +339,8 @@ struct ICanvasBackend {
     virtual void      flush(DrawState &)          { }
     virtual void *     data()                     { return null; }
     virtual vec2i      size()                     { return null; }
-    virtual void       text(DrawState &, str &, rectd &, Vec2<Align> &, vec2 &, bool) { }
-    virtual void      image(DrawState &, Image &, rectd &, Vec2<Align> &, vec2 &)     { }
+    virtual void       text(DrawState &, str &, rectd &, vec2 &, vec2 &, bool) { }
+    virtual void      image(DrawState &, Image &, rectd &, vec2 &, vec2 &)     { }
     virtual void    texture(DrawState &, Image *im);
     virtual void      clear(DrawState &);
     virtual void      clear(DrawState &, rgba &)   { }
@@ -319,8 +400,8 @@ public:
     void     texture(Image &im);
     void        font(Font &f); /// need notes for this one.
     TextMetrics measure(str s);
-    void        text(str, rectd, Vec2<Align>, vec2, bool);
-    void       image(Image &, rectd, Vec2<Align>, vec2);
+    void        text(str, rectd, vec2, vec2, bool);
+    void       image(Image &, rectd, vec2, vec2);
     void       flush();
     void   stroke_sz(double sz);
     void  font_scale(double sc);

@@ -2,17 +2,6 @@
 #include <ux/object.hpp>
 #include <ux/button.hpp>
 
-// macOS doesnt support notifications [/kicks dirt]; get working on Linux and roll into Watch (file, dir)
-//#include <sys/inotify.h>
-
-/// transitions work, transition code improved..
-/*
-/// best term; its an indication of standardization of view and common tasks, and behaviour of management
-struct Shell:node {
-};
-
-*/
-
 struct Car:node {
     declare(Car);
     enum Uniform { U_MVP };
@@ -60,7 +49,6 @@ struct View:node {
     } m;
     
     /// support live reloads on css and shaders.
-    
     void bind() {
         external("model",  m.model,  path_t {"models/dayna.obj"});
         /// -------------------------------------------
@@ -70,8 +58,10 @@ struct View:node {
     }
     
     Element render() {
-        return Button {{
-            {"id", "button"}
+        return Group {{{"id", "something"}}, {
+            Button {{
+                {"id", "button"}
+            }}
         }};
     }
 };

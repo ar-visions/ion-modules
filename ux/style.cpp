@@ -10,6 +10,7 @@ std::unordered_map<str, int> Unit::u_flags = {
     { "in", Standard | Distance },
     { "x",  Distance },
     { "y",  Distance },
+    { "p",  Distance },
     { "l",  Distance },
     { "r",  Distance },
     { "t",  Distance },

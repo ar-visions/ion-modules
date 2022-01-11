@@ -26,6 +26,7 @@ template <> struct uxTransitions <  vec2   > { static const bool enabled = true;
 template <> struct uxTransitions <  vec3   > { static const bool enabled = true; };
 template <> struct uxTransitions <  vec4   > { static const bool enabled = true; };
 template <> struct uxTransitions <  m44    > { static const bool enabled = true; };
+template <> struct uxTransitions < VAlign  > { static const bool enabled = true; };
 
 #include <ux/region.hpp>
 #include <ux/node.hpp>

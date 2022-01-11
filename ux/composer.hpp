@@ -13,11 +13,11 @@ struct Composer {
     vec2i        *sz;
     
     vec<node *> select_at(vec2 cur, bool active = true) {
-        auto inside = root->select([&](node *n) {
-            real    x = cur.x, y = cur.y;
-            vec2    o = n->offset();
-            vec2  rel = { x - o.x, y - o.y };
-            bool   in = n->paths.fill.contains(cur);
+        auto     inside = root->select([&](node *n) {
+            real      x = cur.x, y = cur.y;
+            vec2      o = n->offset();
+            vec2    rel = cur + o;
+            bool     in = n->paths.fill.contains(rel);
             n->m.cursor = in ? vec2(x, y) : vec2(null);
             return (in && (!active || !n->m.active())) ? n : null;
         });
@@ -322,36 +322,21 @@ struct Composer {
             root->paths.rect = rect;
         ///
         root->exec([&](node *n) -> node* {
-            node *rn = n->parent ? n->parent : root;
-            ///
-            struct RegionRect {
-                node::Extern<Region> &reg;
-                node           *n;
-                rectd          &rect;
-                rectd          &result;
-            };
-            ///
-            vec<RegionRect> rr = {
+            /// update regionized rects on nodes
+            int                 index      = 0;
+            node               *rn         = n->parent ? n->parent : root;
+            vec<node::RegionOp> region_ops = {
                 { n->m.region,            rn, rn->paths.rect, n->paths.rect },
-                { n->m.fill.image_region, n,  n->image_rect,  n->image_rect },
-                { n->m.text.region,       n,  n->text_rect,   n->text_rect  }
+                { n->m.fill.image_region, n,   n->paths.rect, n->image_rect },
+                { n->m.text.region,       n,   n->paths.rect, n->text_rect  }
             };
-            ///
-            int index = 0;
-            for (auto &x:rr) {
-                /// we need a list of rect types, and the addresses to store their interpolated results in
-                if (x.reg.style.transitioning()) {
-                    root->flags      |= node::StyleAnimate;
-                    Region    &reg0   =  x.reg.style.value_start;
-                    Region    &reg1   = *x.reg.style.selected;
-                    rectd      rect0  =  x.n->region_rect(index, reg0, x.rect, n); // this is where its called
-                    rectd      rect1  =  x.n->region_rect(index, reg1, x.rect, n); // output this for Button image_region rect
-                    real       p      =  x.reg.style.transition_pos();
-                    real       i      =  1.0 - p;
-                    x.result          = (rect0 * i) + (rect1 * p);
-                } else
-                    x.result          = x.n->region_rect(index, x.reg, x.rect, n);
-                index++;
+            
+            for (auto &r_op:region_ops) {
+                if (str(n->class_name) == "Button") {
+                    int test = 0;
+                    test++;
+                }
+                r_op(n, index++);
             }
             ///
             rectd &r = n->paths.rect;

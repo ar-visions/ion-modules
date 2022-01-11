@@ -184,7 +184,7 @@ struct Context2D:ICanvasBackend {
         return (trim == 0) ? "" : (p == &text) ? text : cur;
     }
     
-    virtual void image(DrawState &ds, Image &image, rectd &rect, Vec2<Align> &align, vec2 &offset) {
+    virtual void image(DrawState &ds, Image &image, rectd &rect, vec2 &align, vec2 &offset) {
         State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
         vec2   pos = { 0, 0 };
@@ -193,31 +193,39 @@ struct Context2D:ICanvasBackend {
         ps.setColor(sk_color(ds.color));
         if (ds.opacity != 1.0f)
             ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
+        
         /// cache management; 
         if (!image.pixels.attachments()) {
             SkBitmap bm;
             rgba    *px = image.pixels.data<rgba>();
-            /// photoshop
-            SkImageInfo info = SkImageInfo::Make(isz.x, isz.y, kBGRA_8888_SkColorType, kUnpremul_SkAlphaType);
+            SkImageInfo info = SkImageInfo::Make(isz.x, isz.y, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType);
             bm.installPixels(info, px, image.stride());
             sk_sp<SkImage> *im = new sk_sp<SkImage>(SkImage::MakeFromBitmap(bm)); /// smarter than smart.
             image.pixels.attach("sk-image", im, [im](var &) { delete im; });
         }
-        ///
-        pos.x = (align.x == Align::End)    ? rect.x + rect.w     - isz.x :
-                (align.x == Align::Middle) ? rect.x + rect.w / 2 - isz.x / 2 :
-                                             rect.x;
-        pos.y = (align.y == Align::End)    ? rect.y + rect.h     - isz.y :
-                (align.y == Align::Middle) ? rect.y + rect.h / 2 - isz.y / 2 :
-                                             rect.y;
+        
+        /// now its just of matter of scaling the little idiot to fit in the box.
+        real scx = std::min(1.0, rect.w / isz.x);
+        real scy = std::min(1.0, rect.h / isz.y);
+        real sc  = (scy > scx) ? scx : scy;
+        
+        /// no enums were harmed during the making of this function
+        pos.x = interp(rect.x, rect.x + rect.w - isz.x * sc, align.x);
+        pos.y = interp(rect.y, rect.y + rect.h - isz.y * sc, align.y);
+        
+        sk_canvas->save();
+        sk_canvas->translate(pos.x + offset.x, pos.y + offset.y);
+        
+        SkCubicResampler c;
+        sk_canvas->scale(sc, sc);
         sk_canvas->drawImage(
             ((sk_sp<SkImage> *)image.pixels["sk-image"].n_value.vstar)->get(),
-            SkScalar(pos.x + offset.x),
-            SkScalar(pos.y + offset.y), SkSamplingOptions(), &ps);
+            SkScalar(0), SkScalar(0), SkSamplingOptions(c), &ps);
+        sk_canvas->restore();
     }
     
     /// the lines are most definitely just text() calls, it should be up to the user to perform multiline
-    void text(DrawState &ds, str &text, rectd &rect, Vec2<Align> &align, vec2 &offset, bool ellip) {
+    void text(DrawState &ds, str &text, rectd &rect, vec2 &align, vec2 &offset, bool ellip) {
         State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
         ps.setColor(sk_color(ds.color));
@@ -270,23 +278,16 @@ struct Context2D:ICanvasBackend {
                                                SkPaint::kMiter_Join);
     }
     
-    // we are to put everything in path.
-    void fill(DrawState &ds, Path &path) {
-        if (path.is_rect())
-            return fill(ds, path.rect);
-        
-        State   *s = (State *)ds.b_state;
-        SkPaint ps = SkPaint(s->ps);
-        ///
-        ps.setAntiAlias(!path.is_rect());
-        ps.setColor(sk_color(ds.color));
-
-        ///
-        if (ds.opacity != 1.0f)
-            ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
-        
-        /// path checks if there is an offset, keeps cache
-        sk_canvas->drawPath(*path.sk_path(&ps), ps);
+    void translate(DrawState &ds, vec2 &tr) {
+        sk_canvas->translate(SkScalar(tr.x), SkScalar(tr.y));
+    }
+    
+    void scale(DrawState &ds, vec2 &sc) {
+        sk_canvas->scale(SkScalar(sc.x), SkScalar(sc.y));
+    }
+    
+    void rotate(DrawState &ds, double degs) {
+        sk_canvas->rotate(degs);
     }
     
     void fill(DrawState &ds, rectd &rect) {
@@ -303,20 +304,43 @@ struct Context2D:ICanvasBackend {
         sk_canvas->drawRect(r, ps);
     }
     
+    // we are to put everything in path.
+    void fill(DrawState &ds, Path &path) {
+        if (path.is_rect())
+            return fill(ds, path.rect);
+        ///
+        State   *s = (State *)ds.b_state;
+        SkPaint ps = SkPaint(s->ps);
+        ///
+        ps.setAntiAlias(!path.is_rect());
+        ps.setColor(sk_color(ds.color));
+        ///
+        if (ds.opacity != 1.0f)
+            ps.setAlpha(float(ps.getAlpha()) * float(ds.opacity));
+        
+        sk_canvas->drawPath(*path.sk_path(&ps), ps);
+    }
+    
+    void clip(DrawState &ds, Path &path) {
+        State   *s = (State *)ds.b_state;
+        SkPaint ps = SkPaint(s->ps);
+        sk_canvas->clipPath(*path.sk_path(&ps));
+    }
+    
     void gaussian(DrawState &state, vec2 &sz, rectd crop) {
         SkImageFilters::CropRect crect = { };
         if (crop) {
-            SkRect rect = { SkScalar(crop.x),
-                            SkScalar(crop.y),
-                            SkScalar(crop.x + crop.w),
-                            SkScalar(crop.y + crop.h) };
+            SkRect rect = { SkScalar(crop.x),          SkScalar(crop.y),
+                            SkScalar(crop.x + crop.w), SkScalar(crop.y + crop.h) };
             crect       = SkImageFilters::CropRect(rect);
         }
         sk_sp<SkImageFilter> filter = SkImageFilters::Blur(sz.x, sz.y, nullptr, crect);
         State *st = (State *)host->state.b_state;
+        host->state.blur = sz;
         st->ps.setImageFilter(std::move(filter));
     }
 };
+
 
 void DrawState::copy(const DrawState &r) {
     host       = r.host;
@@ -429,7 +453,7 @@ struct Terminal:ICanvasBackend {
         return get_str();
     }
 
-    void text(DrawState &state, str &s, rectd &rect, Vec2<Align> &align, vec2 &offset, bool ellip) {
+    void text(DrawState &state, str &s, rectd &rect, vec2 &align, vec2 &offset, bool ellip) {
         assert(glyphs.size() == (sz.x * sz.y));
         size_t len = s.len();
         if (!len)
@@ -526,7 +550,8 @@ map<str, str> Terminal::t_bg_colors_8 = {
 void ICanvasBackend::    clear(DrawState &st)             { }
 void ICanvasBackend::  texture(DrawState &st, Image *im)  { st.im = im; }
 void ICanvasBackend::     font(DrawState &st, Font  &f)   { st.font = f; }
-void ICanvasBackend::translate(DrawState &st, vec2  &tr)  { st.m = st.m.translate(tr); }
+void ICanvasBackend::translate(DrawState &st, vec2  &tr)  {
+    st.m = st.m.translate(tr); } // likely need 2 stacks if we keep the 4x4 for drawing
 void ICanvasBackend::    scale(DrawState &st, vec2  &sc)  { st.m = st.m.scale(sc); }
 void ICanvasBackend::   rotate(DrawState &st, double deg) { st.m = st.m.rotate_z(deg); }
 void ICanvasBackend::    color(DrawState &st, rgba  &c)   { st.color = c;  }
@@ -545,11 +570,20 @@ Canvas::Canvas(vec2i sz, Canvas::Type type, var *result) : type(type),
     save();
 }
 
+void  Canvas::defaults() {
+    state = { this, 1, 1, 1, m44(), "#000f", vec2 {0, 0}, default_font };
+}
+
+void  Canvas::save() {
+    states.push(state);
+    backend->save(state);
+}
+
 void  Canvas::restore() {
-     state = states.top();
-     states.pop();
-     /// needs a backend function: todo.
-     assert(states.size() >= 1);
+    backend->restore(state);
+    state = states.top();
+    states.pop();
+    assert(states.size() >= 1);
 }
 
 void *Canvas::data()                    { return type ? ((::Terminal *)backend)->data() : null; }
@@ -557,8 +591,7 @@ str   Canvas::get_char(int x, int y)    { return backend->get_char(state, x, y);
 TextMetrics Canvas::measure(str s)      { return backend->measure(state, s);               }
 vec2i Canvas::size()                    { return backend->size();                          }
 void *Canvas::copy_bstate(void *bs)     { return type ? backend->copy_bstate(bs) : null;   }
-void  Canvas::save()                    { states.push(state); backend->save(state);        }
-void  Canvas::defaults()                { state = { this, 1, 1, 1, m44(), "#000f", vec2 {0, 0}, default_font }; }
+
 void  Canvas::stroke_sz( double sz)     { state.stroke_sz = sz;                            }
 void  Canvas::font(Font &f)             { state.font = f;                                  }
 void  Canvas::font_scale(double sc)     { state.font_scale  = sc;                          }
@@ -582,14 +615,14 @@ void  Canvas::join(Join::Type t)        { backend->join     (state, t);         
 
 bool  Canvas::operator==(Type   t)       { return type == t;                               }
 str   Canvas::ansi_color(rgba c, bool t) { return backend->ansi_color(c, t);               }
-void  Canvas::text(str text, rectd rect, Vec2<Align> align, vec2 offset, bool ellipsis) {
+void  Canvas::text(str text, rectd rect, vec2 align, vec2 offset, bool ellipsis) {
     backend->text(state, text, rect, align, offset, ellipsis);
 }
 // todo: [node] transition the text from align changes (not at all different from the region transition)
 // perform transitions on icon svg, it would be incredible to have more control there with
 // load simple svg format.. can support simple unioned shapes. no funny business.
 // the idea would be to give access to names where you can set their props by style sheet.
-void  Canvas::image(Image &image, rectd rect, Vec2<Align> align, vec2 offset) {
+void  Canvas::image(Image &image, rectd rect, vec2 align, vec2 offset) {
     backend->image(state, image, rect, align, offset);
 }
 Path::Path()                    { }

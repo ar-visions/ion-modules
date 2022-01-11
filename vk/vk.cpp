@@ -216,7 +216,8 @@ int Vulkan::main(Composer *composer) {
         if (composer->root)
             w.set_title(composer->root->m.text.label);
         ///
-        glfwWaitEventsTimeout(composer->process() ? 1.0 / 60.0 : 1.0);
+        if (!composer->process())
+            glfwWaitEventsTimeout(1.0);
     });
     return 0;
 }

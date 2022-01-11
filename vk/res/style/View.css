@@ -1,18 +1,30 @@
 Button {
-    radius:      0;
-    fill-color:  #348;
-    image:       "menu.png";
-    image-region: 10l 10t 10r 10b;
-    text-color:  #222;
-    text-label:  "This is a label 22z...";
-    region:      0l 0t 70w 0b;
+    radius:       0;
+    fill-color:   #348;
+    image:        "menu.png";
+    image-region:  5l 5t 5r 5b, 200ms ease-in;
+    text-color:   #222;
+    text-label:   "This is a label 22z...";
+    region:       0l 0t 0r 80h;
+    image-align:  left top, 900ms ease;
+    opacity:      0.1; /* need this */
+}
+
+Group {
+    fill-color:   #f00; /* same-side rounded rect optimization needed */
+    region:       0l 0t 0r 0b;
+    radius:       32;
+    clip:         true;
+    image:        "cinderella.png";
+    image-align:  middle middle;
 }
 
 Button:hover {
-    fill-color:#faa;
+    image-region: 15p, 200ms ease-in;
+    fill-color:   #faa, 200ms linear;
+    image-align:  left top, 200ms ease;
 }
 
 Button:active {
-    fill-color:#aaf;
+    fill-color:   #aaf;
 }
-

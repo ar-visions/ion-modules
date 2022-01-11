@@ -151,24 +151,13 @@ struct node {
                     value = (*trans)(value_start, *selected, transition_pos());
             }
             ///
-            /// text-label has style_selection "legit str" and snapshot is some farse.
-            /// the Type on StTrans is random data, otherwise seems to be initialized correctly
-            ///
             inline void changed(T &snapshot, T *style_selection, StTrans *t) {
-                if (name == "text-label") {
-                    int test = 0;
-                    test++;
-                }
                 if (t != trans) {
-                    value_start = snapshot; /// why is this invalid?
+                    value_start = snapshot;
                     timer_start = ticks();
                     trans       = t;
                 }
                 selected = style_selection;
-                if (name == "text-label") {
-                    int test = 0;
-                    test++;
-                }
             }
             operator bool() { return selected != null; }
             T &operator()(T &def) {
@@ -377,7 +366,7 @@ struct node {
         Extern<str>     label;
         Extern<rgba>    color;
         Extern<Region>  region; /// these three should be good. (region, align, offset)
-        Extern<AlignV2> align;
+        Extern<VAlign>  align;
         Extern<real>    offset;
         operator bool() { return label() && color().a > 0; }
     };
@@ -387,7 +376,7 @@ struct node {
         Extern<real>    offset;
         Extern<Image>   image;
         Extern<Region>  image_region;
-        Extern<AlignV2> align; // repeat, rotate, scale, translate
+        Extern<VAlign>  align; // repeat, rotate, scale, translate
         operator bool() { return offset() > 0 && color().a > 0; }
     };
     
@@ -516,7 +505,28 @@ struct node {
     node           *focused();
     virtual rectd   region_rect(int index, Region &reg, rectd &src, node *n);
     
-    int             u_next_id = 0;
+    /// region to rect calculation done here for nodes
+    struct RegionOp {
+        node::Extern<Region> &reg;
+        node           *rel;
+        rectd          &rect;
+        rectd          &result;
+        void operator()(node *n, int index) {
+            auto root = n->root ? n->root : n;
+            if (reg.style.transitioning()) {
+                root->flags      |= node::StyleAnimate;
+                rectd      rect0  =  rel->region_rect(index,  reg.style.value_start, rect, n);
+                rectd      rect1  =  rel->region_rect(index, *reg.style.selected,    rect, n);
+                real       p      =  reg.style.transition_pos();
+                result            = (rect0 * (1.0 - p)) + (rect1 * p);
+                if (str(reg.node->class_name) == "Button") {
+                    int test = 0; /// Button.paths.rect should be 80,80,70,864
+                    test++;
+                }
+            } else
+                result            = rel->region_rect(index, reg, rect, n);
+        }
+    };
     
     template <typename T>
     inline T state(str name) {
