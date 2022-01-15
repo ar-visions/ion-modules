@@ -2,6 +2,7 @@
 #include <dx/var.hpp>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 
 struct Future;
 

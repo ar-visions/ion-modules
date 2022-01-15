@@ -157,7 +157,7 @@ public:
     void observe(std::function<void(Binding op, var &row, str &field, var &value)> fn);
     void write(std::ofstream &f, enum Format format = Binary);
     void write(path_t p, enum Format format = Binary);
-    var(nullptr_t p);
+    var(std::nullptr_t p);
     var(Type::Specifier t, void *v) : t(t) {
         assert(t == Type::Arb);
         n_value.vstar = (void *)v;
@@ -489,7 +489,7 @@ public:
         return (T *)v.d.get();
     }
     
-    var(str s);
+    //var(str &s); /// seems to me like we drop this bum.
     
     void reserve(size_t sz);
     size_t size();
@@ -610,7 +610,7 @@ class Ref {
 protected:
     void *v = null;
 public:
-    Ref(nullptr_t n = nullptr) : v(n) { }
+    Ref(std::nullptr_t n = nullptr) : v(n) { }
     Ref(node *n) : v(n) { }
     Ref(void *v) : v(v) { }
     Ref(var &d) : v((void *)d) { }
@@ -620,7 +620,7 @@ public:
 };
 
 #define io_shim(C,E) \
-    C(nullptr_t n) : C()       { }                      \
+    C(std::nullptr_t n) : C()       { }                      \
     C(const C &ref)            { copy(ref);            }\
     C(var &d)                  { importer(d);          }\
     operator var()             { return exporter();    }\
@@ -716,7 +716,7 @@ struct Element {
         return idc;
     }
     Element(node *ref) : ref(ref) { }
-    Element(nullptr_t n = null) { }
+    Element(std::nullptr_t n = null) { }
     Element(FnFactory factory, Binds &binds, vec<Element> &elements):
         factory(factory), binds(binds), elements(elements) { }
     bool operator==(Element &b);
@@ -810,14 +810,14 @@ struct Remote {
         int64_t value;
             str remote;
     Remote(int64_t value)                  : value(value)                 { }
-    Remote(nullptr_t n = nullptr)          : value(-1)                    { }
+    Remote(std::nullptr_t n = nullptr)          : value(-1)                    { }
     Remote(str remote, int64_t value = -1) : value(value), remote(remote) { }
     operator int64_t() { return value; }
     operator var() {
         if (remote) {
             var m = { Type::Map, Type::Undefined }; /// invalid state used as trigger.
                 m.s = std::shared_ptr<std::string>(new std::string(remote));
-            m["resolves"] = remote;
+            m["resolves"] = var(remote);
             return m;
         }
         return var(value);
@@ -827,48 +827,4 @@ struct Remote {
 struct Ident   : Remote {
        Ident() : Remote(null) { }
 };
-///
-struct Symbol {
-    int         value;
-    std::string symbol;
-    bool operator==(int v) { return v == value; }
-};
-///
-typedef vec<Symbol> Symbols;
-    
-/// basic enums type needs to be enumerable, serializable, and introspectable
-struct EnumData:io {
-    Type        type;
-    int         kind;
-    EnumData(Type type, int kind): type(type), kind(kind) { }
-};
 
-template <typename T>
-struct ex:EnumData {
-    ex(int kind) : EnumData(Id<T>(), kind) { }
-    operator bool() { return kind > 0; }
-    operator  var() {
-        for (auto &sym: T::symbols)
-            if (sym.value == kind)
-                return sym.symbol;
-        console.assertion(false, "invalid enum");
-        return null;
-    }
-    /// depending how Symbol * param, this is an assertion failure on a resolve of symbol to int
-    int resolve(std::string str, Symbol **ptr = null) {
-        for (auto &sym: T::symbols)
-            if (sym.symbol == str) {
-                *ptr = &sym;
-                return sym.value;
-            }
-        if (ptr)
-            *ptr = null;
-        else
-            console.error("enum resolve assertion fail: {0}", {str});
-        ///
-        console.assertion(T::symbols.size(), "empty symbols");
-        return T::symbols[0].value; /// could be null, or undefined-like functionality
-    }
-    ///
-    ex(var &v) { kind = resolve(v); }
-};

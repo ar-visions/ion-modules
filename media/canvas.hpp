@@ -5,6 +5,7 @@
 #include <media/color.hpp>
 #include <media/image.hpp>
 #include <dx/m44.hpp>
+#include <dx/string.hpp>
 
 typedef vec<vec2> Points;
 
@@ -39,7 +40,7 @@ typedef Vec2<Align> AlignV2;
 
 struct VAlign:io {
     vec2 v = { 0, 0 };
-    VAlign(nullptr_t n = null) { }
+    VAlign(std::nullptr_t n = null) { }
     void init(str &d0, str &d1) {
         static str l = "left";
         static str m = "middle";
@@ -129,7 +130,7 @@ struct Filter {
         type = t;
         memclear(params);
     }
-    Filter(nullptr_t n) : Filter(None) { }
+    Filter(std::nullptr_t n) : Filter(None) { }
     operator bool()     { return type != None; }
     bool operator!()    { return type == None; }
 };
@@ -173,12 +174,14 @@ struct Blending:io { /// anything we serialize is an io class
 };
 
 struct Cap:io {
+    /// ---------------------------
     enum Type {
         None,
         Blunt,
         Round
     } value;
-    Cap(nullptr_t n = null) { }
+    /// ---------------------------
+    Cap(std::nullptr_t n = null) { }
     Cap(Cap &c)             { value = c.value; }
     Cap(Type t): value(t)   { }
     Cap(var &v)             {
@@ -186,6 +189,7 @@ struct Cap:io {
         value = s == "round" ? Round :
                 s == "blunt" ? Blunt : None;
     }
+    /// ---------------------------
     bool operator==(Type t) { return value == t; }
     operator bool () { return value != None; }
     bool operator!() { return value == None; }
@@ -195,8 +199,9 @@ struct Cap:io {
         return *this;
     }
     operator   var() {
-        return str(value == Round ? "round" :
-                   value == Blunt ? "blunt" : "none");
+        str sv = str(value == Round ? "round" :
+                     value == Blunt ? "blunt" : "none");
+        return sv;
     }
     operator Type &() { return value; }
 };
@@ -208,7 +213,7 @@ struct Join:io {
         Bevel,
         Round
     } value;
-    Join(nullptr_t n = null) { }
+    Join(std::nullptr_t n = null) { }
     Join(Join &j)            { value = j.value; }
     Join(Type t): value(t)   { }
     Join(var &v)             {
@@ -277,7 +282,7 @@ struct ColoredGlyph {
     str  s;
     rgba bg;
     rgba fg;
-    ColoredGlyph(nullptr_t n) : s(""), bg(null), fg(null) { }
+    ColoredGlyph(std::nullptr_t n) : s(""), bg(null), fg(null) { }
     ColoredGlyph(int border, str s, rgba bg, rgba fg) : border(border), s(s), bg(bg), fg(fg) { }
     str ansi();
     bool operator==(ColoredGlyph &lhs) {
@@ -312,7 +317,7 @@ struct DrawState {
     void        copy(const DrawState &r);
     
     /// io_shim(DrawState, true);
-    DrawState(nullptr_t n) : DrawState() { }
+    DrawState(std::nullptr_t n) : DrawState() { }
     DrawState(const DrawState &ref) { copy(ref);            }
     DrawState(var &d)            { importer(d);          }
     operator var()               { return exporter();    }
@@ -377,7 +382,7 @@ protected:
 
 public:
     DrawState state = {};
-              Canvas(nullptr_t n = nullptr);
+              Canvas(std::nullptr_t n = nullptr);
               Canvas(vec2i sz, Type type, var *result = null);
     bool  operator==(Canvas::Type t);
     vec2i         sz();

@@ -14,7 +14,7 @@ struct Buffer {
     operator       VkBuffer();
     operator       VkDeviceMemory();
     ///
-    Buffer(nullptr_t n = null) : device(null) { }
+    Buffer(std::nullptr_t n = null) : device(null) { }
     Buffer(Device *, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
     
     template <typename T>

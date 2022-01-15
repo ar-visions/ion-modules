@@ -1,7 +1,8 @@
 #include <dx/var.hpp>
 #include <fstream>
+#include <ctype.h>
 
-str::str(nullptr_t n)                                          { }
+str::str(std::nullptr_t n)                                          { }
 str::str(std::string s)    : s(s)                              { }
 str::str(const char *s)    : s(s ? s : "")                              { }
 str::str(const char *s, size_t len) : s({s ? s : "", s ? len : 0})              { }
@@ -116,10 +117,10 @@ str str::substr(int start, size_t len) const {
 str str::substr(int start) const {
     return start >= 0 ? s.substr(size_t(start)) : s.substr(size_t(std::max(0, int(s.length()) + start)));
 }
-/*
+
 str::operator var() {
     return s;
-}*/
+}
 
 str::str(var &d) : s(std::string(d)) { }
 
@@ -183,7 +184,7 @@ int str::index_of(MatchType ct, const char *mp) const {
     }
     auto m = Map {
         { Alpha,     [ ](char &c) { return  isalpha (c);            }},
-        { Numeric,   [ ](char &c) { return  isnumber(c);            }},
+        { Numeric,   [ ](char &c) { return  isdigit (c);            }},
         { WS,        [ ](char &c) { return  isspace (c);            }},
         { Printable, [ ](char &c) { return !isspace (c);            }},
         { String,    [&](char &c) { return  strcmp  (&c, mp0) == 0; }},

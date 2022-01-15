@@ -4,7 +4,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-Image::Image(nullptr_t n) { }
+Image::Image(std::nullptr_t n) { }
 Image::Image(var &pixels) : pixels(pixels) {
     /// not so fast bugs.
     if (pixels == Type::Str) {

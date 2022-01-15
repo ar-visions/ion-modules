@@ -12,7 +12,7 @@ struct UniformData {
     };
     std::shared_ptr<Memory> m = null;
     
-    UniformData(nullptr_t n = null) { }
+    UniformData(std::nullptr_t n = null) { }
     VkWriteDescriptorSet write_desc(size_t frame_index, VkDescriptorSet &ds);
     void   destroy();
     void   update(Device *device);
@@ -41,7 +41,7 @@ struct UniformData {
 
 template <typename U>
 struct UniformBuffer:UniformData { /// will be best to call it 'Uniform', 'Verts', 'Polys'; make sensible.
-    UniformBuffer(nullptr_t n = null) { }
+    UniformBuffer(std::nullptr_t n = null) { }
     UniformBuffer(Device &device, int id, std::function<void(U &)> fn) {
         m = std::shared_ptr<Memory>(new Memory {
             .device    = &device,

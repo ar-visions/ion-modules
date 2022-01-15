@@ -11,7 +11,7 @@ struct Image {
     };
     var pixels; /// our only member. so proud. [how many members does var have?] ... so proud.
 
-    Image(nullptr_t n = null);
+    Image(std::nullptr_t n = null);
     Image(path_t, Format);
     Image(var &);
     Image(vec2i sz, Format f);

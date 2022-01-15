@@ -18,7 +18,7 @@ void PipelineData::Memory::destroy() {
         vkFreeCommandBuffers(device, device.command, 1, &cmd);
 }
 ///
-PipelineData::Memory::Memory(nullptr_t n) { }
+PipelineData::Memory::Memory(std::nullptr_t n) { }
 
 PipelineData::Memory::~Memory() {
     destroy();
@@ -93,8 +93,8 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
         .extent             = device.extent
     };
     auto cba                = VkPipelineColorBlendAttachmentState {
-        .colorWriteMask     = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-        .blendEnable        = VK_FALSE
+        .blendEnable        = VK_FALSE,
+        .colorWriteMask     = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
     };
     auto layout_info        = VkPipelineLayoutCreateInfo {
         .sType              = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -104,12 +104,13 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
     ///
     assert(vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline_layout) == VK_SUCCESS);
     
+    /// ok initializers here we go.
     vkState state {
         .vertex_info = {
-            .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, // these are silly.  what a blimp
+            .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
             .vertexBindingDescriptionCount   = 1,
-            .vertexAttributeDescriptionCount = uint32_t(vk_attr.size()), // bad variable naming here.  you dont redescribe the type that its in, lets go people.
             .pVertexBindingDescriptions      = &binding,
+            .vertexAttributeDescriptionCount = uint32_t(vk_attr.size()),
             .pVertexAttributeDescriptions    = vk_attr.data()
         },
         .topology                    = {
@@ -125,19 +126,19 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
             .pScissors               = &sc
         },
         .rs                          = {
-            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, // had to buy new monitor to insert this comment
+            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .depthClampEnable        = VK_FALSE,
             .rasterizerDiscardEnable = VK_FALSE,
             .polygonMode             = VK_POLYGON_MODE_FILL,
-            .lineWidth               = 1.0f,
             .cullMode                = VK_CULL_MODE_FRONT_BIT,
             .frontFace               = VK_FRONT_FACE_CLOCKWISE,
-            .depthBiasEnable         = VK_FALSE
+            .depthBiasEnable         = VK_FALSE,
+            .lineWidth               = 1.0f
         },
         .ms                          = {
             .sType                   = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-            .sampleShadingEnable     = VK_FALSE,
-            .rasterizationSamples    = device.sampling
+            .rasterizationSamples    = device.sampling,
+            .sampleShadingEnable     = VK_FALSE
         },
         .ds                          = {
             .sType                   = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,

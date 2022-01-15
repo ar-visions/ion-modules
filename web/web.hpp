@@ -37,7 +37,7 @@ struct URI {
         version  = d["version"];
     }
     
-    URI(nullptr_t n = nullptr) { }
+    URI(std::nullptr_t n = nullptr) { }
     
     static map<str, URI::Method> mmap;
     
@@ -111,7 +111,7 @@ struct Socket {
     URI uri;
     std::shared_ptr<SocketInternal> intern;
     bool        is_secure();
-    Socket(nullptr_t n = nullptr);
+    Socket(std::nullptr_t n = nullptr);
     Socket(const Socket &ref);
     Socket(bool secure, bool listen);
    ~Socket();
@@ -156,7 +156,7 @@ public:
             uri.type = URI::Response;
         }
         
-        Message(nullptr_t n = nullptr) { }
+        Message(std::nullptr_t n = nullptr) { }
         
         Message(const Message &ref) :
                 uri(ref.uri),

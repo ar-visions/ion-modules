@@ -7,7 +7,7 @@ double Rand::uniform(double from, double to) {
 }
 
 int Rand::uniform(int from, int to) {
-    return std::uniform_real_distribution<int>(from, to)(e);
+    return int(std::round(std::uniform_real_distribution<double>(double(from), double(to))(e)));
 }
 
 void Rand::seed(int seed) {

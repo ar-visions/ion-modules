@@ -58,9 +58,9 @@ struct View:node {
     
     /// support live reloads on css and shaders.
     void bind() {
-        external("model",  m.model,  path_t {"dayna"}); /// just 'dayna' should work
+        external("model",  m.model,  path_t {"dayna"});
         /// -------------------------------------------
-        override(node::m.ev.hover,   Fn([&](Event ev) { // no type set on hover Member. that would of been done in standard()
+        override(node::m.ev.hover,   Fn([&](Event ev) {
             console.log("Good morning, Dave...");
         }));
     }
@@ -69,7 +69,7 @@ struct View:node {
         return Group {
             {{"id", "something"}}, {
                 Button {{ {"id", "button"} }},
-                Car    {{ {"id", "car"}    }}
+                Car    {{ {"id", "car"   } }}
             }
         };
     }

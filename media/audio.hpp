@@ -5,7 +5,7 @@ struct Audio {
 protected:
     Private *p;
 public:
-    Audio(nullptr_t n);
+    Audio(std::nullptr_t n);
     Audio();
     Audio(std::filesystem::path, bool force_mono = false, int pos = -1, size_t sz = 0);
    ~Audio();

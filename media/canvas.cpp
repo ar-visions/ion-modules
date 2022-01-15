@@ -557,7 +557,7 @@ void ICanvasBackend::   rotate(DrawState &st, double deg) { st.m = st.m.rotate_z
 void ICanvasBackend::    color(DrawState &st, rgba  &c)   { st.color = c;  }
 void ICanvasBackend:: gaussian(DrawState &st, vec2  &sz, rectd cr)  { st.blur  = sz; }
 
-Canvas::Canvas(nullptr_t n) : type(Undefined) { }
+Canvas::Canvas(std::nullptr_t n) : type(Undefined) { }
 
 /// transition to shared ptr for backend
 Canvas::Canvas(vec2i sz, Canvas::Type type, var *result) : type(type),

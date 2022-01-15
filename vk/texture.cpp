@@ -128,11 +128,13 @@ void Texture::Data::set_stage(Stage next_stage) {
             .srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED,
             .image                           = image,
-            .subresourceRange.aspectMask     = aflags,
-            .subresourceRange.baseMipLevel   = 0,
-            .subresourceRange.levelCount     = uint32_t(mips),
-            .subresourceRange.baseArrayLayer = 0,
-            .subresourceRange.layerCount     = 1,
+            .subresourceRange                = {
+                .aspectMask                  = aflags,
+                .baseMipLevel                = 0,
+                .levelCount                  = uint32_t(mips),
+                .baseArrayLayer              = 0,
+                .layerCount                  = 1
+            },
             .srcAccessMask                   = VkAccessFlags(     data.access),
             .dstAccessMask                   = VkAccessFlags(next_data.access)
         };

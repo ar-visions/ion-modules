@@ -178,21 +178,21 @@ struct Composer {
         /// change members
         auto changed = vec<str>(e.binds.size());
         for (auto &bind: e.binds) {
-            const str &child_mname  = bind.id;
+            str &child_mname = bind.id; // support const str on clang++ 13 on linux, not clang++ 13 on macOS ;/ ... the things that only happen to kalen.
             ///
             bool child_ctx = child->stationaries.count(child_mname) > 0;
             if (child_ctx) {
                 *child->stationaries[child_mname] = bind.to;
             } else {
-                const str &parent_mname = bind.to;
+                str &parent_mname = bind.to;
                 ///
                 bool has_ext   = parent->externals.count(parent_mname) > 0;
                 bool has_int   = parent->internals.count(parent_mname) > 0;
                 
                 /// id is an assignment
                 if (has_ext || has_int) { /// child member is never actually registered
-                    const str &child_id = child->m.id;
-                    const str  child_cn = child->class_name;
+                    str &child_id = child->m.id;
+                    str  child_cn = child->class_name;
                     
                     /// external must be available on child
                     if (child->externals.count(bind.id) == 0)

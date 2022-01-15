@@ -44,10 +44,10 @@ struct Matrix44:Vector<T> {
         a[3] = v3;
     }
     
-    Matrix44(nullptr_t n) : Matrix44() { m[0] = dx::nan<double>(); }
+    Matrix44(std::nullptr_t n) : Matrix44() { m[0] = dx::nan<double>(); }
     void copy(Matrix44<T> &ref)        { memcpy(m, ref.m, sizeof(m)); }
     Matrix44(Matrix44<T> &ref)         { copy(ref); }
-    Matrix44(const Matrix44<T> &ref)   { copy((const Matrix44<T> &)ref); }
+    Matrix44(const Matrix44<T> &ref)   { copy((Matrix44<T> &)ref); }
     Matrix44(const T *data)            { memcpy(m, data, sizeof(m)); }
     T *data() const                    { return m; }
     Vec4<T> &operator[](size_t i) { return m[i]; }

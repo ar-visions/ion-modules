@@ -30,7 +30,7 @@ struct IndexData {
     Buffer          buffer;
     operator VkBuffer() { return buffer; }
     size_t       size() { return buffer.sz / buffer.type_size; }
-    IndexData(nullptr_t n = null) { }
+    IndexData(std::nullptr_t n = null) { }
     IndexData(Device &device, Buffer buffer) : device(&device), buffer(buffer)  { }
     operator bool () { return device != null; }
     bool operator!() { return device == null; }
@@ -41,7 +41,7 @@ struct VertexData {
     Buffer          buffer;
     operator VkBuffer() { return buffer;    }
     size_t       size() { return buffer.sz; }
-    VertexData(nullptr_t n = null) { }
+    VertexData(std::nullptr_t n = null) { }
     VertexData(Device &device, Buffer buffer) : device(&device), buffer(buffer)  { }
     operator bool () { return device != null; }
     bool operator!() { return device == null; }
@@ -53,7 +53,7 @@ struct VertexBuffer:VertexData {
         return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
-    VertexBuffer(nullptr_t n = null) : VertexData(n) { }
+    VertexBuffer(std::nullptr_t n = null) : VertexData(n) { }
     VertexBuffer(Device &device, vec<V> &v) : VertexData(device, Buffer {
             &device, v, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) { }
@@ -66,7 +66,7 @@ struct IndexBuffer:IndexData {
         return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
-    IndexBuffer(nullptr_t n = null) : IndexData(n) { }
+    IndexBuffer(std::nullptr_t n = null) : IndexData(n) { }
     IndexBuffer(Device &device, vec<I> &i) : IndexData(device, Buffer {
             &device, i, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) { }
@@ -75,7 +75,7 @@ struct IndexBuffer:IndexData {
 struct Shaders {
     map<std::string, std::string> map;
     /// default construction
-    Shaders(nullptr_t n = null) {
+    Shaders(std::nullptr_t n = null) {
         map["*"] = "main";
     }
     

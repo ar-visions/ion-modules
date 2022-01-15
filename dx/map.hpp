@@ -18,7 +18,7 @@ public:
     std::vector<pair<K,V>> pairs;
     static typename std::vector<pair<K,V>>::iterator iterator;
     
-    map(nullptr_t n = null) { }
+    map(std::nullptr_t n = null) { }
     
     map(std::initializer_list<pair<K,V>> p) {
         pairs.reserve(p.size());

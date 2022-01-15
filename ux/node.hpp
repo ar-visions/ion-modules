@@ -59,7 +59,7 @@ struct Member {
     node    *node;
     ///
     void operator=(const str &s) {
-        var v = s;
+        var v = (str &)s;
         if (fn && fn->var_set)
             fn->var_set(*this, v);
     }
@@ -495,7 +495,7 @@ struct node {
             Extern<Fn> cursor;
         } ev;
     } m;
-                    node(nullptr_t n = null);
+                    node(std::nullptr_t n = null);
                     node(const char *selector, const char *cn, Binds binds, vec<Element> elements);
     virtual        ~node();
             void    standard_bind();

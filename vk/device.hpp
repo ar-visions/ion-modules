@@ -56,7 +56,7 @@ struct Device {
     Device(GPU &gpu, bool aa = false);
     VkQueue &operator()(GPU::Capability cap);
     ///
-    Device(nullptr_t n = null) { }
+    Device(std::nullptr_t n = null) { }
     operator VkViewport &() { return viewport; }
     operator VkPipelineViewportStateCreateInfo() {
         sc.offset = {0, 0};

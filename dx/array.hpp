@@ -23,7 +23,7 @@ public:
     vec(size_t sz, T v) {
         a.resize(sz, v);
     }
-    vec(nullptr_t n) { }
+    vec(std::nullptr_t n) { }
     /*
     vec(vec<var> &d) {
         a.reserve(d.size());

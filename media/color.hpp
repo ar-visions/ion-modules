@@ -11,7 +11,7 @@ void rgba_set_data(double  *, var &);
 template <typename T>
 struct RGBA {
     alignas(T) T r = 0, g = 0, b = 0, a = 0;
-    RGBA(nullptr_t n = nullptr) { }
+    RGBA(std::nullptr_t n = nullptr) { }
     RGBA(real r, real g, real b, real a) {
         if constexpr (std::is_same_v<T, uint8_t>) {
             const auto sc = real(255.0);

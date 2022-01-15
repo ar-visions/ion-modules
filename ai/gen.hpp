@@ -13,7 +13,7 @@ struct Truth {
     vec<float>  label;
     vec<var>    data;
     ///
-    Truth(nullptr_t n = nullptr) { }
+    Truth(std::nullptr_t n = nullptr) { }
     operator bool()  { return data and label.size(); }
     bool operator!() { return !(operator bool()); }
 };

@@ -37,7 +37,7 @@ public:
     
     Window(vec2i);
    ~Window();
-    Window(nullptr_t = null);
+    Window(std::nullptr_t = null);
     operator GLFWwindow *();
     operator VkSurfaceKHR();
 };

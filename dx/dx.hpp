@@ -5,7 +5,7 @@
 template <typename T>
 struct FlagsOf:io {
     uint32_t flags = 0;
-    FlagsOf(nullptr_t = null)           { }
+    FlagsOf(std::nullptr_t = null)           { }
     FlagsOf(T f) : flags(uint32_t(f))   { }
     bool operator()  (T c) { return (flags & c) == c; }
     void operator += (T f) { flags |=  f; }
@@ -85,20 +85,13 @@ struct Unit:io {
     
     operator var() {
         return Args {
-            {"type", type},
-            {"value", value}
+            {"type", var(type)},
+            {"value", var(value)}
         };
     }
 };
 
 struct node;
-
-/// if it inherits from Contextual, it gets a special node param..
-/// super special for fanciful high level data composition from implicit context binding. [/flips off a bridge, walks away]
-struct Contextual {
-    node *n;
-    Contextual(node *n): n(n) { }
-};
 
 struct Raw {
     std::vector<std::string> fields;

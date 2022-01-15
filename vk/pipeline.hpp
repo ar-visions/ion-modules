@@ -31,8 +31,8 @@ struct Attrib {
         auto     result   = vec<VkVertexInputAttributeDescription>(ax.size());
         for (auto &a: ax) {
             result += VkVertexInputAttributeDescription {
-                .binding  = binding,
                 .location = location++,
+                .binding  = binding,
                 .format   = a.format,
                 .offset   = offset
             };
@@ -97,7 +97,7 @@ struct PipelineData {
         bool operator!();
         void enable (bool en);
         void update(size_t frame_id);
-        Memory(nullptr_t    n = null);
+        Memory(std::nullptr_t    n = null);
         Memory(Device      &device,
                UniformData &ubo,
                VertexData  &vbo,
@@ -113,7 +113,7 @@ struct PipelineData {
     bool operator! ()                { return !m->enabled; }
     void enable    (bool en)         { m->enabled = en; }
     bool operator==(PipelineData &b) { return m == b.m; }
-    PipelineData(nullptr_t n = null) { }
+    PipelineData(std::nullptr_t n = null) { }
     void update(size_t frame_id);
     ///
     PipelineData(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,

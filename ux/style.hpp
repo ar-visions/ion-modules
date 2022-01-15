@@ -52,7 +52,7 @@ struct StTrans {
         }
     }
     
-    StTrans(nullptr_t n = null):type(None) { }
+    StTrans(std::nullptr_t n = null):type(None) { }
     
     real pos(real tf) const {
         real x = std::clamp(tf, 0.0, 1.0);
@@ -119,7 +119,7 @@ struct Style {
     static map<str, vec<ptr<StBlock>>> members;
     vec<ptr<StBlock>>                  root;
     ///
-    Style(nullptr_t n = null)         { }
+    Style(std::nullptr_t n = null)         { }
     Style(str &code);
    ~Style();
     ///

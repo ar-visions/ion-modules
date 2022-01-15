@@ -28,7 +28,7 @@ public:
     VkSurfaceKHR     surface;
     ///
     GPU(VkPhysicalDevice, VkSurfaceKHR);
-    GPU(nullptr_t n = null) { }
+    GPU(std::nullptr_t n = null) { }
     uint32_t                index(Capability);
     void                    destroy();
     operator                bool();

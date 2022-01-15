@@ -14,7 +14,7 @@ struct Private {
 static bool        init;
 static mp3dec_t    dec;
 
-Audio::Audio(nullptr_t n) { }
+Audio::Audio(std::nullptr_t n) { }
 
 Audio::Audio() {
     if (!init) {

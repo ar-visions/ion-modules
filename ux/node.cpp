@@ -70,7 +70,7 @@ vec<node *> node::select(std::function<node *(node *)> fn) {
 node::node(const char *selector, const char *cn, Binds binds, vec<Element> elements):
     selector(selector), class_name(cn), elements(elements), binds(binds) { }
 
-node::node(nullptr_t n) { }
+node::node(std::nullptr_t n) { }
 
 Element node::render() {
     return Element(this); // standard render end-point

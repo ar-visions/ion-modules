@@ -87,7 +87,7 @@ struct Texture {
         void        create_resources();
         VkWriteDescriptorSet write_desc(VkDescriptorSet &ds);
         ///
-        Data(nullptr_t n = null) { }
+        Data(std::nullptr_t n = null) { }
         Data(Device *, vec2i, rgba, VkImageUsageFlags,
              VkMemoryPropertyFlags, VkImageAspectFlags, bool,
              VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1);
@@ -104,7 +104,7 @@ struct Texture {
     
     Data *get_data() { return data.get(); }
     
-    Texture(nullptr_t n = null) { }
+    Texture(std::nullptr_t n = null) { }
     Texture(Device            *device,  vec2i sz,        rgba clr,
             VkImageUsageFlags  usage,   VkMemoryPropertyFlags memory,
             VkImageAspectFlags aspect,  bool                  ms,

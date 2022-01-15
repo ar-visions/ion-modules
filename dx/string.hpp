@@ -13,7 +13,7 @@ struct str:io {
         CIString
     };
     std::string s;
-    str(nullptr_t n = null);
+    str(std::nullptr_t n = null);
     str(const char *cstr);
     str(const char *cstr, size_t len);
     str(vec<char> &v);
@@ -75,7 +75,7 @@ struct str:io {
     int    integer()                      const;
     double real()                         const;
     bool   is_numeric()                   const;
-  //operator var();
+    operator var();
     str(var &d);
     str to_lower()                        const;
     str to_upper()                        const;
@@ -97,3 +97,50 @@ namespace std {
         size_t operator()(path_t const& p) const { return hash<std::string>()(p.string()); }
     };
 }
+
+
+
+///
+struct Symbol {
+    int         value;
+    std::string symbol;
+    bool operator==(int v) { return v == value; }
+};
+///
+typedef vec<Symbol> Symbols;
+    
+/// basic enums type needs to be enumerable, serializable, and introspectable
+struct EnumData:io {
+    Type        type;
+    int         kind;
+    EnumData(Type type, int kind): type(type), kind(kind) { }
+};
+
+template <typename T>
+struct ex:EnumData {
+    ex(int kind) : EnumData(Id<T>(), kind) { }
+    operator bool() { return kind > 0; }
+    operator  var() {
+        for (auto &sym: T::symbols)
+            if (sym.value == kind)
+                return sym.symbol;
+        assert(false);
+        return null;
+    }
+    /// depending how Symbol * param, this is an assertion failure on a resolve of symbol to int
+    int resolve(std::string str, Symbol **ptr = null) {
+        for (auto &sym: T::symbols)
+            if (sym.symbol == str) {
+                *ptr = &sym;
+                return sym.value;
+            }
+        if (ptr)
+            *ptr = null;
+        ///
+        assert(!ptr || T::symbols.size());
+        /// in cases we need to obtain what the actual symbol is for integrity
+        return T::symbols[0].value; /// could be null, or undefined-like functionality
+    }
+    ///
+    ex(var &v) { kind = resolve(v); }
+};

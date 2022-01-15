@@ -130,7 +130,7 @@ Args Web::read_headers(Socket sc) {
                 if (rbytes[i] == ':') {
                     str k      = str(&rbytes[0], i);
                     str v      = str(&rbytes[i + 2], sz - k.len() - 2 - 2);
-                    headers[k] = v;
+                    headers[k] = var(v);
                     break;
                 }
             }
@@ -243,7 +243,7 @@ vec<path_t> files(path_t p, vec<str> exts = {}) {
     return v;
 }
 
-Socket::Socket(nullptr_t n) { }
+Socket::Socket(std::nullptr_t n) { }
 
 Socket::Socket(bool secure, bool listen) {
     intern = std::shared_ptr<SocketInternal>(new SocketInternal);
@@ -504,7 +504,8 @@ Future Web::request(str s_uri, Args args) {
         assert(uri != URI::Get || content == null);
         ///
         /// connect to server (secure or insecure depending on uri)
-        console.log("request: {0}", {s_uri});
+        str suri = s_uri;
+        console.log("request: {0}", {suri});
         Socket sc = Socket::connect(s_uri);
         if (!sc) {
             return null;
@@ -546,7 +547,7 @@ Future Web::request(str s_uri, Args args) {
         };
         for (auto &d: vdefs)
             if (d.force || headers.count(d.name) == 0)
-                headers[d.name] = d.value;
+                headers[d.name] = var(d.value);
         for (auto &[k,v]: headers)
             sc.write("{0}: {1}\r\n", {k, v});
 
@@ -572,7 +573,7 @@ Future Web::request(str s_uri, Args args) {
             auto  obj = var::parse_json(js);
             message.content = obj;
         } else if (ct.starts_with("text/"))
-            message.content = str(rcv.data<const char>(), rcv.size());
+            message.content = var(str(rcv.data<const char>(), rcv.size()));
         else {
             /// other non-text types must be supported, not going to just leave them as array for now
             assert(message.content.size() == 0);

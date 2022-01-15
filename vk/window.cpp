@@ -90,7 +90,7 @@ void Window::hide() {
 Window *Window::first = null;
 
 /// Window Constructors
-Window::Window(nullptr_t n) { }
+Window::Window(std::nullptr_t n) { }
 Window::Window(vec2i     sz): size(sz) {
     handle = glfwCreateWindow(sz.x, sz.y, title.cstr(), nullptr, nullptr);
     ///

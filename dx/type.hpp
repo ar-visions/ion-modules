@@ -1,9 +1,11 @@
 #pragma once
 
 #include <unordered_map>
+#include <cstddef>
+#include <atomic>
 
-/// nullptr verbose, incorrect (nullptr_t is not constrained to pointers at all)
-static const nullptr_t null = nullptr;
+/// nullptr verbose, incorrect (std::nullptr_t is not constrained to pointers at all)
+static const std::nullptr_t null = nullptr;
 struct io { };
 
 /// sorry godfather this is the best we can introspect..
@@ -42,7 +44,7 @@ struct Type {
         f32,  f64,
         Bool,
         
-        /// high level types... sigh.
+        /// high level types...
         Str, Map, Array, Ref, Arb, Node, Lambda, Any,
         
         /// and the mighty general
@@ -125,8 +127,9 @@ namespace std {
     };
 }
 
+/// definitely want this pattern for var
 struct Instances {
-    std::unordered_map<Type, void *> allocs; /// definitely want this pattern for var, definitely waiting on that, though.
+    std::unordered_map<Type, void *> allocs;
     inline size_t count(Type &id) { return allocs.count(id); }
     
     template <typename T>

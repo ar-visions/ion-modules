@@ -19,7 +19,7 @@ struct Obj {
     vec<T> vbo;
     map<str, Group> groups;
     
-    Obj(nullptr_t n = nullptr) { }
+    Obj(std::nullptr_t n = nullptr) { }
     Obj(path_t p,
            std::function<T(Group&, vec3&, vec2&, vec3&)> fn)
     {

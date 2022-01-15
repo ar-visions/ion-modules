@@ -1,7 +1,7 @@
 #include <dx/var.hpp>
 
-// nullptr verbose, incorrect (nullptr_t is not constrained to pointers at all)
-//static const nullptr_t null = nullptr;
+// nullptr verbose, incorrect (std::nullptr_t is not constrained to pointers at all)
+//static const std::nullptr_t null = nullptr;
 
 Logging console;
 
@@ -90,7 +90,7 @@ bool var::type_check(var &a, var &b) {
     return aa.t == bb.t && aa.c == bb.c;
 }
 
-var::var(nullptr_t p): var(Type::Undefined) { }
+var::var(std::nullptr_t p): var(Type::Undefined) { }
 
 var::var(std::vector<var> data_array) : t(Type::Array) {
     size_t sz = data_array.size();
@@ -935,7 +935,7 @@ var::~var() {
         fn(*this); // arb value
 }
 
-var:: var(str s) : t(Type::Str), s(new std::string(s.s)) { }
+//var:: var(str s) : t(Type::Str), s(new std::string(s.s)) { }
 
 std::vector<int> var::shape() {
     var &v = resolve(*this);

@@ -10,8 +10,14 @@
 
 template <typename T>
 struct Vector {
-    operator bool()  { return !std::isnan(*(T *)this); }
-    bool operator!() { return !(operator bool());      }
+    operator bool()  {
+        if constexpr (std::is_same_v<T, double> || std::is_same_v<T, float>)
+            return !std::isnan(*(T *)this);
+        return true;
+    }
+    bool operator!() {
+        return !(operator bool());
+    }
     inline T &operator[](size_t i) const {
         T *v = (T *)this;
         return v[i];
@@ -31,7 +37,7 @@ struct Vec4;
 template <typename T>
 struct Vec2: Vector<T> {
     alignas(T) T x, y;
-    Vec2(nullptr_t n = nullptr) : x(dx::nan<T>()) { }
+    Vec2(std::nullptr_t n = nullptr) : x(dx::nan<T>()) { }
     Vec2(T x)      : x(x), y(x) { }
     Vec2(T x, T y) : x(x), y(y) { }
     
@@ -186,7 +192,7 @@ struct Vec2: Vector<T> {
 template <typename T>
 struct Vec3: Vector<T> {
     alignas(T) T x, y, z;
-    Vec3(nullptr_t n = nullptr) : x(dx::nan<T>()) { }
+    Vec3(std::nullptr_t n = nullptr) : x(dx::nan<T>()) { }
     Vec3(T x) : x(x), y(x), z(x) { }
     Vec3(T x, T y, T z) : x(x), y(y), z(z) { }
     
@@ -262,7 +268,7 @@ struct Vec3: Vector<T> {
 template <typename T>
 struct Vec4: Vector<T> {
     alignas(T) T x, y, z, w;
-    Vec4(nullptr_t n = nullptr) {
+    Vec4(std::nullptr_t n = nullptr) {
         x = dx::nan<T>();
     }
     Vec4(T x)                  : x(x),   y(x),   z(x),   w(x)   { }
@@ -336,7 +342,7 @@ struct Edge {
 template <typename T>
 struct Rect: Vector<T> {
     alignas(T) T x, y, w, h;
-    Rect(nullptr_t n = nullptr) : x(std::numeric_limits<T>::quiet_NaN()) { }
+    Rect(std::nullptr_t n = nullptr) : x(std::numeric_limits<T>::quiet_NaN()) { }
     Rect(T x, T y, T w, T h) : x(x), y(y), w(w), h(h) { }
     Rect(Vec2<T> p, Vec2<T> s, bool c) {
         if (c)

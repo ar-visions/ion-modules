@@ -43,6 +43,6 @@ struct Interface {
     virtual void run() { }
     virtual void draw(node *root);
     Interface(Type type) : type(type) { };
-    Interface(nullptr_t n = nullptr) : type(Undefined) { }
+    Interface(std::nullptr_t n = nullptr) : type(Undefined) { }
 };
 
