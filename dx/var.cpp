@@ -1165,5 +1165,4 @@ void resources(path_t p, std::vector<const char *> exts, std::function<void(path
         fn(p);
 }
 
-
-    
+std::unordered_map<Type, Symbols> symbols;

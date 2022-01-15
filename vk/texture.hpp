@@ -40,7 +40,7 @@ struct Texture {
         ///
         bool operator>(Stage &b) { return value > b.value; }
         bool operator<(Stage &b) { return value < b.value; }
-        operator Type() {
+        operator Type() { // todo: conv names. of Type.
             return value;
         }
     };

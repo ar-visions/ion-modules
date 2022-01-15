@@ -50,18 +50,19 @@ struct Region:io {
     inline rectd operator()(rectd container) {
         if (!sides)
             return container;
-        int index = int(L);
+        int index = 0;
         real   x0 = container.x;
         real   y0 = container.y;
         real   x1 = container.x + container.w;
         real   y1 = container.y + container.h;
         for (auto &s:sides) {
             real  &v = s;
-            switch (Sides(index++)) {
-                case L: x0 = (s == "x" || s == "l") ? x0 + v : x1 - v; break;
-                case T: y0 = (s == "y" || s == "t") ? y0 + v : y1 - v; break;
-                case R: x1 = (s == "w") ? x0 + v : ((s == "x" || s == "l") ? x0 + v : x1 - v); break;
-                case B: y1 = (s == "h") ? y0 + v : ((s == "y" || s == "t") ? y0 + v : y1 - v); break;
+            switch (index++) {
+                case L:  x0 = (s == "x" || s == "l") ? x0 + v : x1 - v; break;
+                case T:  y0 = (s == "y" || s == "t") ? y0 + v : y1 - v; break;
+                case R:  x1 = (s == "w") ? x0 + v : ((s == "x" || s == "l") ? x0 + v : x1 - v); break;
+                case B:  y1 = (s == "h") ? y0 + v : ((s == "y" || s == "t") ? y0 + v : y1 - v); break;
+                default: assert(false);
             }
         }
         return rectd { x0 - container.x, y0 - container.y, std::max(0.0, x1-x0), std::max(0.0, y1-y0) };

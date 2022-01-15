@@ -27,7 +27,7 @@ typedef std::function<void(Member &, void *)> MFnArb;
 struct Member {
     enum MType {
         Undefined,
-        Context,
+        Stationary,
         Intern,
         Extern
     };
@@ -115,7 +115,8 @@ struct node {
     Style         *style = null;
     rectd     image_rect, text_rect;
     ///
-    map<str, Member *> contextuals;
+    map<str, Member *> stationaries; /// statics, protected, idents, models, descriptors...
+                                     /// we're going with stationary because everyone has loads of it they need to use for something.
     map<str, Member *> internals;
     map<str, Member *> externals;
     
@@ -123,8 +124,6 @@ struct node {
     template <typename T, const Member::MType MT>
     struct MType:Member {
         struct StyleValue {
-           
-            ///
             public:
             str name;
                 T            *selected     = null;
@@ -170,8 +169,7 @@ struct node {
         T             value;
         StyleValue    style; // .value, .selected
         
-        /// state cant and wont use style, not unless we want to create a feedback in spacetime
-        /// great. scott.
+        /// state cant and wont use style, not unless we want to create a feedback in spacetime. great. scott.
         bool state_bool() {
             T &v = cache ? value : def;
             if constexpr (std::is_same_v<T, std::filesystem::path>)
@@ -181,7 +179,7 @@ struct node {
         }
         
         /// current effective value
-        T &current() {
+        virtual T &current() {
             style.name = name;
             style.auto_update();
             return (cache != 0) ? value : style(def);
@@ -190,18 +188,10 @@ struct node {
         /// pointer to current effective value
         void *ptr() { return &current(); }
         
-        /// extern, intern, context and such could override; only to disable most likely
-        /// perhaps you may want intern to use the style only if its default is null
+        /// called upon style selection with value of type T in the void *ptr
+        /// if its in transition then we are animating
         void style_value_set(void *ptr, StTrans *t) {
-            if (name == "text-label") { // right when the test code goes in, it starts to work. maybe no one will notice.
-                int test = 0;
-                test++;
-            }
             T &cur = current();
-            if (name == "text-label") {
-                int test = 0;
-                test++;
-            }
             style.changed(cur, (ptr ? (T *)ptr : (T *)null), t);
             if (style.transitioning())
                 node->root->flags |= node::StyleAnimate;
@@ -242,10 +232,10 @@ struct node {
                                 var conv = p->value;
                                 p->instances.set(m.type, T::new_import(conv));
                             } else {
-                                if constexpr (is_strable<T>())
+                                if constexpr (is_strable<T>() || std::is_base_of<EnumData, T>())                 /// this should be enforced.
                                     p->instances.set(m.type, new T(p->value));
                                 else {
-                                    var conv = p->value;
+                                    var conv = p->value; /// var-based conversion is always an option
                                     p->instances.set(m.type, new T(conv));
                                 }
                             }
@@ -269,9 +259,9 @@ struct node {
                         mm.cache++;
                     }
                 };
-                
-                /// io conversion
+
                 if constexpr (std::is_base_of<io, T>() || std::is_same_v<T, path_t>) {
+                    /// io conversion
                     if constexpr (!std::is_same_v<T, path_t>)
                         lambdas[type].var_get = [](Member &m) -> var { return var(((MType<T,MT> &)m).current()); };
                     ///
@@ -313,12 +303,14 @@ struct node {
             init();
         }
         ///
-        ///
         T &operator=(T v) const {
+            assert(fn->type_set != null);
             fn->type_set(*this, (void *)&v);
             return value;
         }
+        ///
         T &operator=(var  &v) {
+            assert(fn->var_set != null);
             fn->var_set(*this, v);
             return value;
         }
@@ -329,27 +321,36 @@ struct node {
            operator bool() { return bool(ref()); }
     };           ///
     
+    ///
     template <typename T>
-    struct Context:MType<T, Member::Context> {
+    struct Stationary:MType<T, Member::Stationary> {
         inline void operator=(T v) {
+            assert(Member::fn->type_set != null);
             Member::fn->type_set(*this, (void *)&v);
         }
     };
     
+    ///
     template <typename T>
     struct Intern:MType<T, Member::Intern> {
         typedef T value_type;
-        inline void operator=(T v) {
-            Member::fn->type_set(*this, (void *)&v);
-        }
+        inline void operator=(T v) { Member::fn->type_set(*this, (void *)&v); }
     };
     
+    ///
+    template <typename T, typename C>
+    struct Lambda:Intern<T> {
+        typedef T value_type;
+        std::function<T(C &)> lambda;
+        ///
+        T &current() { return (this->value = lambda(*(C *)Intern<T>::node)); }
+    };
+    
+    ///
     template <typename T>
     struct Extern:MType<T, Member::Extern> {
         typedef T value_type;
-        inline void operator=(T v) {
-            Member::fn->type_set(*this, (void *)&v);
-        }
+        inline void operator=(T v) { Member::fn->type_set(*this, (void *)&v); }
     };
     
     struct Border {
@@ -380,31 +381,41 @@ struct node {
         operator bool() { return offset() > 0 && color().a > 0; }
     };
     
+    /// staaaaaation.
     template <typename T>
-    void contextual(str name, Context<T> &m, T def) {
-        m.type          = Id<T>();
-        m.member        = Member::Context;
-        m.name          = name;
-        m.def           = def;
-        contextuals[name] = &m;
+    void stationary(str name, Stationary<T> &mtype, T def) {
+        mtype.type     =  Id<T>();
+        mtype.member   =  Member::Stationary;
+        mtype.name     =  name;
+        mtype.def      =  def;
+        stationaries[name] = &mtype;
     }
     
     template <typename T>
-    void internal(str name, Intern<T> &m, T def) {
-        m.type          = Id<T>();
-        m.member        = Member::Intern;
-        m.name          = name;
-        m.def           = def;
-        internals[name] = &m;
+    void internal(str name, Intern<T> &mtype, T def) {
+        mtype.type     =  Id<T>();
+        mtype.member   =  Member::Intern;
+        mtype.name     =  name;
+        mtype.def      =  def;
+        internals[name] = &mtype;
+    }
+    
+    template <typename T, typename C>
+    void lambda(str name, Lambda<T,C> &mtype, std::function<T(C &)> fn) {
+        mtype.type     =  Id<T>();
+        mtype.member   =  Member::Intern;
+        mtype.name     =  name;
+        mtype.lambda   =  std::function<T(C &)>(fn);
+        internals[name] = &mtype;
     }
     
     template <typename T>
-    void external(str name, Extern<T> &m, T def) {
-        m.type          = Id<T>();
-        m.member        = Member::Extern;
-        m.name          = name;
-        m.def           = def;
-        externals[name] = &m;
+    void external(str name, Extern<T> &mtype, T def) {
+        mtype.type     =  Id<T>();
+        mtype.member   =  Member::Extern;
+        mtype.name     =  name;
+        mtype.def      =  def;
+        externals[name] = &mtype;
     }
     
     vec2 offset() {
@@ -419,15 +430,16 @@ struct node {
         return o;
     }
     
-    ///
+    /// override intern (value)
     template <typename T>
-    void override(Intern<T> &m, T def) {
+    void override(Intern<T> &m, T v) {
         assert(m.name);
         assert(Id<T>() == m.type);
-        m.def             = def;
+        m.def             = v;
         internals[m.name] = &m;
     }
     
+    /// override extern (default value)
     template <typename T>
     void override(Extern<T> &m, T def) {
         assert(m.name);
@@ -437,7 +449,7 @@ struct node {
     }
     
     struct Members {
-        Context<str>   id;
+        Stationary<str> id;
         Extern<str>    bind;
         Extern<int>    tab_index;
         Text           text;
@@ -445,6 +457,7 @@ struct node {
         Border         border;
         Fill           child;
         Extern<Region> region;
+        ///
         struct Radius {
             enum Side { TL, TR, BR, BL };
             Extern<real> val;
@@ -464,6 +477,7 @@ struct node {
                 return 0;
             }
         } radius;
+        ///
         Intern<bool>   captured;
         Intern<bool>   focused;
         Intern<vec2>   cursor;
@@ -519,10 +533,6 @@ struct node {
                 rectd      rect1  =  rel->region_rect(index, *reg.style.selected,    rect, n);
                 real       p      =  reg.style.transition_pos();
                 result            = (rect0 * (1.0 - p)) + (rect1 * p);
-                if (str(reg.node->class_name) == "Button") {
-                    int test = 0; /// Button.paths.rect should be 80,80,70,864
-                    test++;
-                }
             } else
                 result            = rel->region_rect(index, reg, rect, n);
         }
@@ -539,33 +549,22 @@ struct node {
         return T(null);
     }
     
-    Device &device() {
-        return Vulkan::device();
-    }
+    Device &device() { return Vulkan::device(); }
     
     template <typename U>
-    UniformData uniform(int id, std::function<void(U &)> fn) {
-        return UniformBuffer<U>(device(), id, fn);
-    }
+    UniformData uniform(int id, std::function<void(U &)> fn) { return UniformBuffer<U>(device(), id, fn); }
     
     template <typename T>
-    VertexData vertices(vec<T> &v_vbo) {
-        return VertexBuffer<Vertex>(device(), v_vbo);
-    }
+    VertexData vertices(vec<T> &v_vbo) { return VertexBuffer<Vertex>(device(), v_vbo); }
     
     template <typename I>
-    IndexData polygons(vec<I> &v_ibo) {
-        return IndexBuffer<I>(device(), v_ibo);
-    }
+    IndexData polygons(vec<I>  &v_ibo) { return IndexBuffer<I>(device(), v_ibo); }
     
     template <typename V>
-    PipelineMap model(path_t       path, UniformData  ubo,
-                      vec<Attrib>  attr, Shaders      shaders = null) {
+    Pipes model(path_t path, UniformData  ubo, VAttr attr, Shaders shaders = null) {
         return Model<V>(device(), ubo, attr, path);
     }
     
-    /// vice versa pattern with above ^
-    /// simple texture output with ubo controller
     Pipeline<Vertex> texture(Texture tx, UniformData ubo) {
         auto v_sqr = Vertex::square();
         auto i_sqr = vec<uint32_t> { 0, 1, 2, 2, 3, 0 };
@@ -590,8 +589,8 @@ struct node {
         static T t_null = null;
         node  *n = this;
         while (n)
-            if (n->contextuals.count(name))
-                return ((Intern<T> *)n->contextuals[name])->value;
+            if (n->stationaries.count(name))
+                return ((Intern<T> *)n->stationaries[name])->value;
             else
                 n = n->parent;
         return t_null;
@@ -607,5 +606,3 @@ struct node {
 struct Group:node {
     declare(Group);
 };
-
-/// not much more amazement fits within 575 lines. this line is outside of that count. it is not amazing.

@@ -76,7 +76,7 @@ struct List:node {
         external<rgba>    ("column-bg",  m.column.bg,  rgba {"#00f"});
         external<Columns> ("column-ids", m.column.ids,      { });
     }
-    
+    /*
     void update_columns() {
         columns      = vec<Column>(m.column.ids());
         double tsz   = 0;
@@ -100,6 +100,7 @@ struct List:node {
             else
                 c.final = c.size;
     }
+    */
     
     /*
     void draw(Canvas &canvas) {

@@ -15,7 +15,7 @@ void PipelineData::Memory::destroy() {
     vkDestroyPipeline(device, pipeline, null);
     vkDestroyPipelineLayout(device, pipeline_layout, null);
     for (auto &cmd: frame_commands)
-        vkFreeCommandBuffers(device, device.pool, 1, &cmd);
+        vkFreeCommandBuffers(device, device.command, 1, &cmd);
 }
 ///
 PipelineData::Memory::Memory(nullptr_t n) { }
@@ -51,14 +51,16 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
     ai.descriptorSetCount  = n_frames;
     ai.pSetLayouts         = layouts.data();
     desc_sets.resize(n_frames);
-    assert (vkAllocateDescriptorSets(device, &ai, desc_sets.data()) == VK_SUCCESS);
+    VkDescriptorSet *ds_data = desc_sets.data();
+    VkResult res = vkAllocateDescriptorSets(device, &ai, ds_data);
+    assert  (res == VK_SUCCESS);
     ubo.update(&device);
+    /// needs fixing.  i dont want to pass a legit texture handle at this point if i can prevent it
     ///
     Texture tx;
     for (size_t i = 0; i < attr.size(); i++)
         if (attr[i].tx)
-            tx = attr[i].tx; // needs to be associated to sampler-based bindings
-    ///
+            tx = attr[i].tx;
     /// write descriptor sets for all swap image instances
     for (size_t i = 0; i < device.frames.size(); i++) {
         auto &desc_set = desc_sets[i];
@@ -66,16 +68,14 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
             ubo.write_desc(i, desc_set),
              tx.write_desc(desc_set) /// use the pipeline texture sampler bound at [1]
         };
-        VkDevice dev = device;
-        size_t    sz = v_writes.size();
+        VkDevice   dev = device;
+        size_t      sz = v_writes.size();
         VkWriteDescriptorSet *ptr = v_writes.data();
         vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
     }
     ///
-    auto vert = device.module(
-        str::format("shaders/{0}.vert.spv", {shader}), Device::Vertex);
-    auto frag = device.module(
-        str::format("shaders/{0}.frag.spv", {shader}), Device::Fragment);
+    auto vert = device.module(str::format("shaders/{0}.vert.spv", {shader}), Device::Vertex);
+    auto frag = device.module(str::format("shaders/{0}.frag.spv", {shader}), Device::Fragment);
     ///
     vec<VkPipelineShaderStageCreateInfo> stages {{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
@@ -192,10 +192,10 @@ void PipelineData::Memory::update(size_t frame_id) {
     };
     
     /// reallocate command
-    vkFreeCommandBuffers(device, device.pool, 1, &cmd);
+    vkFreeCommandBuffers(device, device.command, 1, &cmd);
     auto alloc_info = VkCommandBufferAllocateInfo {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        null, device.pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
+        null, device.command, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
     assert(vkAllocateCommandBuffers(device, &alloc_info, &cmd) == VK_SUCCESS);
     
     /// begin command

@@ -24,7 +24,8 @@ struct Obj {
            std::function<T(Group&, vec3&, vec2&, vec3&)> fn)
     {
         str g;
-        str contents  = str::read_file(p); /// rename to resource
+        str contents  = str::read_file(std::filesystem::exists(p) ? p
+            : path_t(str::format("models/{0}.obj", {p})));
         assert(contents.len() > 0);
         
         auto lines    = contents.split("\n");

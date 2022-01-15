@@ -37,7 +37,7 @@ struct Edit:node {
     
     void draw(Canvas &canvas) {
         node::draw(canvas);
-        Text &text = node::m.text;
-        canvas.text(text.label, path.rect, text.align, {0,0});
+        //Text &text = node::m.text;
+        //canvas.text(text.label, path.rect, text.align, {0,0});
     }
 };

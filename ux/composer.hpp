@@ -149,7 +149,7 @@ struct Composer {
             
             for (auto &[name, member]: child->externals)   member->node = child;
             for (auto &[name, member]: child->internals)   member->node = child;
-            for (auto &[name, member]: child->contextuals) member->node = child; /// call for style after all of this updating, not during
+            for (auto &[name, member]: child->stationaries) member->node = child; /// call for style after all of this updating, not during
             
             node_updated = true;
         } else if (!e) {
@@ -180,9 +180,9 @@ struct Composer {
         for (auto &bind: e.binds) {
             const str &child_mname  = bind.id;
             ///
-            bool child_ctx = child->contextuals.count(child_mname) > 0;
+            bool child_ctx = child->stationaries.count(child_mname) > 0;
             if (child_ctx) {
-                *child->contextuals[child_mname] = bind.to;
+                *child->stationaries[child_mname] = bind.to;
             } else {
                 const str &parent_mname = bind.to;
                 ///
@@ -203,8 +203,8 @@ struct Composer {
                                                                *parent->externals  [parent_mname]);
                     /// change member, if different
                     if (!(child_member == parent_member)) {
-                        child_member  = parent_member;
-                        changed      += bind.id;
+                        child_member   = parent_member;
+                        changed       += bind.id;
                     }
                 } else {
                     /// no external/internal member exists on parent
@@ -254,6 +254,10 @@ struct Composer {
              child->mounted = true;
         }
         
+        /// call changed before a render, of course.
+        if (node_updated)
+            child->changed(changed);
+        
         /// render child, and call update with those elements
         Element ee = child->render();
         if (ee.ref) { /// hunt these cases down.
@@ -281,8 +285,6 @@ struct Composer {
                 update(child, &child->mounts[id], e_null);
                 node_updated = true;
             }
-        if (node_updated)
-            child->changed(changed);
         
         /// perform this just for root
         if (!parent && child) {
@@ -290,8 +292,9 @@ struct Composer {
             // -> node added, removed
             // -> state change at all in the entire tree
             child->exec([&](node *n) {
+                /// no internals, they read only makes them ideal for state match
                 for (auto &[name, member]: n->externals)
-                    member->fn->compute_style(*member); /// no internals, they read only makes them ideal for state match
+                    member->fn->compute_style(*member);
             });
         }
         return node_updated;

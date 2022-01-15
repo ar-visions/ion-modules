@@ -84,7 +84,7 @@ Internal &Internal::bootstrap() {
     uint32_t count;
     vkEnumerateInstanceLayerProperties(&count, nullptr);
     layers.resize(count);
-    vkEnumerateInstanceLayerProperties(&count, layers);
+    vkEnumerateInstanceLayerProperties(&count, layers.data());
     ///
     VkApplicationInfo appInfo {};
     appInfo.sType               = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -119,7 +119,7 @@ Internal &Internal::bootstrap() {
         ci.pNext               = nullptr;
     #endif
     ci.enabledExtensionCount   = static_cast<uint32_t>(instance_ext.size());
-    ci.ppEnabledExtensionNames = instance_ext;
+    ci.ppEnabledExtensionNames = instance_ext.data();
     auto res                   = vkCreateInstance(&ci, nullptr, &vk);
     assert(res == VK_SUCCESS);
     ///
@@ -170,6 +170,9 @@ int Vulkan::main(Composer *composer) {
     ///
     i.device.initialize(&w);
     w.show();
+    
+    
+    
     /// canvas polygon data (pos, norm, uv, color)
     auto   vertices = Vertex::square();
     auto    indices = vec<uint16_t> { 0, 1, 2, 2, 3, 0 };

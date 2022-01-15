@@ -68,26 +68,36 @@ macro(var_prepare)
         file(GLOB _tests_src     "${CMAKE_CURRENT_SOURCE_DIR}/${p}/tests/*.c*")
         file(GLOB _tests_headers "${CMAKE_CURRENT_SOURCE_DIR}/${p}/tests/*.h*")
     endif()
+    
+    # filename component
     set(src "")
     foreach(s ${_src})
         get_filename_component(name ${s} NAME)
         list(APPEND src ${name})
     endforeach()
+    
+    # list of header-dirs
     set(headers "")
     foreach(s ${_headers})
         get_filename_component(name ${s} NAME)
         list(APPEND headers ${name})
     endforeach()
+    
+    # list of app targets
     set(apps "")
     foreach(s ${_apps_src})
         get_filename_component(name ${s} NAME)
         list(APPEND apps ${name})
     endforeach()
+    
+    # list of header-dirs for apps (all)
     set(apps_headers "")
     foreach(s ${_apps_headers})
         get_filename_component(name ${s} NAME)
         list(APPEND apps_headers ${name})
     endforeach()
+    
+    # list of test targets
     set(tests "")
     foreach(s ${_tests_src})
         get_filename_component(name ${s} NAME)
@@ -185,13 +195,30 @@ function(load_modules r_path external_repo)
             set(app_path "${p}/apps/${app}")
             string(REGEX REPLACE "\\.[^.]*$" "" t_app ${app})
             list(APPEND app_list ${t_app})
+            
+            # add app target
             add_executable(${t_app} ${app_path} ${${t_app}_src})
+
+            # add pre-compiled headers
+            target_precompile_headers(${t_app} PUBLIC ${_headers})
+            
+            # add include dir of apps
             target_include_directories(${t_app} PUBLIC ${p}/apps)
+
+            # setup module includes
             module_includes(${t_app} ${r_path} ${mod})
+
+            # common compilation flags
             set_compilation(${t_app} ${app_path} ${mod})
+
+            # link app to its own module
             target_link_libraries(${t_app} ${t_name})
+
+            # format upper-case name for app name
             string(TOUPPER ${t_app} u)
             string(REPLACE "-" "_" u ${u})
+
+            # define global name-here -> APP_NAME_HERE
             target_compile_definitions(${t_app} PRIVATE APP_${u})
             add_dependencies(${t_app} ${t_name})
             foreach(role ${r_list})

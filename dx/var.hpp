@@ -823,8 +823,52 @@ struct Remote {
         return var(value);
     }
 };
-
-struct Ident  : Remote       {
-       Ident(): Remote(null) { }
+///
+struct Ident   : Remote {
+       Ident() : Remote(null) { }
+};
+///
+struct Symbol {
+    int         value;
+    std::string symbol;
+    bool operator==(int v) { return v == value; }
+};
+///
+typedef vec<Symbol> Symbols;
+    
+/// basic enums type needs to be enumerable, serializable, and introspectable
+struct EnumData:io {
+    Type        type;
+    int         kind;
+    EnumData(Type type, int kind): type(type), kind(kind) { }
 };
 
+template <typename T>
+struct ex:EnumData {
+    ex(int kind) : EnumData(Id<T>(), kind) { }
+    operator bool() { return kind > 0; }
+    operator  var() {
+        for (auto &sym: T::symbols)
+            if (sym.value == kind)
+                return sym.symbol;
+        console.assertion(false, "invalid enum");
+        return null;
+    }
+    /// depending how Symbol * param, this is an assertion failure on a resolve of symbol to int
+    int resolve(std::string str, Symbol **ptr = null) {
+        for (auto &sym: T::symbols)
+            if (sym.symbol == str) {
+                *ptr = &sym;
+                return sym.value;
+            }
+        if (ptr)
+            *ptr = null;
+        else
+            console.error("enum resolve assertion fail: {0}", {str});
+        ///
+        console.assertion(T::symbols.size(), "empty symbols");
+        return T::symbols[0].value; /// could be null, or undefined-like functionality
+    }
+    ///
+    ex(var &v) { kind = resolve(v); }
+};

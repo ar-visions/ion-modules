@@ -52,6 +52,9 @@ struct Normal3f   : Attrib { Normal3f  ()           : Attrib(Attrib::Normal3f,  
 struct Texture2f  : Attrib { Texture2f (Texture tx) : Attrib(Attrib::Texture2f,  VK_FORMAT_R32G32_SFLOAT,       tx)   { }};
 struct Color4f    : Attrib { Color4f   ()           : Attrib(Attrib::Color4f,    VK_FORMAT_R32G32B32A32_SFLOAT, null) { }};
 
+typedef vec<Attrib> VAttr;
+
+
 /// just a solid, slab of state.  fresh out of the fires of Vulkan
 /// Will be initialized by the general pipeline code, then optionally passed into lambda where it is altered
 struct vkState {
@@ -130,34 +133,32 @@ struct Pipeline:PipelineData {
         PipelineData(device, ubo, vbo, ibo, attr, sizeof(V), clr, name) { }
 };
 
-/// eventually different texture vectors for the different parts.. shared uv
-struct PipelineMap {
+/// these are calling for Daniel.
+/// this is an ensemble of a lot of things, working together.
+struct Pipes {
     struct Data {
         Device      *device  = null;
         VertexData   vbo     = null;
         uint32_t     binding = 0;
-        vec<Attrib>  attr    = {};
+        //vec<Attrib>  attr    = {};
         map<str, PipelineData> part;
     };
     std::shared_ptr<Data> data;
-
-    //inline map<str, PipelineData>::iterator begin() { return data->part.begin(); }
-    //inline map<str, PipelineData>::iterator end()   { return data->part.end();   }
-    
     operator bool() { return !!data; }
     inline map<str, PipelineData> &map() { return data->part; }
 };
 
 /// model dx (using pipeline dx)
 template <typename V>
-struct Model:PipelineMap {
-    Model(Device &device, UniformData &ubo, vec<Attrib> ax, std::filesystem::path p) {
+struct Model:Pipes {
+    Model(Device &device, UniformData &ubo, vec<Attrib> &ax, std::filesystem::path p) {\
         this->data = std::shared_ptr<Data>(new Data { &device });
         auto &data = *this->data;
         auto   obj = Obj<V>(p, [](auto& g, vec3& pos, vec2& uv, vec3& norm) {
             return V(pos, norm, uv, vec4f {1.0f, 1.0f, 1.0f, 1.0f});
         });
-        data.vbo = VertexBuffer<V>(device, obj.vbo);
+        ///
+        data.vbo   = VertexBuffer<V>(device, obj.vbo);
         for (auto &[name, group]: obj.groups) {
             auto        ibo = IndexBuffer<uint32_t>(device, group.ibo);
             data.part[name] = Pipeline<V>(device, ubo, data.vbo, ibo, ax, null, name);

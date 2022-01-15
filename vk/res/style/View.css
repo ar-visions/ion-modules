@@ -10,6 +10,11 @@ Button {
     opacity:      0.1; /* need this */
 }
 
+Car {
+    region:       0l 80y 0r 0b;
+    fill-color:   #222;
+}
+
 Group {
     fill-color:   #f00; /* same-side rounded rect optimization needed */
     region:       0l 0t 0r 0b;

@@ -141,7 +141,7 @@ Device::Device(GPU &p_gpu, bool aa) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = gpu.index(GPU::Graphics)
     };
-    assert(vkCreateCommandPool(device, &pool_info, nullptr, &pool) == VK_SUCCESS);
+    assert(vkCreateCommandPool(device, &pool_info, nullptr, &command) == VK_SUCCESS);
 }
 
 /// this is to avoid doing explicit monkey-work, and keep code size down as well as find misbound texture
@@ -269,26 +269,27 @@ void Device::initialize(Window *window) {
     /// get swap-chain images
     swap_images.resize(frame_count);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, swap_images.data());
-    format                        = surface_format.format;
-    this->extent                  = extent;
-    viewport                      = { 0.0f, 0.0f, r32(extent.width), r32(extent.height), 0.0f, 1.0f };
+    format             = surface_format.format;
+    this->extent       = extent;
+    viewport           = { 0.0f, 0.0f, r32(extent.width), r32(extent.height), 0.0f, 1.0f };
     
+    /// just how many pipelines do we have?   thats a difficult question to ask a bootstrap
+    /// so it seems we have an answer to the problem, by happenstance of it being in front of my face.
+    /// we call this function again and again, viewport and down...
     /// create descriptor pool
-    std::array<VkDescriptorPoolSize, 2> ps {};
-    ps[0]              = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frame_count };
-    ps[1]              = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count };
+    const int guess    = 8;
+    auto      ps       = std::array<VkDescriptorPoolSize, 2> {};
+    ps[0]              = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         frame_count * guess };
+    ps[1]              = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count * guess };
     auto dpi           = VkDescriptorPoolCreateInfo {
                             VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
-                            frame_count, uint32_t(ps.size()), ps.data() };
-    dpi.poolSizeCount  = uint32_t(ps.size());
-    dpi.pPoolSizes     = ps.data();
-    dpi.maxSets        = frame_count;
+                            frame_count * guess, uint32_t(ps.size()), ps.data() };
     render             = Render(this);
     desc               = Descriptor(this);
     ///
     assert(vkCreateDescriptorPool(device, &dpi, nullptr, &desc.pool) == VK_SUCCESS);
     for (auto &f: frames)
-        f.index = -1;
+        f.index        = -1;
     update();
 }
 
@@ -362,7 +363,7 @@ VkCommandBuffer Device::begin() {
     ///
     ai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     ai.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    ai.commandPool        = pool;
+    ai.commandPool        = command;
     ai.commandBufferCount = 1;
     vkAllocateCommandBuffers(device, &ai, &cb);
     ///
@@ -385,7 +386,7 @@ void Device::submit(VkCommandBuffer cb) {
     vkQueueSubmit(queue, 1, &si, VK_NULL_HANDLE);
     vkQueueWaitIdle(queue);
     ///
-    vkFreeCommandBuffers(device, pool, 1, &cb);
+    vkFreeCommandBuffers(device, command, 1, &cb);
 }
 
 VkQueue &Device::operator()(GPU::Capability cap) {
@@ -398,7 +399,7 @@ Device::operator VkPhysicalDevice() {
 }
 
 Device::operator VkCommandPool() {
-    return pool;
+    return command;
 }
 
 Device::operator VkDevice() {
@@ -438,4 +439,3 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
         func(instance, debugMessenger, pAllocator);
     }
 }
-

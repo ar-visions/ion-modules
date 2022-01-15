@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [{
+        "name": "(lldb) Launch",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/ux-app",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd":"${workspaceFolder}/vk/res",
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "lldb"
+    }]
+}

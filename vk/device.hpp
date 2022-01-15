@@ -24,7 +24,7 @@ struct Device {
     VkRenderPass          render_pass = VK_NULL_HANDLE;
     Descriptor            desc;
     GPU                   gpu;
-    VkCommandPool         pool;
+    VkCommandPool         command;
     VkDevice              device;
     VkQueue               queues[GPU::Complete];
     VkSwapchainKHR        swap_chain;

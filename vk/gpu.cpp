@@ -40,7 +40,7 @@ GPU::GPU(VkPhysicalDevice gpu, VkSurfaceKHR surface) : gpu(gpu) {
             if (format_count != 0) {
                 support.formats.resize(format_count);
                 vkGetPhysicalDeviceSurfaceFormatsKHR(
-                    gpu, surface, &format_count, support.formats);
+                    gpu, surface, &format_count, support.formats.data());
             }
             /// query swap chain support, store on GPU
             vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
@@ -59,7 +59,7 @@ GPU::GPU(VkPhysicalDevice gpu, VkSurfaceKHR surface) : gpu(gpu) {
             if (present_mode_count != 0) {
                 support.present_modes.resize(present_mode_count);
                 vkGetPhysicalDeviceSurfacePresentModesKHR(
-                    gpu, surface, &present_mode_count, support.present_modes);
+                    gpu, surface, &present_mode_count, support.present_modes.data());
             }
         }
         if (has_gfx & has_present)
@@ -78,7 +78,7 @@ vec<GPU> GPU::listing() {
     auto       hw = vec<VkPhysicalDevice>();
     gpu.resize(gpu_count);
     hw.resize(gpu_count);
-    vkEnumeratePhysicalDevices(vk, &gpu_count, hw);
+    vkEnumeratePhysicalDevices(vk, &gpu_count, hw.data());
     vec2i sz = Vulkan::startup_rect().size();
     VkSurfaceKHR surface = Vulkan::surface(sz);
     for (size_t i = 0; i < gpu_count; i++) {

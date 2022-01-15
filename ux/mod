@@ -1,4 +1,1 @@
 dep(dx web media vk)
-if(NOT WIN32)
-    dep(pthread)
-endif()

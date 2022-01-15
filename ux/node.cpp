@@ -104,7 +104,7 @@ bool node::process() {
 node::~node() { }
 
 void node::standard_bind() {
-    contextual<str>        ("id",               m.id,              str(""));
+    stationary<str>        ("id",               m.id,              str(""));
     /// --------------------------------------------------------------------------
     external <int>         ("tab-index",        m.tab_index,       -1);
     /// --------------------------------------------------------------------------

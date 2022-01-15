@@ -91,6 +91,14 @@ struct Unit:io {
     }
 };
 
+struct node;
+
+/// if it inherits from Contextual, it gets a special node param..
+/// super special for fanciful high level data composition from implicit context binding. [/flips off a bridge, walks away]
+struct Contextual {
+    node *n;
+    Contextual(node *n): n(n) { }
+};
 
 struct Raw {
     std::vector<std::string> fields;
@@ -113,10 +121,10 @@ struct ModelContext {
     var           data;
 };
 
-struct DX {
+struct ModelBind { // this was named DX, it needs a different name than this, though.  DX is the API end of an app, its data experience or us
     ModelContext &ctx;
     str           uri;
-    DX(ModelContext &ctx, str uri) : ctx(ctx), uri(uri) { }
+    ModelBind(ModelContext &ctx, str uri) : ctx(ctx), uri(uri) { }
     virtual var record(var &view, int64_t primary_key = -1) = 0;
     virtual var lookup(var &view, int64_t primary_key) = 0;
     virtual bool reset(var &view) = 0;

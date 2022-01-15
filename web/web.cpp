@@ -117,7 +117,7 @@ Args Web::read_headers(Socket sc) {
         if (sz == 2)
             break;
         if (line++   == 0) {
-            str hello = str(rbytes, sz - 2);
+            str hello = str(rbytes.data(), sz - 2);
             int  code = 0;
             auto   sp = hello.split(" ");
             if (hello.len() >= 12) {

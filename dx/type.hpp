@@ -31,6 +31,7 @@ size_t fn_id(std::function<T(U...)> &fn) {
     return (size_t) *fnPointer;
 }
 
+/// rename all others to something in their domain.
 struct Type {
     enum Specifier {
         Undefined, /// null state and other uses
@@ -41,7 +42,7 @@ struct Type {
         f32,  f64,
         Bool,
         
-        /// high level types.. they got trouble on another level
+        /// high level types... sigh.
         Str, Map, Array, Ref, Arb, Node, Lambda, Any,
         
         /// and the mighty general
@@ -88,6 +89,7 @@ struct Type {
     ///
     Type(Specifier id, std::string code_name = "") : id(size_t(id)), code_name(code_name) { }
     Type(size_t    id, std::string code_name = "") : id(id),         code_name(code_name) { }
+    Type() { }
     
 protected:
     const char *specifier_name(size_t id) { /// allow runtime augmentation of this when useful

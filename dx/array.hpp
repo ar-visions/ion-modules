@@ -126,8 +126,6 @@ public:
     inline void operator -= (int i) {
         return erase(i);
     }
-    inline operator bool() const    { return a.size() > 0;  }
-    inline bool operator!() const   { return a.size() == 0; }
     inline size_t index_of(T v) const {
         for (size_t i = 0; i < size(); i++)
             if (a[i] == v)
@@ -152,9 +150,11 @@ public:
     inline bool operator!=(vec<T> &b) {
         return !operator==(b);
     }
-    inline operator T *() {
-        return data(); /// as a boolean operation, its a bit lame
-    }
+    //inline operator T *() {
+    //    return data(); /// as a boolean operation (which the compiler thinks it is?), its a bit lame
+    //}
+    inline operator bool() const    { return a.size() > 0;  }
+    inline bool operator!() const   { return a.size() == 0; }
 };
 
 template<typename>
