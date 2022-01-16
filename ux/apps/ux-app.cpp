@@ -2,6 +2,7 @@
 #include <ux/object.hpp>
 #include <ux/button.hpp>
 
+///
 struct Car:node {
     declare(Car);
     enum Uniform { U_MVP };
@@ -45,7 +46,7 @@ struct Car:node {
     }
 };
 
-
+///
 struct View:node {
     declare(View);
     ///
@@ -75,12 +76,14 @@ struct View:node {
     }
 };
 
+///
 Args defaults = {
     {"window-width",  int(1024)},
     {"window-height", int(1024)},
     {"model",         path_t("models/ray.obj")}
 };
 
+///
 int main(int c, const char *v[]) {
     return UX<View>(c, v, defaults);
 }

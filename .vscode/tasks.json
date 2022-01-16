@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+	  {
+		"label": "build",
+		"type": "shell",
+		"options": {"cwd": "${workspaceFolder}/build"},
+		"command": "make ux-app -j16",
+		"presentation": {
+		  "reveal": "silent",
+		  "panel": "shared"
+		}
+	  }
+	]
+}

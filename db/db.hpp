@@ -1,10 +1,8 @@
 #pragma once
 #include <dx/dx.hpp>
 
-struct SQLite:DX {
-    SQLite(ModelContext &ctx, str uri) : DX(ctx, uri) {
-        fetch();
-    }
+struct SQLite:Adapter {
+    SQLite(ModelContext &ctx, str uri) : Adapter(ctx, uri) { fetch(); }
     var record(var &view, int64_t primary_key = -1);
     var lookup(var &view, int64_t primary_key);
     bool reset(var &view);

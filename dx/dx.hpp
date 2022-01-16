@@ -114,10 +114,10 @@ struct ModelContext {
     var           data;
 };
 
-struct ModelBind { // this was named DX, it needs a different name than this, though.  DX is the API end of an app, its data experience or us
+struct Adapter { // this was named DX, it needs a different name than this, though.  DX is the API end of an app, its data experience or us
     ModelContext &ctx;
     str           uri;
-    ModelBind(ModelContext &ctx, str uri) : ctx(ctx), uri(uri) { }
+    Adapter(ModelContext &ctx, str uri) : ctx(ctx), uri(uri) { }
     virtual var record(var &view, int64_t primary_key = -1) = 0;
     virtual var lookup(var &view, int64_t primary_key) = 0;
     virtual bool reset(var &view) = 0;

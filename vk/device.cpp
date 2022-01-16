@@ -113,13 +113,20 @@ Device::Device(GPU &p_gpu, bool aa) {
     if (i_present != i_gfx)
         qcreate        += VkDeviceQueueCreateInfo  { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, null, 0, i_present, 1, &priority };
     auto features       = VkPhysicalDeviceFeatures { .samplerAnisotropy = aa ? VK_TRUE : VK_FALSE };
+    bool is_apple = false;
+    ///
+    /// silver: macros should be better, not removed. wizard once told me.
+#ifdef __APPLE__
+    is_apple = true;
+#endif
     vec<const char *> ext = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         "VK_KHR_portability_subset"
     };
+
     VkDeviceCreateInfo ci {};
 #if !defined(NDEBUG)
-    //ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME; # not supported on macOS with molten-vk
+    //ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME; # not supported on macOS with lunarg vk
     static const char *debug   = "VK_LAYER_KHRONOS_validation";
     ci.enabledLayerCount       = 1;
     ci.ppEnabledLayerNames     = &debug;
@@ -128,7 +135,7 @@ Device::Device(GPU &p_gpu, bool aa) {
     ci.queueCreateInfoCount    = uint32_t(qcreate.size());
     ci.pQueueCreateInfos       = qcreate.data();
     ci.pEnabledFeatures        = &features;
-    ci.enabledExtensionCount   = uint32_t(ext.size());
+    ci.enabledExtensionCount   = uint32_t(ext.size() - size_t(!is_apple));
     ci.ppEnabledExtensionNames = ext.data();
 
     auto res = vkCreateDevice(gpu, &ci, nullptr, &device);
