@@ -11,9 +11,7 @@ struct Temp {
     static path_t uid(path_t &base) {
         path_t path;
         do {
-            path = str::fill(6, [](size_t) {
-                return Rand::uniform('0', '9');
-            });
+            path = str::fill(6, [](size_t) { return Rand::uniform('0', '9'); });
         } while (std::filesystem::exists(base / path));
         return path;
     }
@@ -31,7 +29,6 @@ struct Temp {
     }
 };
 
-/// the watcher makes it lovely. the orbit makes it smooth.
 int main(int argc, char[] argv) {
     auto   a = var::args(argc, argv);
     ///
