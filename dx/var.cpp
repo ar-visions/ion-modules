@@ -3,7 +3,7 @@
 // nullptr verbose, incorrect (std::nullptr_t is not constrained to pointers at all)
 //static const std::nullptr_t null = nullptr;
 
-Logging console;
+Logging<Dissolvable> console;
 
 int var::shape_volume(std::vector<int> &sh) {
     int sz = 1;
@@ -12,12 +12,10 @@ int var::shape_volume(std::vector<int> &sh) {
     return sz;
 }
 
-void _log(str t, std::vector<var> a, bool error) {
-#if !defined(NDEBUG)
+void _print(str t, std::vector<var> a, bool error) {
     t = str::format(t, a);
     auto &out = error ? std::cout : std::cerr;
     out << std::string(t) << std::endl << std::flush;
-#endif
 }
 
 bool var::is_numeric(const char *s) {

@@ -25,23 +25,27 @@ struct str:io {
     ///
     static str  read_file(path_t p);
     ///
-    size_t       find(str &str, size_t from)    const;
+    size_t      find(str &str, size_t from)     const;
     size_t       len()                          const;
     str         trim()                          const;
     str      replace(str, str, bool all = true) const;
     str       substr(int start, size_t len)     const;
     str       substr(int start)                 const;
+    str        &fill()                          const;
     str   operator()(size_t start, size_t len)  const;
     str   operator()(size_t start)              const;
     bool starts_with(const char *cstr)          const;
     bool   ends_with(const char *cstr)          const;
     int     index_of(const char *f)             const;
     int     index_of(MatchType ct, const char * = null) const;
-    int     index_icase(const char *f)          const;
+    int  index_icase(const char *f)             const;
     vec<str>   split(str delim)                 const;
     vec<str>   split(const char *delim)         const;
     vec<str>   split()                          const;
-    
+    bool    contains(vec<str> &a)               const;
+    int index_of_first(vec<str> &, int *)       const;
+    str         fill(int, std::function<char(size_t)>);
+
     template <typename T>
     T map(T default_v, std::unordered_map<std::string, T> &m) {
         return m.count(s) == 0 ? default_v : m[s];
@@ -98,8 +102,6 @@ namespace std {
     };
 }
 
-
-
 ///
 struct Symbol {
     int         value;
@@ -109,7 +111,7 @@ struct Symbol {
 ///
 typedef vec<Symbol> Symbols;
     
-/// basic enums type needs to be enumerable, serializable, and introspectable
+/// basic enums type needs to be enumerable by enum keyword, serializable, and introspectable
 struct EnumData:io {
     Type        type;
     int         kind;

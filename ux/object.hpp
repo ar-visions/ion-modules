@@ -47,7 +47,7 @@ struct Object:node {
         m.pipes     = model<Vertex>(mod, m.ubo, m.attr, m.shaders);
     }
     
-    /// dont make anything difficult on yourself. at all kalen.
+    /// 
     Element render() {
         auto &device = Vulkan::device();
         Pipes &pipes = m.pipes;

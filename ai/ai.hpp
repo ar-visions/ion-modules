@@ -2,6 +2,7 @@
 #include <dx/dx.hpp>
 #include <media/image.hpp>
 
+/// two valid meanings inferred
 struct AInternal;
 
 class AI {

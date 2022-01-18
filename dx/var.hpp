@@ -613,14 +613,17 @@ public:
     Ref(std::nullptr_t n = nullptr) : v(n) { }
     Ref(node *n) : v(n) { }
     Ref(void *v) : v(v) { }
-    Ref(var &d) : v((void *)d) { }
-    operator void *() {
-        return v;
-    }
+    Ref(var &d)  : v((void *)d) { }
+    operator void *() { return v; }
 };
 
+#define ex_shim(C,E,D) \
+    static Symbols symbols;\
+    C(E t = D):ex<C>(t) { }\
+    C(std::string s):ex<C>(D) { kind = resolve(s); }
+
 #define io_shim(C,E) \
-    C(std::nullptr_t n) : C()       { }                      \
+    C(std::nullptr_t n) : C()  { }                      \
     C(const C &ref)            { copy(ref);            }\
     C(var &d)                  { importer(d);          }\
     operator var()             { return exporter();    }\
@@ -630,8 +633,7 @@ public:
         if (this != &ref)\
             copy(ref);\
         return *this;\
-    }\
-
+    }
 
 #include <dx/array.hpp>
 #include <dx/string.hpp>
@@ -639,44 +641,65 @@ public:
 #include <dx/rand.hpp>
 
 typedef map<std::string, var> Args;
-void _log(str t, std::vector<var> a, bool error);
+void _print(str t, std::vector<var> a, bool error);
 
-
-struct Logging {
+///
+struct is_debug :
 #if !defined(NDEBUG)
-    static void log(str t, std::vector<var> a = {}) { // add this operation to Array
-        _log(t, a, false);
-    }
+    std::true_type
 #else
-    static inline void log(str t, std::vector<var> a = {}) { }
+    std::false_type
 #endif
-    static inline void error(str t, std::vector<var> a = {}) {
-        _log(t, a, true);
+{};
+
+enum LoggingType {
+    Dissolvable,
+    Always
+};
+
+template <const LoggingType L>
+struct Logging {
+    /// print always prints
+    void print(str t, std::vector<var> a = {}) {
+        _print(t, a, false);
     }
+
+    /// log when debugging or LoggingType:Always
+    void log(str t, std::vector<var> a = {}) {
+        if constexpr (L == Always || is_debug()) 
+            _print(t, a, false);
+    }
+
+    /// log categorically as error; do not quit
+    inline void error(str t, std::vector<var> a = {}) {
+        _print(t, a, true);
+    }
+
+    /// assertion test with log out upon error
     static inline void assertion(bool a0, str t, std::vector<var> a = {}) {
         if (!a0) {
-            _log(t, a, true);
+            _print(t, a, true);
             assert(a0);
         }
     }
+
+    /// log error, and quit
     static inline void fault(str t, std::vector<var> a = {}) {
-        _log(t, a, true);
+        _print(t, a, true);
         exit(1);
     }
+
+    /// prompt for any type of data
     template <typename T>
     static T prompt(str t, std::vector<var> a = {}) {
-        _log(t, a, false);
+        _print(t, a, false);
         T v;
         std::cin >> v;
         return v;
     }
 };
 
-typedef std::function<void(map<std::string, var> &)> FnArgs;
-
-extern Logging console;
-
-typedef std::function<var(var &)> FnProcess;
+extern Logging<Dissolvable> console;
 
 #if !defined(WIN32) && !defined(WIN64)
 #define UNIX
@@ -768,9 +791,11 @@ enum MouseButton {
     MiddleButton
 };
 
+/// needs to be ex, but no handlers written yet
+/*
 enum KeyCode {
-    D           = 68,
-    N           = 78,
+    Key_D       = 68,
+    Key_N       = 78,
     Backspace   = 8,
     Tab         = 9,
     LineFeed    = 10,
@@ -794,6 +819,7 @@ enum KeyCode {
     Delete      = 46, // or 127 ?
     Meta        = 91
 };
+*/
 
 typedef map<str, var> Schema;
 typedef map<str, var> Map;

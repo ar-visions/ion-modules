@@ -14,16 +14,6 @@ struct Edit:node {
         Extern<rgba>     sel_fg;
     } m;
     
-    /*
-    static FnFilter LCase() { /// good concept i just want type-specific data
-        return FnFilter([](var &d) {
-            std::string s = *(d.s);
-            std::transform(s.begin(), s.end(), s.begin(), [](uint8_t c) { return std::tolower(c); });
-            return var(s);
-        });
-    }
-    */
-    
     void bind() {
         external<bool>     ("word-wrap",  m.word_wrap,  false);
         external<bool>     ("multi-line", m.multi_line, false);

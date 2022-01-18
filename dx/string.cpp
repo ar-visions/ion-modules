@@ -2,10 +2,10 @@
 #include <fstream>
 #include <ctype.h>
 
-str::str(std::nullptr_t n)                                          { }
-str::str(std::string s)    : s(s)                              { }
-str::str(const char *s)    : s(s ? s : "")                              { }
-str::str(const char *s, size_t len) : s({s ? s : "", s ? len : 0})              { }
+str::str(std::nullptr_t n) { }
+str::str(std::string s)    : s(s) { }
+str::str(const char *s)    : s(s ? s : "") { }
+str::str(const char *s, size_t len) : s({s ? s : "", s ? len : 0}) { }
 
 str::str(vec<char> &v) {
     s = std::string((const char *)v.data(), v.size());
@@ -23,6 +23,34 @@ str str::read_file(path_t f) {
     sstr << fs.rdbuf();
     fs.close();
     return str(sstr.str());
+}
+
+str str::fill(int count, std::function<char(size_t)> fn) {
+    str s;
+    for (size_t i = 0; i < count; i++)
+        s += fn(i);
+    return s;
+}
+
+int str::index_of_first(vec<str> &a, int *a_index) const {
+    int less  = -1;
+    int index = -1;
+    for (str &ai:a) {
+          ++index;
+        int i = index_of(ai.cstr());
+        if (i >= 0 && (less == -1 || i < less)) {
+            less = i;
+            if (a_index)
+               *a_index = index;
+        }
+    }
+    if  (a_index)
+        *a_index = -1;
+    return less;
+}
+
+bool str::contains(vec<str> &a) const {
+    return index_of_first(a, null) >= 0;
 }
 
 bool str::starts_with(const char *cstr) const {

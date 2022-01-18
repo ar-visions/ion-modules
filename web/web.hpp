@@ -142,20 +142,18 @@ protected:
     static bool   write_headers(Socket sc, Args &headers);
     static var    content_data(Socket sc, var &c, Args &headers);
     static str          cookie(var &result);
-    
 public:
-    
     struct Message {
         URI    uri;
-        int    code = 0;
+        var    code = 0;
         var    content;
         Args   headers;
         
-        Message(int code, var content = null, Args headers = null):
+        Message(var code, var content = null, Args headers = null):
                 code(code), content(content), headers(headers) {
             uri.type = URI::Response;
         }
-        
+
         Message(std::nullptr_t n = nullptr) { }
         
         Message(const Message &ref) :
@@ -173,27 +171,36 @@ public:
             }
             return *this;
         }
+        
         Message(var &d) {
             uri     = d["uri"];
             code    = d["code"];
             content = d["content"];
             headers = d["headers"];
         }
+
         map<str, str> cookies();
+
         str text() {
             return str(content);
         }
+
         operator var() {
             return Args {
                 {"uri",     uri},
-                {"code",    int(code)},
+                {"code",    code},
                 {"content", content},
                 {"headers", headers}
             };
         }
+
         operator bool() {
-            return uri.type != URI::Undefined && code >= 200 && code < 300;
+            assert(code == Type::i32 || code == Type::Str);
+            return ((uri.type != URI::Undefined) &&
+                   ((code == Type::i32 && int(code) >= 200 && int(code) < 300) ||
+                    (code == Type::Str && code.size())));
         }
+
         bool operator!() {
             return !(operator bool());
         }

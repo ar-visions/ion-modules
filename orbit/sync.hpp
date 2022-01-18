@@ -1,33 +1,17 @@
 #pragma once
-#include <ux/ux.hpp>
-#include <ux/interface.hpp>
-#include <web/web.hpp>
-#include <thread>
-#include <mutex>
-#include <sys/ioctl.h>
-#include <signal.h>
-#include <termios.h>
+#include <dx/dx.hpp>
 
-template <class V>
-struct UX:Interface {
-    struct Internal* intern;
-    void set_title(str t);
-    str         title;
-    Composer *  composer;
-    int         result = 0;
-    /// -------------------------------------
-    void run() {
-        composer = Composer_init(this, fn, args);
-        code     = Vulkan::main(composer);
-    }
-    /// -------------------------------------
-    UX(int c, const char *v[], Args &defaults) {
-        type     = Interface::UX;
-        fn       = [&]() -> Element { return V(); };
-        Interface::bootstrap(c, v, defaults);
-    }
+/// Station Commands; todo: utilize .gitignore on client
+struct StationCommand:ex<StationCommand> {
+    enum Type {
+        None,       Project,    // project, version
+        Ping,       Pong,       // ping and pong have never gone up in smoke, shame
+        Dependency,             // module-name, version, uri
+        Resource,               // resource-path [content = data]
+        Products,               // target:os:arch target2:os:arch
+        Delivery,               // general delivery method, just a product name and its contents
+        Activate,   Deactivate, // will not be active until the client says-so
+        ForceBuild, ForceClean  // everyone knows these, but force imples implicit else-where
+    };
+    ex_shim(StationCommand, Type, None);
 };
-
-#include <ux/composer.hpp>
-typedef std::function<bool (node *, node **, var &)> FnUpdate;
-

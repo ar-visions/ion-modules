@@ -1,16 +1,19 @@
 {
     "version": "0.2.0",
-    "configurations": [{
-        "name":             "Debug",
-        "type":             "cppdbg",
-        "request":          "launch",
-        "program":          "${workspaceFolder}/build/ux-app",
-        "args":             [],
-        "stopAtEntry":      false,
-        "cwd":              "${workspaceFolder}/vk/res",
-        "environment":      [],
-        "externalConsole":  false,
-        "MIMode":           "gdb",
-        "preLaunchTask":    "build"
-    }]
+    "configurations": [
+        {
+            "name":             "Debug",
+            "type":             "cppdbg",
+            "request":          "launch",
+            "program":          "${workspaceFolder}/build/ux-app",
+            "args":             [],
+            "stopAtEntry":      false,
+            "cwd":              "${workspaceFolder}/vk/res",
+            "environment":      [],
+            "externalConsole":  false,
+            "preLaunchTask":    "build",
+            "MIMode":           "gdb",
+            "osx": { "MIMode":  "lldb" }
+        } 
+    ]
 }
