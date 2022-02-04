@@ -18,7 +18,7 @@ struct Frame {
     };
     int             index;
     Device         *device;
-    vec<Texture>    attachments;
+    array<Texture>    attachments;
     VkFramebuffer   framebuffer = VK_NULL_HANDLE;
     map<str, VkCommandBuffer> render_commands;
     void destroy();

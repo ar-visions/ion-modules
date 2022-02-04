@@ -10,5 +10,5 @@ protected:
     struct AInternal *i;
 public:
     AI(path_t p);
-    vec<float> operator()(vec<var> v);
+    array<float> operator()(array<var> v);
 };

@@ -25,7 +25,7 @@ void UniformData::update(Device *device) {
         b.destroy();
     m.device = device;
     size_t n_frames = device->frames.size();
-    m.buffers = vec<Buffer>(n_frames);
+    m.buffers = array<Buffer>(n_frames);
     for (int i = 0; i < n_frames; i++)
         m.buffers += Buffer {
             device, uint32_t(m.struct_sz), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -46,7 +46,7 @@ void UniformData::transfer(size_t frame_id) {
     auto   &device = *m.device;
     Buffer &buffer = m.buffers[frame_id]; /// todo -- UniformData never initialized (problem, that is)
     size_t      sz = buffer.sz;
-    const char *data[2048];
+    cchar_t *data[2048];
     void* gpu;
     memset(data, 0, sizeof(data));
     m.fn(data);
@@ -83,7 +83,7 @@ VkShaderModule Device::module(std::filesystem::path p, Module type) {
         auto mc     = VkShaderModuleCreateInfo { };
         str code    = str::read_file(p);
         mc.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        mc.codeSize = code.len();
+        mc.codeSize = code.size();
         mc.pCode    = reinterpret_cast<const uint32_t *>(code.cstr());
         assert (vkCreateShaderModule(device, &mc, nullptr, &m[key]) == VK_SUCCESS);
     }
@@ -103,7 +103,7 @@ uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
 };
 
 Device::Device(GPU &p_gpu, bool aa) {
-    auto qcreate        = vec<VkDeviceQueueCreateInfo>(2);
+    auto qcreate        = array<VkDeviceQueueCreateInfo>(2);
     gpu                 = GPU(p_gpu);
     sampling            = VK_SAMPLE_COUNT_8_BIT; //aa ? gpu.support.max_sampling : VK_SAMPLE_COUNT_1_BIT;
     float priority      = 1.0f;
@@ -119,7 +119,7 @@ Device::Device(GPU &p_gpu, bool aa) {
 #ifdef __APPLE__
     is_apple = true;
 #endif
-    vec<const char *> ext = {
+    array<cchar_t *> ext = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         "VK_KHR_portability_subset"
     };
@@ -127,7 +127,7 @@ Device::Device(GPU &p_gpu, bool aa) {
     VkDeviceCreateInfo ci {};
 #if !defined(NDEBUG)
     //ext += VK_EXT_DEBUG_UTILS_EXTENSION_NAME; # not supported on macOS with lunarg vk
-    static const char *debug   = "VK_LAYER_KHRONOS_validation";
+    static cchar_t *debug   = "VK_LAYER_KHRONOS_validation";
     ci.enabledLayerCount       = 1;
     ci.ppEnabledLayerNames     = &debug;
 #endif
@@ -184,7 +184,7 @@ void Device::update() {
         frame.index    = i;
         auto   tx_swap = SwapImage { this, sz, swap_images[i] };
         ///
-        frame.attachments = vec<Texture> {
+        frame.attachments = array<Texture> {
             tx_color,
             tx_depth,
             tx_swap
@@ -206,7 +206,7 @@ void Device::update() {
 }
 
 void Device::initialize(Window *window) {
-    auto select_surface_format = [](vec<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR {
+    auto select_surface_format = [](array<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR {
         for (const auto &f: formats)
             if (f.format     == VK_FORMAT_B8G8R8A8_SRGB &&
                 f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
@@ -214,7 +214,7 @@ void Device::initialize(Window *window) {
         return formats[0];
     };
     ///
-    auto select_present_mode = [](vec<VkPresentModeKHR> &modes) -> VkPresentModeKHR {
+    auto select_present_mode = [](array<VkPresentModeKHR> &modes) -> VkPresentModeKHR {
         for (const auto &m: modes)
             if (m == VK_PRESENT_MODE_MAILBOX_KHR)
                 return m;
@@ -271,7 +271,7 @@ void Device::initialize(Window *window) {
     /// create swap-chain
     assert(vkCreateSwapchainKHR(device, &ci, nullptr, &swap_chain) == VK_SUCCESS);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, nullptr); /// the dreaded frame_count (2) vs image_count (3) is real.
-    frames = vec<Frame>(frame_count, this); /// its a vector. its a size. its a value.
+    frames = array<Frame>(frame_count, this); /// its a vector. its a size. its a value.
     
     /// get swap-chain images
     swap_images.resize(frame_count);
@@ -306,7 +306,7 @@ void Descriptor::destroy() {
 }
 
 #if 0
-VkFormat supported_format(VkPhysicalDevice gpu, vec<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+VkFormat supported_format(VkPhysicalDevice gpu, array<VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
     for (VkFormat format: candidates) {
         VkFormatProperties props;
         vkGetPhysicalDeviceFormatProperties(gpu, format, &props);

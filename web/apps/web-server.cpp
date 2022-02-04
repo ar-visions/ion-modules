@@ -16,7 +16,7 @@ struct ExampleServer:node {
     declare(ExampleServer);
     void mount() {
         data = var(Type::Map);
-        vec<str> s = {"chicken", "frog", "bird"};
+        array<str> s = {"chicken", "frog", "bird"};
         data["animals"] = s;
     }
     Element render() {
@@ -27,12 +27,12 @@ struct ExampleServer:node {
     }
 };
 
-Args defaults = {
+Map defaults = {
     {"port", int(443)}
 };
 
-int main(int c, const char *v[]) {
-    return Server(c, v, defaults)([&](Args &args) {
+int main(int c, cchar_t *v[]) {
+    return Server(c, v, defaults)([&](Map &args) {
         return ExampleServer(args);
     });
 }

@@ -5,13 +5,12 @@
             "name":             "Debug",
             "type":             "cppdbg",
             "request":          "launch",
-            "program":          "${workspaceFolder}/build/ux-app",
+            "program":          "${workspaceFolder}/build/orbiter",
             "args":             [],
             "stopAtEntry":      false,
             "cwd":              "${workspaceFolder}/vk/res",
             "environment":      [],
-            "externalConsole":  false,
-            "preLaunchTask":    "build",
+            "externalConsole":  true,
             "MIMode":           "gdb",
             "osx": { "MIMode":  "lldb" }
         } 

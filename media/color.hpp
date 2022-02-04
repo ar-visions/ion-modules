@@ -39,7 +39,7 @@ struct RGBA {
             a = v.w;
         }
     }
-    RGBA(const char *pc) {
+    RGBA(cchar_t *pc) {
         parse(pc);
     }
     RGBA(var &d) {
@@ -66,7 +66,7 @@ struct RGBA {
         arr[3] = uint8_t(std::round(a * sc));
         for (size_t i = 0, len = sizeof(arr) - (arr[3] == 255); i < len; i++)
             sprintf(&str[i * 2], "%02x", arr[i]);
-        return (const char *)str;
+        return (cchar_t *)str;
     }
     operator var() {
         var d;
@@ -79,9 +79,9 @@ struct RGBA {
         return d;
     }
     void parse(str s) {
-        const char *pc = s.cstr();
+        cchar_t *pc = s.cstr();
         str      h = pc;
-        size_t  sz = h.len();
+        size_t  sz = h.size();
         int32_t ir = 0, ig = 0,
                 ib = 0, ia = 255;
         if (sz && h[0] == '#') {

@@ -14,73 +14,72 @@ struct Construct;
 struct Member;
 
 typedef map<std::string, node *>     State;
-typedef vec<str> &PropList;
+typedef array<str> &PropList;
 
 void delete_node(node *n);
 
-typedef std::function<void(Member &, var &)>  MFn;
-typedef std::function< var(Member &)>         MFnGet;
-typedef std::function<bool(Member &)>         MFnBool;
-typedef std::function<void(Member &)>         MFnVoid;
-typedef std::function<void(Member &, void *)> MFnArb;
+size_t                    Style_members_count(str &s);
+array<ptr<struct StBlock>> &Style_members(str &s);
+StPair                   *Style_pair(Member *member);
 
-struct Member {
-    enum MType {
-        Undefined,
-        Stationary,
-        Intern,
-        Extern
-    };
-    ///
-    Type     type       =  Type::Undefined;
-    MType    member     = MType::Undefined;
-    str      name       = null;
-    size_t   cache      = 0;
-    size_t   peer_cache = 0xffffffff;
-    Member  *bound_to   = null;
-    ///
-    virtual void *ptr() { return null; }
-    ///
-    virtual bool state_bool()  {
-        assert(false);
-        return bool(false);
-    }
-    ///
-    /// once per type (todo)
-    struct Lambdas {
-        MFn      var_set;
-        MFnGet   var_get;
-        MFnBool  get_bool;
-        MFnVoid  compute_style;
-        MFnArb   type_set;
-        MFnVoid  unset;
-    } *fn = null;
-    ///
-    node    *node;
-    ///
-    void operator=(const str &s) {
-        var v = (str &)s;
-        if (fn && fn->var_set)
-            fn->var_set(*this, v);
-    }
-    ///
-    void operator=(Member &v);
-    ///
-    virtual bool operator==(Member &m) {
-        return bound_to == &m && peer_cache == m.peer_cache;
-    }
-    
-    virtual void style_value_set(void *ptr, StTrans *) { }
-};
-
-size_t Style_members_count(str &s);
-vec<ptr<struct StBlock>> &Style_members(str &s);
-double StBlock_match(struct StBlock *, struct node *);
-struct StPair* StBlock_pair (struct StBlock *b, str  &s);
-size_t StPair_instances_count(struct StPair *p, Type &t);
-StPair *Style_pair(Member *member);
+double                    StBlock_match(struct StBlock *, struct node *);
+struct StPair*            StBlock_pair (struct StBlock *b, str  &s);
+size_t                    StPair_instances_count(struct StPair *p, Type &t);
 
 struct Style;
+
+
+struct Bind {
+    str id, to;
+    Bind(str id, str to = null):id(id), to(to ? to : id) { }
+    bool operator==(Bind &b) { return id == b.id; }
+    bool operator!=(Bind &b) { return !operator==(b); }
+};
+
+struct  node;
+typedef node * (*FnFactory)();
+
+typedef array<Bind> Binds;
+
+struct Element {
+    FnFactory         factory   = null;
+    Binds             binds;
+    array<Element>    elements;
+    node             *ref       = 0;
+    std::string       idc       = "";
+    ///
+    std::string &id() {
+        if (idc.length())
+            return idc;
+        str id;
+        for (auto &bind: binds)
+            if (bind.id == "id") {
+                id       = bind.to;
+                break;
+            }
+        char buf[256];
+        if (!id)
+            sprintf(buf, "%p", (void *)factory); /// type-based token, effectively
+        idc = id ? std::string(id) : std::string(buf);
+        return idc;
+    }
+    Element(node *ref) : ref(ref) { }
+    Element(std::nullptr_t n = null) { }
+    Element(FnFactory factory, Binds &binds, array<Element> &elements):
+        factory(factory), binds(binds), elements(elements) { }
+    bool operator==(Element &b);
+    bool operator!=(Element &b);
+    operator bool()  { return ref || factory;     }
+    bool operator!() { return !(operator bool()); }
+    
+    template <typename T>
+    static Element each(array<T> &i, std::function<Element(T &v)> fn);
+    
+    template <typename K, typename V>
+    static Element each(map<K, V> &m, std::function<Element(K &k, V &v)> fn);
+};
+
+typedef std::function<Element(void)> FnRender;
 
 struct node {
     enum Flags {
@@ -90,13 +89,13 @@ struct node {
         StyleAnimate = 8
     };
     ///
-    const char    *selector   = "";
-    const char    *class_name = "";
-    node          *parent     = null;
+    cchar_t         *selector   = "";
+    cchar_t         *class_name = "";
+    node            *parent     = null;
     map<std::string, node *> mounts;
-    vec<Element>   elements; /// elements cache
-    Element        element;  ///
-    std::queue<Fn> queue;
+    array<Element>   elements; /// elements cache
+    Element          element;  ///
+    std::queue<Fn>   queue;
     ///
     struct Paths {
         real       last_sg; /// identity for the last region-based rect update
@@ -113,7 +112,7 @@ struct node {
     int32_t        flags;
     map<std::string, PipelineData> objects;
     Style         *style = null;
-    rectd     image_rect, text_rect;
+    rectd          image_rect, text_rect;
     ///
     map<str, Member *> stationaries; /// statics, protected, idents, models, descriptors...
                                      /// we're going with stationary because everyone has loads of it they need to use for something.
@@ -122,7 +121,7 @@ struct node {
     
     /// member type-specific struct
     template <typename T, const Member::MType MT>
-    struct MType:Member {
+    struct NMember:Member { /// add something. (from Member)
         struct StyleValue {
             public:
             str name;
@@ -207,13 +206,13 @@ struct node {
                 
                 /// unset value, use default value
                 lambdas[type].unset = [](Member &m) -> void {
-                    MType<T,MT> &mm = (MType<T,MT> &)m;
+                    NMember<T,MT> &mm = (NMember<T,MT> &)m;
                     mm.cache        = 0;
                 };
                 
                 /// boolean check, used with style. members extend the syntax of style. focus is just a standard member
                 lambdas[type].get_bool = [](Member &m) -> bool {
-                    MType<T,MT> &mm = (MType<T,MT> &)m;
+                    NMember<T,MT> &mm = (NMember<T,MT> &)m;
                     if constexpr (std::is_same_v<T, std::filesystem::path>) {
                         T &v = (mm.cache != 0) ? mm.value : mm.style(mm.def);
                         return std::filesystem::exists(v);
@@ -225,7 +224,7 @@ struct node {
                 if constexpr (MT == Extern)
                     lambdas[type].compute_style = [](Member &m) -> void {
                         StPair *p = Style_members_count(m.name) ? Style_pair(&m) : null;
-                        MType<T,MT> &mm = (MType<T,MT> &)m;
+                        NMember<T,MT> &mm = (NMember<T,MT> &)m;
                         ///
                         if (p && p->instances.count(m.type) == 0) {
                             if constexpr (is_vec<T>()) {
@@ -247,7 +246,7 @@ struct node {
                 
                 /// direct set
                 lambdas[type].type_set = [](Member &m, void *pv) -> void {
-                    MType<T,MT> &mm = (MType<T,MT> &)m;
+                    NMember<T,MT> &mm = (NMember<T,MT> &)m;
                     T *v = (T *)pv;
                     if constexpr (is_func<T>()) {
                         if (fn_id(mm.value) != fn_id(*v)) {
@@ -263,14 +262,14 @@ struct node {
                 if constexpr (std::is_base_of<io, T>() || std::is_same_v<T, path_t>) {
                     /// io conversion
                     if constexpr (!std::is_same_v<T, path_t>)
-                        lambdas[type].var_get = [](Member &m) -> var { return var(((MType<T,MT> &)m).current()); };
+                        lambdas[type].var_get = [](Member &m) -> var { return var(((NMember<T,MT> &)m).current()); };
                     ///
                     lambdas[type].var_set = [&](Member &m, var &v) -> void {
-                        MType<T,MT> &mm = (MType<T,MT> &)m;
+                        NMember<T,MT> &mm = (NMember<T,MT> &)m;
                         if constexpr (is_vec<T>()) {
                             size_t sz = v.size();
                             T    conv = T(sz);
-                            for (auto &i: *v.a)
+                            for (auto &i: v.a)
                                 conv += static_cast<typename T::value_type>(i); /// static_cast not required, i think.  thats why its here.
                             mm.value  = conv;
                             mm.cache++;
@@ -294,11 +293,11 @@ struct node {
             fn = &lambdas[type];
         }
         ///
-        MType() {
+        NMember() {
             init();
         }
         ///
-        MType(T v) : cache(1), value(v) {
+        NMember(T v) : cache(1), value(v) {
             type = MT;
             init();
         }
@@ -323,7 +322,7 @@ struct node {
     
     ///
     template <typename T>
-    struct Stationary:MType<T, Member::Stationary> {
+    struct Stationary:NMember<T, Member::Stationary> {
         inline void operator=(T v) {
             assert(Member::fn->type_set != null);
             Member::fn->type_set(*this, (void *)&v);
@@ -332,7 +331,7 @@ struct node {
     
     ///
     template <typename T>
-    struct Intern:MType<T, Member::Intern> {
+    struct Intern:NMember<T, Member::Intern> {
         typedef T value_type;
         inline void operator=(T v) { Member::fn->type_set(*this, (void *)&v); }
     };
@@ -348,7 +347,7 @@ struct node {
     
     ///
     template <typename T>
-    struct Extern:MType<T, Member::Extern> {
+    struct Extern:NMember<T, Member::Extern> {
         typedef T value_type;
         inline void operator=(T v) { Member::fn->type_set(*this, (void *)&v); }
     };
@@ -383,39 +382,39 @@ struct node {
     
     /// staaaaaation.
     template <typename T>
-    void stationary(str name, Stationary<T> &mtype, T def) {
-        mtype.type     =  Id<T>();
-        mtype.member   =  Member::Stationary;
-        mtype.name     =  name;
-        mtype.def      =  def;
-        stationaries[name] = &mtype;
+    void stationary(str name, Stationary<T> &nmem, T def) {
+        nmem.type          =  Id<T>();
+        nmem.member        =  Member::Stationary;
+        nmem.name          =  name;
+        nmem.def           =  def;
+        stationaries[name] = &nmem;
     }
     
     template <typename T>
-    void internal(str name, Intern<T> &mtype, T def) {
-        mtype.type     =  Id<T>();
-        mtype.member   =  Member::Intern;
-        mtype.name     =  name;
-        mtype.def      =  def;
-        internals[name] = &mtype;
+    void internal(str name, Intern<T> &nmem, T def) {
+        nmem.type          =  Id<T>();
+        nmem.member        =  Member::Intern;
+        nmem.name          =  name;
+        nmem.def           =  def;
+        internals[name]    = &nmem;
     }
     
     template <typename T, typename C>
-    void lambda(str name, Lambda<T,C> &mtype, std::function<T(C &)> fn) {
-        mtype.type     =  Id<T>();
-        mtype.member   =  Member::Intern;
-        mtype.name     =  name;
-        mtype.lambda   =  std::function<T(C &)>(fn);
-        internals[name] = &mtype;
+    void lambda(str name, Lambda<T,C> &nmem, std::function<T(C &)> fn) {
+        nmem.type          =  Id<T>();
+        nmem.member        =  Member::Intern;
+        nmem.name          =  name;
+        nmem.lambda        =  std::function<T(C &)>(fn);
+        internals[name]    = &nmem;
     }
     
     template <typename T>
-    void external(str name, Extern<T> &mtype, T def) {
-        mtype.type     =  Id<T>();
-        mtype.member   =  Member::Extern;
-        mtype.name     =  name;
-        mtype.def      =  def;
-        externals[name] = &mtype;
+    void external(str name, Extern<T> &nmem, T def) {
+        nmem.type          =  Id<T>();
+        nmem.member        =  Member::Extern;
+        nmem.name          =  name;
+        nmem.def           =  def;
+        externals[name]    = &nmem;
     }
     
     vec2 offset() {
@@ -496,7 +495,7 @@ struct node {
         } ev;
     } m;
                     node(std::nullptr_t n = null);
-                    node(const char *selector, const char *cn, Binds binds, vec<Element> elements);
+                    node(cchar_t *selector, cchar_t *cn, Binds binds, array<Element> elements);
     virtual        ~node();
             void    standard_bind();
             void    standard_style();
@@ -512,7 +511,7 @@ struct node {
     bool            process();
     node           *find(std::string n);
     node           *select_first(std::function<node *(node *)> fn);
-    vec<node *>     select(std::function<node *(node *)> fn);
+    array<node *>     select(std::function<node *(node *)> fn);
     void            exec(std::function<void(node *)> fn);
     void            focus();
     void            blur();
@@ -555,10 +554,10 @@ struct node {
     UniformData uniform(int id, std::function<void(U &)> fn) { return UniformBuffer<U>(device(), id, fn); }
     
     template <typename T>
-    VertexData vertices(vec<T> &v_vbo) { return VertexBuffer<Vertex>(device(), v_vbo); }
+    VertexData vertices(array<T> &v_vbo) { return VertexBuffer<Vertex>(device(), v_vbo); }
     
     template <typename I>
-    IndexData polygons(vec<I>  &v_ibo) { return IndexBuffer<I>(device(), v_ibo); }
+    IndexData polygons(array<I>  &v_ibo) { return IndexBuffer<I>(device(), v_ibo); }
     
     template <typename V>
     Pipes model(path_t path, UniformData  ubo, VAttr attr, Shaders shaders = null) {
@@ -567,7 +566,7 @@ struct node {
     
     Pipeline<Vertex> texture(Texture tx, UniformData ubo) {
         auto v_sqr = Vertex::square();
-        auto i_sqr = vec<uint32_t> { 0, 1, 2, 2, 3, 0 };
+        auto i_sqr = array<uint32_t> { 0, 1, 2, 2, 3, 0 };
         auto   vbo = vertices(v_sqr);
         auto   ibo = polygons(i_sqr);
         return Pipeline<Vertex> {
@@ -598,8 +597,8 @@ struct node {
 };
 
 #define declare(T)\
-    T(Binds binds = {}, vec<Element> elements = {}):\
-        node((const char *)"", (const char *)TO_STRING(T), binds, elements) { }\
+    T(Binds binds = {}, array<Element> elements = {}):\
+        node((cchar_t *)"", (cchar_t *)TO_STRING(T), binds, elements) { }\
         inline static T *factory() { return new T(); };\
         inline operator  Element() { return { FnFactory(T::factory), node::binds, node::elements }; }
 

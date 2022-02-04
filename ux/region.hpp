@@ -5,12 +5,12 @@
 struct Node;
 struct Region:io {
     enum Sides { L, T, R, B };
-    vec<Unit>  sides;
+    array<Unit>  sides;
     ///
-    Region() { sides = vec<Unit> { "0l", "0t", "0r", "0b" }; }
+    Region() { sides = array<Unit> { "0l", "0t", "0r", "0b" }; }
     ///
     Region(Unit lside, Unit tside, Unit rside, Unit bside) {
-        sides = vec<Unit> { lside, tside, rside, bside };
+        sides = array<Unit> { lside, tside, rside, bside };
         assert_region();
     }
     ///
@@ -22,10 +22,10 @@ struct Region:io {
                 real  u = ua;
                 console.assertion(!std::isnan(u),        "invalid unit read in region");
                 console.assertion(ua == "" || ua == "p", "invalid pad unit");
-                str s0 = str::format("{0}l", {real(u)});
-                str s1 = str::format("{0}t", {real(u)});
-                str s2 = str::format("{0}r", {real(u)});
-                str s3 = str::format("{0}b", {real(u)});
+                str s0 = var::format("{0}l", {real(u)});
+                str s1 = var::format("{0}t", {real(u)});
+                str s2 = var::format("{0}r", {real(u)});
+                str s3 = var::format("{0}b", {real(u)});
                 sides = {s0, s1, s2, s3};
                 ///
                 /// additional states to implement:
@@ -44,7 +44,7 @@ struct Region:io {
                 assert_region();
             }
         } else
-            sides = vec<Unit> { "0l", "0t", "0r", "0b" };
+            sides = array<Unit> { "0l", "0t", "0r", "0b" };
     }
     ///
     inline rectd operator()(rectd container) {
@@ -70,7 +70,7 @@ struct Region:io {
     ///
     inline var exporter()       { return sides; }
     ///
-    void importer(var& d)       { sides = vec<Unit>(d); }
+    void importer(var& d)       { sides = array<Unit>(d); }
     ///
     void copy(const Region &rg) { sides = rg.sides; }
     

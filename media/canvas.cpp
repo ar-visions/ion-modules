@@ -59,7 +59,7 @@ struct Skia {
             };
             grc.fMaxAPIVersion = Vulkan::version();
           //grc.fVkExtensions = new GrVkExtensions(); // internal needs population perhaps
-            grc.fGetProc = [](const char *name, VkInstance inst, VkDevice dev) -> PFN_vkVoidFunction {
+            grc.fGetProc = [](cchar_t *name, VkInstance inst, VkDevice dev) -> PFN_vkVoidFunction {
                 return (dev == VK_NULL_HANDLE) ? vkGetInstanceProcAddr(inst, name) :
                                                  vkGetDeviceProcAddr  (dev,  name);
             };
@@ -147,7 +147,7 @@ struct Context2D:ICanvasBackend {
     TextMetrics measure(DrawState &ds, str &text) {
         SkFontMetrics mx;
         SkFont     &font = *ds.font.handle();
-        auto         adv = font.measureText(text.cstr(), text.len(), SkTextEncoding::kUTF8);
+        auto         adv = font.measureText(text.cstr(), text.size(), SkTextEncoding::kUTF8);
         auto          lh = font.getMetrics(&mx);
         return TextMetrics {
             .w           = adv,
@@ -357,11 +357,11 @@ void DrawState::copy(const DrawState &r) {
 
 /// this is a very KiSS-oriented Terminal Canvas
 struct Terminal:ICanvasBackend {
-    static map<str, str> t_text_colors_8;
-    static map<str, str> t_bg_colors_8;
-    const char *reset = "\u001b[0m";
+    static fmap<str, str> t_text_colors_8;
+    static fmap<str, str> t_bg_colors_8;
+    cchar_t *reset = "\u001b[0m";
     vec2i sz = { 0, 0 };
-    vec<ColoredGlyph> glyphs;
+    array<ColoredGlyph> glyphs;
     
     str ansi_color(rgba c, bool text) {
         map<str, str> &map = text ? t_text_colors_8 : t_bg_colors_8;
@@ -386,7 +386,7 @@ struct Terminal:ICanvasBackend {
 
     void set_size(vec2i sz_new) {
         sz     = sz_new;
-        glyphs = vec<ColoredGlyph>(sz.y * sz.x, null);
+        glyphs = array<ColoredGlyph>(sz.y * sz.x, null);
     }
 
     void set_char(DrawState &st, int x, int y, ColoredGlyph cg) {
@@ -455,7 +455,7 @@ struct Terminal:ICanvasBackend {
 
     void text(DrawState &state, str &s, rectd &rect, vec2 &align, vec2 &offset, bool ellip) {
         assert(glyphs.size() == (sz.x * sz.y));
-        size_t len = s.len();
+        size_t len = s.size();
         if (!len)
             return;
         int x0 = std::clamp(int(std::round(rect.x)), 0, sz.x - 1);

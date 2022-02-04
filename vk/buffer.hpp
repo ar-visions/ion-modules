@@ -18,7 +18,7 @@ struct Buffer {
     Buffer(Device *, size_t, VkBufferUsageFlags, VkMemoryPropertyFlags);
     
     template <typename T>
-    Buffer(Device *d, vec<T> &v, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprops): sz(v.size() * sizeof(T)) {
+    Buffer(Device *d, array<T> &v, VkBufferUsageFlags usage, VkMemoryPropertyFlags mprops): sz(v.size() * sizeof(T)) {
         type_size = sizeof(T);
         VkDevice device = device_handle(d);
         VkBufferCreateInfo bi {};

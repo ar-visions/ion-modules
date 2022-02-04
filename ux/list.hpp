@@ -51,8 +51,8 @@ struct List:node {
         io_shim(Column, id);
     };
     
-    vec<Column>             columns;
-    typedef vec<Column>     Columns;
+    array<Column>             columns;
+    typedef array<Column>     Columns;
     
     struct Members {
         struct Cell {
@@ -78,7 +78,7 @@ struct List:node {
     }
     /*
     void update_columns() {
-        columns      = vec<Column>(m.column.ids());
+        columns      = array<Column>(m.column.ids());
         double tsz   = 0;
         double warea = node::path.rect.w;
         double t     = 0;
@@ -182,7 +182,7 @@ struct List:node {
 
 void test1() {
     var v = {};
-    vec<List::Column> conv = vec<List::Column>(v);
+    array<List::Column> conv = array<List::Column>(v);
 }
 
 */

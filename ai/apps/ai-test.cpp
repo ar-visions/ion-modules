@@ -3,8 +3,8 @@
 #include <media/image.hpp>
 
 
-int main(int argc, const char* argv[]) {
-    auto def  = Args {{"image", "str"}};
+int main(int argc, cchar_t* argv[]) {
+    auto def  = Map {{"image", "str"}};
     auto args = var::args(argc, argv, def);
     ///
     if (args.size() == 0)

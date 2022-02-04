@@ -14,7 +14,7 @@ struct DX:Interface {
     Async       async;
     struct ServerInternal* intern;
     /// ------------------------------------------------
-    Web::Message query(Web::Message &m, Args &a, var &p) {
+    Web::Message query(Web::Message &m, Map &a, var &p) {
         Web::Message msg;
         auto r = m.uri.resource;
         auto sp = m.uri.resource.split("/");
@@ -41,7 +41,7 @@ struct DX:Interface {
     void run() {
         str uri = "https://0.0.0.0:443";
         async   = Web::server(uri, [&](Web::Message &m) -> Web::Message {
-            Args a;
+            Map a;
             var p = null;
             return query(m, a, p);
         });
@@ -49,7 +49,7 @@ struct DX:Interface {
     }
     /// ------------------------------------------------
     template <typename C>
-    DX(int c, const char *v[], Args &defaults) {
+    DX(int c, cchar_t *v[], Map &defaults) {
         type    = Interface::DX;
         fn      = []() -> Element { return C(); };
         Interface::bootstrap(c, v, defaults);

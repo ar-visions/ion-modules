@@ -70,12 +70,12 @@ GPU::GPU(VkPhysicalDevice gpu, VkSurfaceKHR surface) : gpu(gpu) {
         support.max_sampling = max_sampling(gpu);
 }
 
-vec<GPU> GPU::listing() {
+array<GPU> GPU::listing() {
     VkInstance vk = Vulkan::instance();
     uint32_t   gpu_count;
     vkEnumeratePhysicalDevices(vk, &gpu_count, null);
-    auto      gpu = vec<GPU>();
-    auto       hw = vec<VkPhysicalDevice>();
+    auto      gpu = array<GPU>();
+    auto       hw = array<VkPhysicalDevice>();
     gpu.resize(gpu_count);
     hw.resize(gpu_count);
     vkEnumeratePhysicalDevices(vk, &gpu_count, hw.data());
@@ -88,7 +88,7 @@ vec<GPU> GPU::listing() {
 }
 
 GPU GPU::select(int index) {
-    vec<GPU> gpu = GPU::listing();
+    array<GPU> gpu = GPU::listing();
     assert(index >= 0 && index < gpu.size());
     return gpu[index];
 }

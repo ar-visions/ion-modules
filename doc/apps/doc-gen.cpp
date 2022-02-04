@@ -1,9 +1,9 @@
 #include <dx/dx.hpp>
 
-auto default_args = Args {{"path", null}};
+auto default_args = Map {{"path", null}};
 
-int main(int argc, const char *argv[]) {
-    Args args = var::args(argc, argv, default_args);
+int main(int argc, cchar_t *argv[]) {
+    Map  args = var::args(argc, argv, default_args);
     
     /// iterate through module folders relative to this cwd, unless a path is given
     auto  cwd = std::filesystem::current_path();

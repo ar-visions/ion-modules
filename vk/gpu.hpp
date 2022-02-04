@@ -16,15 +16,15 @@ public:
     };
     struct Support {
         VkSurfaceCapabilitiesKHR caps;
-        vec<VkSurfaceFormatKHR>  formats;
-        vec<VkPresentModeKHR>    present_modes;
+        array<VkSurfaceFormatKHR>  formats;
+        array<VkPresentModeKHR>    present_modes;
         bool                     ansio;
         VkSampleCountFlagBits    max_sampling;
     };
     Support          support;
     VkPhysicalDevice gpu        = VK_NULL_HANDLE;
     VkQueue          queues[2];
-    vec<VkQueueFamilyProperties> family_props;
+    array<VkQueueFamilyProperties> family_props;
     VkSurfaceKHR     surface;
     ///
     GPU(VkPhysicalDevice, VkSurfaceKHR);
@@ -34,6 +34,6 @@ public:
     operator                bool();
     operator                VkPhysicalDevice();
     bool                    operator()(Capability);
-    static vec<GPU>         listing();
+    static array<GPU>         listing();
     static GPU              select(int index = 0);
 };

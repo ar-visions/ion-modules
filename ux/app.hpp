@@ -21,7 +21,7 @@ struct UX:Interface {
         code     = Vulkan::main(composer);
     }
     /// -------------------------------------
-    UX(int c, const char *v[], Args &defaults) {
+    UX(int c, cchar_t *v[], Map &defaults) {
         type     = Interface::UX;
         fn       = [&]() -> Element { return V(); };
         Interface::bootstrap(c, v, defaults);

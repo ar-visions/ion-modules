@@ -1,11 +1,20 @@
 #pragma once
-#include <dx/var.hpp>
+#include <dx/type.hpp>
 #include <dx/nan.hpp>
+
+enum Role {
+    Client,
+    Server
+};
 
 template <typename T>
 struct FlagsOf:io {
     uint32_t flags = 0;
-    FlagsOf(std::nullptr_t = null)           { }
+    FlagsOf(std::nullptr_t = null) { }
+    FlagsOf(std::initializer_list<T> l) {
+        for (auto i:l)
+            flags |= i;
+    }
     FlagsOf(T f) : flags(uint32_t(f))   { }
     bool operator()  (T c) { return (flags & c) == c; }
     void operator += (T f) { flags |=  f; }
@@ -44,7 +53,7 @@ struct Unit:io {
     }
     
     ///
-    Unit(const char *s = null) : Unit(str(s)) { }
+    Unit(cchar_t *s = null) : Unit(str(s)) { }
     Unit(var &v) {
         value  = v["value"];
         type   = v["type"];
@@ -73,10 +82,10 @@ struct Unit:io {
     }
     
     ///
-    bool operator==(const char *s) { return type == s; }
+    bool operator==(cchar_t *s) { return type == s; }
     
     ///
-    void assert_types(vec<str> &types, bool allow_none) {
+    void assert_types(array<str> &types, bool allow_none) {
         console.assertion((allow_none && !type) || types.index_of(type) >= 0, "unit not recognized");
     }
     ///
@@ -84,12 +93,79 @@ struct Unit:io {
     operator real &() { return value; }
     
     operator var() {
-        return Args {
-            {"type", var(type)},
+        return Map {
+            {"type",  var(type)},
             {"value", var(value)}
         };
     }
 };
+
+struct Member;
+typedef std::function<void(Member &, var &)>  MFn;
+typedef std::function< var(Member &)>         MFnGet;
+typedef std::function<bool(Member &)>         MFnBool;
+typedef std::function<void(Member &)>         MFnVoid;
+typedef std::function<void(Member &, void *)> MFnArb;
+struct StTrans;
+
+struct Member {
+    enum MType { /// multi-planetary enum.
+        Undefined,
+        Stationary,
+        Intern,
+        Extern,
+        Configurable = Intern
+    };
+    std::function<void(Member *, Member *)> copy_fn;
+    var *serialized = null;
+    var &nil() {
+        static var n;
+        return n;
+    }
+    
+    ///
+    Type     type       =  Type::Undefined;
+    MType    member     = MType::Undefined;
+    str      name       = null;
+    size_t   cache      = 0;
+    size_t   peer_cache = 0xffffffff;
+    Member  *bound_to   = null;
+    void    *arg        = null; /// user-defined arg (used with node binding in ux)
+    ///
+    virtual void *ptr()        { return null; }
+    virtual bool  state_bool() {
+        assert(false);
+        return bool(false);
+    }
+    ///
+    /// once per type
+    struct Lambdas {
+        MFn      var_set;
+        MFnGet   var_get;
+        MFnBool  get_bool;
+        MFnVoid  compute_style;
+        MFnArb   type_set;
+        MFnVoid  unset;
+    } *fn = null;
+    ///
+    
+    ///
+    virtual void operator=(const str &s) {
+        var v = (str &)s;
+        if (fn && fn->var_set)
+            fn->var_set(*this, v);
+    }
+    ///
+    void operator=(Member &v);
+    ///
+    virtual bool operator==(Member &m) {
+        return bound_to == &m && peer_cache == m.peer_cache;
+    }
+    
+    virtual void style_value_set(void *ptr, StTrans *) { }
+};
+
+
 
 struct node;
 
@@ -104,7 +180,7 @@ typedef std::unordered_map<std::string, Idents> ModelIdents;
 
 struct ModelCache {
     Results       results;
-    Idents        idents; /// lookup map needed for optimization
+    Idents        idents; /// lookup fmap needed for optimization
 };
 
 struct ModelContext {
@@ -123,5 +199,7 @@ struct Adapter { // this was named DX, it needs a different name than this, thou
     virtual bool reset(var &view) = 0;
 };
 
+#include <dx/path.hpp>
 
+#define infinite_loop() { for (;;) { usleep(1000); } }
 

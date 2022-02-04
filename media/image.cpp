@@ -6,13 +6,9 @@
 
 Image::Image(std::nullptr_t n) { }
 Image::Image(var &pixels) : pixels(pixels) {
-    /// not so fast bugs.
     if (pixels == Type::Str) {
         bool no_ext = path_t(pixels).extension() == "";
-        path_t path = str::format("images/{0}{1}", {pixels, (no_ext ? str {".png"} : str {""})});
-        /// when done in this fashion, we keep a cache of them.  this var can easily change and we dont want to reload
-        /// for local image resources this is a bit nothing to maintain
-        /// you would only want to store for like domains, otherwise you empty
+        path_t path = var::format("images/{0}{1}", {pixels, (no_ext ? str {".png"} : str {""})});
         *this = Image(path, Format::Rgba);
     }
 }
@@ -54,7 +50,7 @@ Image Image::transform(m44 m, vec2i vp) {
     Image    vi = Image(vp, f);
     vec2     sz = size();
     rectd     r = {0.0, 0.0, sz[0], sz[1]};
-    vec<vec2> clip = {{r.x,r.y}, {r.x + r.w,r.y},
+    array<vec2> clip = {{r.x,r.y}, {r.x + r.w,r.y},
                       {r.x + r.w,r.y + r.w}, {r.x,r.y + r.h}};
     
     for (    int y = 0; y < vp.y; y++)

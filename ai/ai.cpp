@@ -24,7 +24,7 @@ AI::AI(path_t p) {
 }
 ///
 /// forward pass data
-vec<float> AI::operator()(Table in) { /// Table == vec<var>
+array<float> AI::operator()(Table in) { /// Table == array<var>
     assert(in.size() > 0);
     assert(equals(in[0].t, { Type::f32, Type::ui8, Type::i8 }));
     auto     itr = i->itr.get();
@@ -44,6 +44,6 @@ vec<float> AI::operator()(Table in) { /// Table == vec<var>
     assert(ot->dims->size == 1);
     size_t sz = ot->dims->data[0];
     float*  o = itr->typed_output_tensor<float>(0);
-    return vec<float>(o, sz);
+    return array<float>(o, sz);
 }
 

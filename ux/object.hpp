@@ -20,7 +20,7 @@ struct Object:node {
         Extern<path_t>      model;
         Extern<Shaders>     shaders;
         Extern<UniformData> ubo;
-        Extern<vec<Attrib>> attr;
+        Extern<array<Attrib>> attr;
         Extern<Rendering>   render;
         /// --------------------------
         Intern<str>         sval;
@@ -33,7 +33,7 @@ struct Object:node {
         external("uniform", m.ubo,       UniformData   { null     });
         external("model",   m.model,     path_t        { ""       });
         external("shaders", m.shaders,   Shaders       { "*=main" });
-        external("attr",    m.attr,      vec<Attrib>   {          });
+        external("attr",    m.attr,      array<Attrib>   {          });
         external("render",  m.render,    Rendering     { Rendering::Shader });
         /// ------------------------------------------------
         internal("pipes",   m.pipes,     Pipes         { null });

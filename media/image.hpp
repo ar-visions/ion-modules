@@ -152,4 +152,4 @@ struct Image {
     }
 };
 
-void shodgeman(vec<vec2> &poly, vec<vec2> &clip);
+void shodgeman(array<vec2> &poly, array<vec2> &clip);

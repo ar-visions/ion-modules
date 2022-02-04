@@ -30,7 +30,7 @@ struct Commander:node {
             auto   ep = e.path();
             size_t sz = std::filesystem::is_regular_file(ep) ?
                         std::filesystem::file_size(ep)       : 0;
-            auto  res = Args {{
+            auto  res = Map {{
                 {"name", ep.stem().string()},
                 {"ext",  ep.extension().string()},
                 {"size", sz}
@@ -62,7 +62,7 @@ struct Commander:node {
                     {"bind",         "resources"},
                     {"border-color", "#ff0"},
                     {"border-size",  1.0},
-                    {"column-ids",   vec<List::Column> {
+                    {"column-ids",   array<List::Column> {
                         {"name", 0.66},
                         {"size", 32, Align::End}
                     }},
@@ -79,6 +79,6 @@ struct Commander:node {
 };
 
 
-int main(int c, const char *v[]) {
+int main(int c, cchar_t *v[]) {
     return Console<Commander>(c, v);
 }

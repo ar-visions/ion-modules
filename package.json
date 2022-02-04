@@ -1,5 +1,10 @@
 {
-    "name":     "ion",
-    "version":  "0.22.0",
-    "extern":   []
+    "name": "ion",
+    "version": "0.80.0",
+    "depends": {
+        "skia":       {"url": "https://github.com/ar-visions/skia.git"},
+        "glfw":	      {"url": "https://github.com/ar-visions/glfw.git"},
+        "mbedtls":    {"url": "https://github.com/ar-visions/mbedtls.git"},
+        "tensorflow": {"url": "https://github.com/ar-visions/tensorflow.git"}
+    }
 }

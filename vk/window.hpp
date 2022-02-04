@@ -9,7 +9,7 @@ protected:
     GLFWwindow  *handle    = null;
     VkSurfaceKHR surface   = VK_NULL_HANDLE;
 public:
-    var          mouse     = Args {};
+    var          mouse     = Map {};
     str          title     = "";
     vec2         dpi_scale = { 1, 1 };
     vec2i        size      = { 0, 0 };

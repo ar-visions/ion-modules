@@ -10,14 +10,13 @@
 
 template <typename T>
 struct Vector {
-    operator bool()  {
+    operator bool() const {
         if constexpr (std::is_same_v<T, double> || std::is_same_v<T, float>)
             return !std::isnan(*(T *)this);
         return true;
     }
-    bool operator!() {
-        return !(operator bool());
-    }
+    bool operator!() const { return !(operator bool()); }
+
     inline T &operator[](size_t i) const {
         T *v = (T *)this;
         return v[i];
@@ -72,7 +71,7 @@ struct Vec2: Vector<T> {
         }
     }
     
-    static void aabb(vec<Vec2<T>> &a, Vec2<T> &v_min, Vec2<T> &v_max) {
+    static void aabb(array<Vec2<T>> &a, Vec2<T> &v_min, Vec2<T> &v_max) {
         const int sz = a.size();
         v_min        = a[0];
         v_max        = a[0];
@@ -171,7 +170,7 @@ struct Vec2: Vector<T> {
     operator Vec2<double>()         { return Vec2<double> { double(x), double(y) }; }
     operator Vec2<int>()            { return Vec2<int>    {    int(x),    int(y) }; }
     ///
-    static double area(vec<Vec2<T>> &p) {
+    static double area(array<Vec2<T>> &p) {
         double area = 0.0;
         const int n = int(p.size());
         int       j = n - 1;
@@ -312,8 +311,6 @@ struct Vec4: Vector<T> {
     inline Vec2<T> yw()                    { return Vec2<T> { y, w }; }
 };
 
-typedef map<std::string, var> Args; // todo: why here
-
 template <typename T>
 struct Edge {
     Vec2<T> &a;
@@ -406,19 +403,19 @@ struct Rect: Vector<T> {
             x = std::numeric_limits<double>::quiet_NaN();
     }
     
-    vec<Vec2<T>> edges() const {
+    array<Vec2<T>> edges() const {
         return {{x,y},{x+w,y},{x+w,y+h},{x,y+h}};
     }
     
-    vec<Vec2<T>> clip(vec<Vec2<T>> &poly) const {
+    array<Vec2<T>> clip(array<Vec2<T>> &poly) const {
         const Rect<T>  &clip = *this;
-        vec<Vec2<T>>       p = poly;
-        vec<Vec2<T>>       e = clip.edges();
+        array<Vec2<T>>       p = poly;
+        array<Vec2<T>>       e = clip.edges();
         for (int i = 0; i < e.size(); i++) {
             Vec2<T>  &e0 = e[i];
             Vec2<T>  &e1 = e[(i + 1) % e.size()];
             Edge<T> edge = { e0, e1 };
-            vec<Vec2<T>> cl;
+            array<Vec2<T>> cl;
             for (int ii = 0; ii < p.size(); ii++) {
                 const Vec2<T> &pi = p[(ii + 0)];
                 const Vec2<T> &pk = p[(ii + 1) % p.size()];
@@ -450,17 +447,6 @@ struct Rect: Vector<T> {
         return p;
     }
 };
-
-#if INTPTR_MAX == INT64_MAX
-typedef double       real;
-#elif INTPTR_MAX == INT32_MAX
-typedef float        real;
-#else
-#error Unknown pointer size or missing size macros!
-#endif
-
-typedef float        r32;
-typedef double       r64;
 
 typedef Vec2<float>  vec2f;
 typedef Vec2<real>   vec2;

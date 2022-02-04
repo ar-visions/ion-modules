@@ -1,6 +1,6 @@
 #include <ux/ux.hpp>
 
-static Args def = {
+static Map def = {
     {"gravity", 1.0}
 };
 
@@ -21,13 +21,13 @@ struct Car:node {
         float  max_speed;
         bool   active;
         ///
-        static vec<Model> models;
+        static array<Model> models;
         ///
         static void load() {
             if (models)
                 return;
             ///
-            models  = vec<Model>(size_t(Zuul) + 1);
+            models  = array<Model>(size_t(Zuul) + 1);
             models += Model { Venkman,  str("Venkman"), 1.0f, true };
             models += Model { Egon,     str("Egon"),    1.0f, true };
             models += Model { Winston,  str("Winston"), 1.0f, true };
@@ -78,7 +78,5 @@ struct CarSelection:View {
 };
 
 int main(int c, char *v[]) {
-    return Window(c, v, def)([&](Args &args) {
-        return CarSelection(args);
-    });
+    return Window(c, v, def)([&](Map &args) { return CarSelection(args); });
 }

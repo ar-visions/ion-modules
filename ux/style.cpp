@@ -4,7 +4,7 @@
 //#include <regex> in time.
 
 map<path_t, Style> Style::cache            = {};
-map<str, vec<ptr<StBlock>>> Style::members = {};
+map<str, array<ptr<StBlock>>> Style::members = {};
 std::unordered_map<str, int> Unit::u_flags = {
     { "cm", Metric   | Distance },
     { "in", Standard | Distance },
@@ -26,20 +26,20 @@ struct StBlock;
 
 /// -------------------------------------------------
 size_t    Style_members_count(str &s)              { return (Style::members.count(s)); }
-vec<ptr<StBlock>> &Style_members(str &s)           { return Style::members[s]; }
+array<ptr<StBlock>> &Style_members(str &s)           { return Style::members[s]; }
 double          StBlock_match(StBlock *b, node *n) { return b->match(n); }
 StPair*         StBlock_pair (StBlock *b, str  &s) { return b->pair(s);  }
 size_t StPair_instances_count(StPair *p, Type &t)  { return p->instances.count(t); }
 
 StPair *Style_pair(Member *member) {
-    vec<ptr<struct StBlock>> &blocks  = Style_members(member->name);
+    array<ptr<struct StBlock>> &blocks  = Style_members(member->name);
     struct StPair *match      = null;
     double         best_score = 0;
     ///
     /// find top style pair for this member
     for (auto ptr:blocks) {
         StBlock *block = ptr;
-        double score = block->match(member->node);
+        double score = block->match((node *)member->arg);
         if (score > 0 && score >= best_score) {
             match = block->pair(member->name);
             best_score = score;
@@ -49,7 +49,7 @@ StPair *Style_pair(Member *member) {
 }
 
 static bool ws(char *&cursor) {
-    auto is_cmt = [](const char *c) -> bool { return c[0] == '/' && c[1] == '*'; };
+    auto is_cmt = [](cchar_t *c) -> bool { return c[0] == '/' && c[1] == '*'; };
     while (isspace(*cursor) || is_cmt(cursor)) {
         while (isspace(*cursor))
             cursor++;
@@ -61,7 +61,7 @@ static bool ws(char *&cursor) {
     return *cursor != 0;
 }
 
-static bool scan_to(char *&cursor, vec<char> chars) {
+static bool scan_to(char *&cursor, array<char> chars) {
     bool sl  = false;
     bool qt  = false;
     bool qt2 = false;
@@ -81,7 +81,7 @@ static bool scan_to(char *&cursor, vec<char> chars) {
     return false;
 }
 
-static vec<StQualifier> parse_qualifiers(char **p) {
+static array<StQualifier> parse_qualifiers(char **p) {
     str   qstr;
     char *start = *p;
     char *end   = null;
@@ -103,7 +103,7 @@ static vec<StQualifier> parse_qualifiers(char **p) {
     }
     ///
     auto  quals = qstr.split(",");
-    auto result = vec<StQualifier>(quals.size());
+    auto result = array<StQualifier>(quals.size());
     ///
     for (auto qs:quals) {
         str  q = qs.trim();
@@ -126,7 +126,7 @@ static vec<StQualifier> parse_qualifiers(char **p) {
             } else
                 v.type = q;
         }
-        auto   ops = vec<str> {"!=",">=","<=",">","<","="};
+        auto   ops = array<str> {"!=",">=","<=",">","<","="};
         if (tail) {
             // check for ops
             bool is_op = false;
@@ -136,7 +136,7 @@ static vec<StQualifier> parse_qualifiers(char **p) {
                     auto sp = tail.split(op);
                     v.state = sp[0].trim();
                     v.oper  = op;
-                    v.value = tail.substr(sp[0].len() + op.len()).trim();
+                    v.value = tail.substr(sp[0].size() + op.size()).trim();
                     break;
                 }
             }
@@ -225,7 +225,7 @@ Style::Style(str &code) {
                         bool       qe = cb_value.substr(-1, 1) == "\"";
                         if (qs && qe) {
                             auto cstr = (char *)cb_value.cstr();
-                            cb_value  = var::parse_quoted(&cstr, cb_value.len());
+                            cb_value  = var::parse_quoted(&cstr, cb_value.size());
                         }
                         int         i = cb_value.index_of(",");
                         str     param = i >= 0 ? cb_value.substr(i + 1).trim() : "";
@@ -272,8 +272,8 @@ Style Style::load(path_t path) {
     return cache[path];
 }
 
-Style *Style::for_class(const char *class_name) {
-    path_t p = str::format("style/{0}.css", { str(class_name) });
+Style *Style::for_class(cchar_t *class_name) {
+    path_t p = var::format("style/{0}.css", { str(class_name) });
     return &(cache.count(p) ? cache[p] : (cache[p] = Style::load(p)));
 }
 
@@ -335,7 +335,7 @@ double StBlock::match(node *n) {
 }
 
 void Style::init(path_t path) {
-    resources(path, {".css"}, [&](path_t &p) -> void {
+    resources(path, {".css"}, false, [&](path_t &p) -> void {
         for_class(p.stem().string().c_str());
     });
 }

@@ -10,15 +10,15 @@ struct DataW {
 };
 
 struct Truth {
-    vec<float>  label;
-    vec<var>    data;
+    array<float>  label;
+    array<var>    data;
     ///
     Truth(std::nullptr_t n = nullptr) { }
     operator bool()  { return data and label.size(); }
     bool operator!() { return !(operator bool()); }
 };
 
-typedef vec<Truth> Truths;
+typedef array<Truth> Truths;
 
 struct Dataset {
     path_t      path;
@@ -26,11 +26,11 @@ struct Dataset {
     float       w;
     ///
     operator var()  {
-        return vec<var> { var(path.string()), var(dataset), var(w) };
+        return array<var> { var(path.string()), var(dataset), var(w) };
     }
     void import(path_t root, str d) {
         auto sp = d.split(":");
-        path    = str::format("{0}/{1}", {root.string(), sp[0]});
+        path    = var::format("{0}/{1}", {root.string(), sp[0]});
         dataset = sp[0];
         w       = sp.size() > 1 ? sp[1].real() : 1.0;
     }
@@ -40,9 +40,9 @@ struct Dataset {
     Dataset(var &d) {
         import(path_t(d[size_t(0)]), str(d[size_t(1)]));
     }
-    static vec<Dataset> parse(path_t root, str ds) {
-        vec<Dataset> r;
-        vec<str>     sp = ds.split(",");
+    static array<Dataset> parse(path_t root, str ds) {
+        array<Dataset> r;
+        array<str>     sp = ds.split(",");
         for (str &d: sp) {
             r += {root, d};
         }
@@ -50,10 +50,10 @@ struct Dataset {
     }
 };
 
-void Gen(Args         &args,
-         vec<str>      require,
-         vec<Dataset> &ds,
-         str          model,
+void Gen(Map            &args,
+         array<str>      require,
+         array<Dataset> &ds,
+         str             model,
          std::function<Truths(var &)> fn);
 
 Truths if_image(var &data, Image::Format format, std::function<Truths(Image &)> fn);

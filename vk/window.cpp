@@ -6,7 +6,7 @@
 #include <vk/vk.hpp>
 #include <vk/window.hpp>
 
-static void glfw_error  (int code, const char *cstr) {
+static void glfw_error  (int code, cchar_t *cstr) {
     console.log("glfw error: {0}", {str(cstr)});
 }
 

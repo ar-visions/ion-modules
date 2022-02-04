@@ -29,28 +29,28 @@ VkDevice vk_device() {
     return Vulkan::device();
 }
 
-const char *cstr_copy(const char *s) {
+cchar_t *cstr_copy(cchar_t *s) {
     int   len = strlen(s);
     char   *r = (char *)malloc(len + 1);
     std::memcpy((void *)r, (void *)s, len + 1);
-    return (const char *)r;
+    return (cchar_t *)r;
 }
 
-const std::vector<const char*> validation_layers = {
+const std::vector<cchar_t*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
 struct Internal {
     Window *window;
     VkInstance vk = VK_NULL_HANDLE;
-    vec<VkLayerProperties> layers;
+    array<VkLayerProperties> layers;
     Device   device;
     GPU      gpu;
     Device   instance;
     Texture  tx_skia;
     bool     resize;
-    vec<VkFence> fence;
-    vec<VkFence> image_fence;
+    array<VkFence> fence;
+    array<VkFence> image_fence;
     Internal &bootstrap();
     static Internal &handle();
 };
@@ -100,15 +100,15 @@ Internal &Internal::bootstrap() {
     ///
     uint32_t    n_ext;
     auto          dbg = VkDebugUtilsMessengerCreateInfoEXT {};
-    auto     glfw_ext = (const char **)glfwGetRequiredInstanceExtensions(&n_ext); /// this is ONLY for instance; must be moved.
-    auto instance_ext = vec<const char *>(n_ext + 1);
+    auto     glfw_ext = (cchar_t **)glfwGetRequiredInstanceExtensions(&n_ext); /// this is ONLY for instance; must be moved.
+    auto instance_ext = array<cchar_t *>(n_ext + 1);
     for (int i = 0; i < n_ext; i++)
         instance_ext += glfw_ext[i];
     instance_ext     += "VK_KHR_get_physical_device_properties2";
     #if !defined(NDEBUG)
         instance_ext          += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
         ci.enabledLayerCount   = uint32_t(validation_layers.size());
-        ci.ppEnabledLayerNames = (const char* const*)validation_layers.data();
+        ci.ppEnabledLayerNames = (cchar_t* const*)validation_layers.data();
         dbg.sType              = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         dbg.messageSeverity    = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         dbg.messageType        = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
@@ -155,7 +155,7 @@ recti Vulkan::startup_rect() {
 /// allocate composer, the class which takes rendered elements and manages instances
 /// allocate window internal (glfw subsystem) and canvas (which initializes a Device for usage on skia?)
 int Vulkan::main(Composer *composer) {
-    Args     &args = composer->args;
+    Map      &args = composer->args;
     vec2i       sz = {args.count("window-width")  ? int(args["window-width"])  : 512,
                       args.count("window-height") ? int(args["window-height"]) : 512};
     s_rect         = recti { 0, 0, sz.x, sz.y };
@@ -175,7 +175,7 @@ int Vulkan::main(Composer *composer) {
     
     /// canvas polygon data (pos, norm, uv, color)
     auto   vertices = Vertex::square();
-    auto    indices = vec<uint16_t> { 0, 1, 2, 2, 3, 0 };
+    auto    indices = array<uint16_t> { 0, 1, 2, 2, 3, 0 };
     auto        vbo = VertexBuffer<Vertex>(device, vertices);
     auto        ibo = IndexBuffer<uint16_t>(device, indices);
     auto        uni = UniformBuffer<MVP>(device, 0, [&](MVP &mvp) {

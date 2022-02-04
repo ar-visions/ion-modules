@@ -8,7 +8,7 @@ Frame::Frame(Device *device): device(device) { }
 void Frame::update() {
     Device &device = *this->device;
     vkDestroyFramebuffer(device, framebuffer, nullptr);
-    auto views = vec<VkImageView>();
+    auto views = array<VkImageView>();
     for (Texture &tx: attachments)
         views += VkImageView(tx);
     VkFramebufferCreateInfo ci {};

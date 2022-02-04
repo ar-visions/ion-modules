@@ -77,13 +77,13 @@ struct View:node {
 };
 
 ///
-Args defaults = {
+Map defaults = {
     {"window-width",  int(1024)},
     {"window-height", int(1024)},
     {"model",         path_t("models/ray.obj")}
 };
 
 ///
-int main(int c, const char *v[]) {
+int main(int c, cchar_t *v[]) {
     return UX<View>(c, v, defaults);
 }

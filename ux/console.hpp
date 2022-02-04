@@ -14,7 +14,7 @@ int run(AppInternal **, var &);
 struct Composer;
 struct var;
 
-Composer *Composer_init(void *ix, FnRender fn, Args &args);
+Composer *Composer_init(void *ix, FnRender fn, Map &args);
 node     *Composer_root(Composer *cc);
 void      Composer_render(Composer *cc, FnRender &fn);
 void      Composer_input(Composer *cc, str &s);
@@ -23,7 +23,7 @@ void      Composer_input(Composer *cc, str &s);
 /// why give up on the poor little terminal, why not use the same UX components?  hey!  [/hugs]
 template <class V>
 struct TX:Interface {
-    vec<ColoredGlyph>   cache;
+    array<ColoredGlyph>   cache;
     std::mutex          mx;
     /// ------------------------------------------------
     void run() {
@@ -88,11 +88,11 @@ struct TX:Interface {
     
     void draw(node *root) {
         Interface::draw(root);
-        vec<ColoredGlyph> *buf = (vec<ColoredGlyph> *)canvas.data();
+        array<ColoredGlyph> *buf = (array<ColoredGlyph> *)canvas.data();
         bool update_cache = !cache || cache.size() != buf->size();
         /// update on resize, and update these buffers
         if (update_cache) {
-            cache = vec<ColoredGlyph>(buf->size(), null);
+            cache = array<ColoredGlyph>(buf->size(), null);
             //for (size_t i = 0; i < sz.y; i++)
             //    fprintf(stdout, "\n");
         }
@@ -124,7 +124,7 @@ struct TX:Interface {
         fflush(stdout);
     }
     /// ------------------------------------------------
-    TX(int c, const char *v[], Args &defaults) {
+    TX(int c, cchar_t *v[], Map &defaults) {
         type    = Interface::TX;
         fn      = []() -> Element { return V(); };
         Interface::bootstrap(c, v, defaults);

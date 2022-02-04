@@ -15,7 +15,7 @@ Interface *Interface::instance = nullptr;
 ///
 Interface::operator int() { return code; }
 ///
-Composer *Composer_init(void *ix, FnRender fn, Args &args) {
+Composer *Composer_init(void *ix, FnRender fn, Map &args) {
     return new Composer((Interface *)ix, fn, args);
 }
 ///

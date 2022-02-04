@@ -121,7 +121,7 @@ bool SQLite::reset(var &view) {
     sqlite3  *db = null;
     char    *err = null;
     int       rc = sqlite3_open(uri.cstr(), &db);
-    str       qy = str::format("DROP TABLE IF EXISTS {0}", {table_name});
+    str       qy = var::format("DROP TABLE IF EXISTS {0}", {table_name});
     ///
     console.log("reset: {0}", {qy});
     rc = sqlite3_exec(db, qy.cstr(), null, null, &err);
@@ -181,7 +181,7 @@ void SQLite::observe(str model_name) {
         ///
         auto str_from_value = [&](str field, var &value) {
             if (value == Type::Str)
-                return str::format("'{0}'", {sql_encode(value)});
+                return var::format("'{0}'", {sql_encode(value)});
             ///
             if (value == Type::Map) {
                 for (auto &[peer_name, v_fields]: refs.map()) {
@@ -200,7 +200,7 @@ void SQLite::observe(str model_name) {
         switch (op) {
             case var::Binding::Update: {
                 str sv = str_from_value(field, value);
-                qy = str::format(UPDATE_QY, {model_name, field, sv, kname, skey});
+                qy = var::format(UPDATE_QY, {model_name, field, sv, kname, skey});
                 break;
             }
             case var::Binding::Insert: {
@@ -215,7 +215,7 @@ void SQLite::observe(str model_name) {
                         first = false;
                         continue;
                     }
-                    /// directed by schema map, not the row
+                    /// directed by schema fmap, not the row
                     if (fields) {
                         fields += ", ";
                         values += ", ";
@@ -226,11 +226,11 @@ void SQLite::observe(str model_name) {
                     values      += explicit_key ? explicit_key : str_from_value(field, rval);
                     first        = false;
                 }
-                qy = str::format(INSERT_QY, { model_name, fields, values });
+                qy = var::format(INSERT_QY, { model_name, fields, values });
                 break;
             }
             case var::Binding::Delete: {
-                qy = str::format(DELETE_QY, { model_name, kname, skey });
+                qy = var::format(DELETE_QY, { model_name, kname, skey });
                 break;
             }
         }
@@ -278,7 +278,7 @@ void SQLite::fetch() {
                     ctx.first_fields[m] = field;
                 first = false;
             }
-        str         qy = str::format("SELECT * FROM {0}", {m});
+        str         qy = var::format("SELECT * FROM {0}", {m});
                     rc = sqlite3_exec(db, qy.cstr(), sql_rowfn(process_raw),
                                       (void *)&cache, &err);
         /// create sql table on failure of select

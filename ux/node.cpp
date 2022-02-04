@@ -52,8 +52,8 @@ void node::exec(std::function<void(node *)> fn) {
     recur(this);
 }
 
-vec<node *> node::select(std::function<node *(node *)> fn) {
-    vec<node *> result;
+array<node *> node::select(std::function<node *(node *)> fn) {
+    array<node *> result;
     std::function<node *(node *)> recur;
     recur = [&](node* n) -> node* {
         node* r = fn(n);
@@ -67,7 +67,7 @@ vec<node *> node::select(std::function<node *(node *)> fn) {
     return result;
 }
 
-node::node(const char *selector, const char *cn, Binds binds, vec<Element> elements):
+node::node(cchar_t *selector, cchar_t *cn, Binds binds, array<Element> elements):
     selector(selector), class_name(cn), elements(elements), binds(binds) { }
 
 node::node(std::nullptr_t n) { }

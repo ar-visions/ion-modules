@@ -5,7 +5,7 @@ struct Vertex {
     glm::vec3 norm;
     glm::vec2 uv;
     glm::vec4 clr;
-    static vec<VkVertexInputAttributeDescription> attrs();
+    static array<VkVertexInputAttributeDescription> attrs();
     Vertex(vec3 pos, vec3 norm, vec2 uv, vec4 clr):
            pos({pos.x,pos.y,pos.z}),
            norm({norm.x,norm.y,norm.z}),
@@ -15,8 +15,8 @@ struct Vertex {
            pos({pos.x,pos.y,pos.z}), norm({norm.x,norm.y,norm.z}), uv({uv.x,uv.y}) { }
     
     /// very special function.
-    static vec<Vertex> square(rgba clr = {1.0, 1.0, 1.0, 1.0}) {
-        return vec<Vertex> {
+    static array<Vertex> square(rgba clr = {1.0, 1.0, 1.0, 1.0}) {
+        return array<Vertex> {
             Vertex {{-0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0}, clr},
             Vertex {{ 0.5, -0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 0.0}, clr},
             Vertex {{ 0.5,  0.5, 0.0}, {0.0, 0.0, 0.0}, {1.0, 1.0}, clr},
@@ -54,7 +54,7 @@ struct VertexBuffer:VertexData {
                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
     VertexBuffer(std::nullptr_t n = null) : VertexData(n) { }
-    VertexBuffer(Device &device, vec<V> &v) : VertexData(device, Buffer {
+    VertexBuffer(Device &device, array<V> &v) : VertexData(device, Buffer {
             &device, v, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) { }
     size_t size() { return buffer.sz / sizeof(V); }
@@ -67,7 +67,7 @@ struct IndexBuffer:IndexData {
                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
     IndexBuffer(std::nullptr_t n = null) : IndexData(n) { }
-    IndexBuffer(Device &device, vec<I> &i) : IndexData(device, Buffer {
+    IndexBuffer(Device &device, array<I> &i) : IndexData(device, Buffer {
             &device, i, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) { }
 };

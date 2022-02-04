@@ -7,7 +7,7 @@ struct UniformData {
         Device     *device = null;
         int         id;
         int         struct_sz;
-        vec<Buffer> buffers;
+        array<Buffer> buffers;
         UniformFn   fn;
     };
     std::shared_ptr<Memory> m = null;
@@ -31,7 +31,7 @@ struct UniformData {
         size_t uni_sz = sizeof(UniformFn);
         std::shared_ptr<uint8_t> b(new uint8_t[uni_sz]);
         memcopy(b.get(), (uint8_t *)&m->fn, uni_sz);
-        return Args {
+        return Map {
             {"id", m->id},
             {"sz", m->struct_sz},
             {"fn", var { Type::ui8, b, uni_sz }}

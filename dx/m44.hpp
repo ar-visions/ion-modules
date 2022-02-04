@@ -50,7 +50,7 @@ struct Matrix44:Vector<T> {
     Matrix44(const Matrix44<T> &ref)   { copy((Matrix44<T> &)ref); }
     Matrix44(const T *data)            { memcpy(m, data, sizeof(m)); }
     T *data() const                    { return m; }
-    Vec4<T> &operator[](size_t i) { return m[i]; }
+    Vec4<T> &operator[](size_t i)      { return m[i]; }
     
     static Matrix44<T> translation(Vec3<T> v) {
         Matrix44<T> r;

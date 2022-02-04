@@ -32,8 +32,8 @@ struct Device {
     VkExtent2D            extent;
     VkViewport            viewport;
     VkRect2D              sc;
-    vec<Frame>            frames;
-    vec<VkImage>          swap_images;
+    array<Frame>            frames;
+    array<VkImage>          swap_images;
     Texture               tx_color;
     Texture               tx_depth;
     

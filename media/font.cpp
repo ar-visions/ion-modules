@@ -11,7 +11,7 @@
 typedef std::map<std::string, sk_sp<SkTypeface>> Typefaces;
 
 static sk_sp<SkFontMgr>    sk_manager;
-static vec<Font *>         cache;
+static array<Font *>         cache;
 static Typefaces           faces;
 
 struct FontData {

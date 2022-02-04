@@ -13,7 +13,7 @@ int run(AppInternal **, var &);
 struct Composer;
 struct var;
 
-Composer *Composer_init(void *ix, FnRender fn, Args &args);
+Composer *Composer_init(void *ix, FnRender fn, Map &args);
 node     *Composer_root(Composer *cc);
 void      Composer_render(Composer *cc, FnRender &fn);
 void      Composer_input(Composer *cc, str &s);
@@ -25,14 +25,14 @@ struct Interface {
         UX, DX, TX
     }           type = Undefined;
     vec2i       sz   = {0,0};
-    Args        args;
+    Map         args;
     Canvas      canvas;
     FnRender    fn;
     int         code = 0; /// result code
     ///
     operator int();
     /// ------------------------------------------------
-    void bootstrap(int c, const char *v[], Args &defaults) {
+    void bootstrap(int c, cchar_t *v[], Map &defaults) {
         args = var::args(c, v);
         for (auto &[k,v]: defaults)
             if (args.count(k) == 0)

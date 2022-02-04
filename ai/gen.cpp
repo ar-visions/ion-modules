@@ -2,37 +2,37 @@
 #include <dx/async.hpp>
 #include <media/image.hpp>
 
-void first_data(str model, Truth &schema, vec<std::ofstream *> &odata, std::ofstream *& olabels) {
-    std::ofstream o_index(str::format("gen/{0}/index.json", {model}).cstr());
+void first_data(str model, Truth &schema, array<std::ofstream *> &odata, std::ofstream *& olabels) {
+    std::ofstream o_index(var::format("gen/{0}/index.json", {model}).cstr());
     var d_index  = var(Type::Map);
     str s_shape  = "";
     for (size_t i = 0; i < schema.data.size(); i++) {
         if (s_shape)
             s_shape += str {","};
         var &d   = schema.data[i]; // store the shape on pixels in image?
-        str key  = str::format("data{0}.{1}", {
+        str key  = var::format("data{0}.{1}", {
             i, (schema.data[i].c == Type::ui8 ? "u8" : "f32")});
         var dmap   = var(Type::Map);
-        dmap[key]  = vec<int>(d.shape());
+        dmap[key]  = array<int>(d.shape());
         s_shape += str(dmap);
     }
-    std::string   s_index = std::string(d_index);
-    o_index.write(s_index.c_str(), s_index.len());
+    string s_index = string(d_index);
+    o_index.write(s_index.cstr(), s_index.size());
     olabels = new std::ofstream(
-        str::format("gen/{0}/labels.f32", {model}).cstr(),
+        var::format("gen/{0}/labels.f32", {model}).cstr(),
         std::ios::out | std::ios::binary);
     for (size_t i = 0; i < schema.data.size(); i++) {
         assert(schema.data[i].t == Type::Array);
         assert(schema.data[i].c == Type::ui8 || schema.data[i].c == Type::f32);
         odata += new std::ofstream(
-            str::format("gen/{0}/data{1}.{2}", {
+            var::format("gen/{0}/data{1}.{2}", {
                 model, i, (schema.data[i].c == Type::ui8 ? "u8" : "f32")
             }).cstr(),
             std::ios::out | std::ios::binary);
     }
 }
 
-void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
+void index_data(array<Dataset> &ds, array<str> &require, array<DataW> &index) {
     auto processed = map<path_t, bool>();
     for (Dataset &d: ds) {
         auto   dir = std::filesystem::directory_iterator(d.path);
@@ -43,17 +43,19 @@ void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
             if (processed.count(id))
                 continue;
             processed[id] = true;
+            
+            auto ex = [](path_t p) {
             ///
             auto  rp = p.string().substr(0, p.filename().string().length());
             auto  js = path_t(str(rp) + str(p.stem().string()) + str {".json"});
-            str  vid = exists(js) ? ".mp4"  : "";
-            str  img = exists(id + ".jpg")  ? (id + ".jpg")  :
-                       exists(id + ".jpeg") ? (id + ".jpeg") :
-                       exists(id + ".png")  ? (id + ".png")  : "";
-            str  aud = exists(id + ".mp4")  ? (id + ".mp4")  :
-                       exists(id + ".mp3")  ? (id + ".mp3")  : "";
+            str  vid = std::filesystem::exists(js) ? ".mp4"  : "";
+            str  img = std::filesystem::exists(id + ".jpg")  ? (id + ".jpg")  :
+                       std::filesystem::exists(id + ".jpeg") ? (id + ".jpeg") :
+                       std::filesystem::exists(id + ".png")  ? (id + ".png")  : "";
+            str  aud = std::filesystem::exists(id + ".mp4")  ? (id + ".mp4")  :
+                       std::filesystem::exists(id + ".mp3")  ? (id + ".mp3")  : "";
             
-            if (require.size() and !exists(js))
+            if (require.size() and !std::filesystem::exists(js))
                 continue;
             ///
             /// image and audio files get their best path to resource selection here
@@ -87,21 +89,21 @@ void index_data(vec<Dataset> &ds, vec<str> &require, vec<DataW> &index) {
 }
 
 void Gen(
-        Args         &args,
-        vec<str>      require,
-        vec<Dataset> &ds,
-        str          model,
+        Map            &args,
+        array<str>      require,
+        array<Dataset> &ds,
+        str             model,
         std::function<Truths(var &)> fn) {
-    vec<str>       idents;
-    vec<DataW>     annots;
-    bool           init = true;
+    array<str>   idents;
+    array<DataW> annots;
+    bool         init = true;
     
     index_data(ds, require, annots);
     
     double split = args.count("split") ? double(args["split"]) : 0.10;
     /// where annot_index % w.index == 0
     std::ofstream       *olabels;
-    vec<std::ofstream *> odata;
+    array<std::ofstream *> odata;
     Truth                schema;
     std::mutex           mx;
     auto async = Async(16, [&, split=split](Process *process, int index) -> var {
@@ -138,19 +140,19 @@ void Gen(
                         assert(var::type_check(d, c));
                         assert(d.size() == c.size());
                         if (d.c == Type::ui8)
-                            odata[i]->write((const char *)d.data<uint8_t>(), d.size() * sizeof(uint8_t));
+                            odata[i]->write((cchar_t *)d.data<uint8_t>(), d.size() * sizeof(uint8_t));
                         else
-                            odata[i]->write((const char *)d.data<float>(),   d.size() * sizeof(float));
+                            odata[i]->write((cchar_t *)d.data<float>(),   d.size() * sizeof(float));
                     }
                     // output labels
-                    olabels->write((const char *)t.label.data(), t.label.size() * sizeof(float));
+                    olabels->write((cchar_t *)t.label.data(), t.label.size() * sizeof(float));
                     mx.unlock();
                 }
             }
         }
         return null;
     });
-    async.result();
+    async.sync();
 }
 
 Truths if_image(var &data, Image::Format format, std::function<Truths(Image &)> fn) {

@@ -91,9 +91,9 @@ struct StPair {
 ///
 struct StBlock {
     StBlock          *parent = null;
-    vec<StQualifier>  quals;
-    vec<StPair>       pairs;
-    vec<ptr<StBlock>> blocks;
+    array<StQualifier>  quals;
+    array<StPair>       pairs;
+    array<ptr<StBlock>> blocks;
     double match(node *n);
     size_t score(node *n);
     
@@ -115,9 +115,9 @@ struct StBlock {
 };
 
 struct Style {
-    static map<path_t, Style>          cache;
-    static map<str, vec<ptr<StBlock>>> members;
-    vec<ptr<StBlock>>                  root;
+    static map<path_t, Style>            cache;
+    static map<str, array<ptr<StBlock>>> members;
+    array<ptr<StBlock>>                  root;
     ///
     Style(std::nullptr_t n = null)         { }
     Style(str &code);
@@ -127,5 +127,5 @@ struct Style {
     static void   init(path_t path = "style");
     static void   unload();
     static Style  load(path_t path);
-    static Style *for_class(const char *);
+    static Style *for_class(cchar_t *);
 };

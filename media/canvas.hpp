@@ -1,13 +1,11 @@
 #pragma once
 #include <dx/dx.hpp>
-#include <dx/vec.hpp>
+#include <dx/m44.hpp>b
 #include <media/font.hpp>
 #include <media/color.hpp>
 #include <media/image.hpp>
-#include <dx/m44.hpp>
-#include <dx/string.hpp>
 
-typedef vec<vec2> Points;
+typedef array<vec2> Points;
 
 ///
 struct Canvas;

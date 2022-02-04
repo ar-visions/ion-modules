@@ -1,7 +1,7 @@
 #include <vk/vk.hpp>
 
-vec<VkVertexInputAttributeDescription> Vertex::attrs() {
-    auto attrs = vec<VkVertexInputAttributeDescription> {
+array<VkVertexInputAttributeDescription> Vertex::attrs() {
+    auto attrs = array<VkVertexInputAttributeDescription> {
         { 0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex, pos) },
         { 1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex, clr) },
         { 2, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex, uv)  }
@@ -27,14 +27,14 @@ PipelineData::Memory::~Memory() {
 /// constructor for pipeline memory; worth saying again.
 PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
                              VertexData  &vbo,     IndexData &ibo,
-                             vec<Attrib> &attr,       size_t vsize,
+                             array<Attrib> &attr,       size_t vsize,
                              rgba         clr,   std::string shader,
                              VkStateFn    vk_state):
         device(&device),   shader(shader),  ubo(ubo),
         vbo(vbo), ibo(ibo), attr(attr), vsize(vsize), clr(clr)
 {
     /// obtain data via usage
-    auto bindings = vec<VkDescriptorSetLayoutBinding> {
+    auto bindings = array<VkDescriptorSetLayoutBinding> {
         { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
         { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }};
     /// create descriptor set layout
@@ -64,7 +64,7 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
     /// write descriptor sets for all swap image instances
     for (size_t i = 0; i < device.frames.size(); i++) {
         auto &desc_set = desc_sets[i];
-        auto  v_writes = vec<VkWriteDescriptorSet> {
+        auto  v_writes = array<VkWriteDescriptorSet> {
             ubo.write_desc(i, desc_set),
              tx.write_desc(desc_set) /// use the pipeline texture sampler bound at [1]
         };
@@ -74,15 +74,15 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
         vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
     }
     ///
-    auto vert = device.module(str::format("shaders/{0}.vert.spv", {shader}), Device::Vertex);
-    auto frag = device.module(str::format("shaders/{0}.frag.spv", {shader}), Device::Fragment);
+    auto vert = device.module(var::format("shaders/{0}.vert.spv", {shader}), Device::Vertex);
+    auto frag = device.module(var::format("shaders/{0}.frag.spv", {shader}), Device::Fragment);
     ///
-    vec<VkPipelineShaderStageCreateInfo> stages {{
+    array<VkPipelineShaderStageCreateInfo> stages {{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
-        VK_SHADER_STAGE_VERTEX_BIT,   vert, shader.c_str(), null
+        VK_SHADER_STAGE_VERTEX_BIT,   vert, shader.cstr(), null
     }, {
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
-        VK_SHADER_STAGE_FRAGMENT_BIT, frag, shader.c_str(), null
+        VK_SHADER_STAGE_FRAGMENT_BIT, frag, shader.cstr(), null
     }};
     ///
     auto binding            = VkVertexInputBindingDescription { 0, uint32_t(vsize), VK_VERTEX_INPUT_RATE_VERTEX };
@@ -205,7 +205,7 @@ void PipelineData::Memory::update(size_t frame_id) {
     assert(vkBeginCommandBuffer(cmd, &begin_info) == VK_SUCCESS);
     
     ///
-    auto   clear_values = vec<VkClearValue> {
+    auto   clear_values = array<VkClearValue> {
         {        .color = clear_color(clr)}, // for image rgba  sfloat
         { .depthStencil = {1.0f, 0}}         // for image depth sfloat
     };
@@ -221,7 +221,7 @@ void PipelineData::Memory::update(size_t frame_id) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     
     /// toss together a VBO array
-    vec<VkBuffer>    a_vbo   = { vbo };
+    array<VkBuffer>    a_vbo   = { vbo };
     VkDeviceSize   offsets[] = {0};
     vkCmdBindVertexBuffers(cmd, 0, 1, a_vbo.data(), offsets);
     vkCmdBindIndexBuffer(cmd, ibo, 0, ibo.buffer.type_size == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);

@@ -3,35 +3,9 @@
 #include <unordered_map>
 #include <cstddef>
 #include <atomic>
-
-/// nullptr verbose, incorrect (std::nullptr_t is not constrained to pointers at all)
-static const std::nullptr_t null = nullptr;
-struct io { };
-
-/// sorry godfather this is the best we can introspect..
-///      ...you call this introspection?
-template <typename _ZXZtype_name>
-const std::string &code_name() {
-    static std::string n;
-    if (n.empty()) {
-        const char str[] = "_ZXZtype_name =";
-        const size_t blen = sizeof(str);
-        size_t b, l;
-        n = __PRETTY_FUNCTION__;
-        b = n.find(str) + blen;
-        l = n.find("]", b) - b;
-        n = n.substr(b, l);
-    }
-    return n;
-}
-
-/// you express these with int(var, int, str); U unwraps inside the parenthesis
-template <typename T, typename... U>
-size_t fn_id(std::function<T(U...)> &fn) {
-    typedef T(fnType)(U...);
-    fnType ** fnPointer = fn.template target<fnType *>();
-    return (size_t) *fnPointer;
-}
+#include <string>
+#include <dx/io.hpp>
+#include <dx/array.hpp>
 
 /// rename all others to something in their domain.
 struct Type {
@@ -83,12 +57,12 @@ struct Type {
     bool operator!=(Type::Specifier b) const { return id != size_t(b); }
     inline operator size_t()           const { return id;              }
     inline operator int()              const { return int(id);         }
+    
     ///
     template <typename T>
-    T name() {
-        return code_name.length() ? code_name.c_str() : specifier_name(id);
-    }
-    ///
+    T name() { return code_name.length() ? code_name.c_str() : specifier_name(id); }
+    
+    /// could potentially use an extra flag for knowing origin
     Type(Specifier id, std::string code_name = "") : id(size_t(id)), code_name(code_name) { }
     Type(size_t    id, std::string code_name = "") : id(id),         code_name(code_name) { }
     Type() { }
@@ -144,6 +118,8 @@ struct Instances {
 };
 
 /// the smart pointer with baked in arrays and a bit of indirection.
+/// think about its integration with var.. i somehow missed the possibility yesterday.
+/// its ridiculous not to support vector here too.
 template <typename T>
 struct ptr {
     struct Alloc {
@@ -222,53 +198,209 @@ struct ptr {
     }
 };
 
-/*
+#include <dx/map.hpp>
+#include <dx/var.hpp>
+#include <dx/array.hpp>
+#include <dx/enum.hpp>
+#include <dx/string.hpp>
+#include <dx/rand.hpp>
+
+#define ex_shim(C,E,D) \
+    static Symbols symbols;\
+    C(E t = D):ex<C>(t) { }\
+    C(std::string s):ex<C>(D) { kind = resolve(s); }
+
+#define enums(C,E,D,ARGS...) \
+    struct C:ex<C> {\
+        static Symbols symbols;\
+        enum E { ARGS };\
+        C(E t = D):ex<C>(t) { }\
+        C(std::string s):ex<C>(D) { kind = resolve(s); }\
+    };\
+
+#define io_shim(C,E) \
+    C(std::nullptr_t n) : C()  { }                      \
+    C(const C &ref)            { copy(ref);            }\
+    C(var &d)                  { importer(d);          }\
+    operator var()             { return exporter();    }\
+    operator bool()  const     { return   E;           }\
+    bool operator!() const     { return !(E);          }\
+    C &operator=(const C &ref) {\
+        if (this != &ref)\
+            copy(ref);\
+        return *this;\
+    }
+
+void _print(str t, array<var> &a, bool error);
+
+///
+/// best to do this kind of thing in logic that exists with the 'others'
+struct is_apple :
+#if defined(__APPLE__)
+    std::true_type
+#else
+    std::false_type
+#endif
+{};
+    
+///
+struct is_android :
+#if defined(__ANDROID_API__)
+    std::true_type
+#else
+    std::false_type
+#endif
+{};
+    
+///
+struct is_win :
+#if defined(_WIN32) || defined(_WIN64)
+    std::true_type
+#else
+    std::false_type
+#endif
+{};
+    
+///
+struct is_gpu : std::true_type {};
+
+///
+struct is_debug :
+#if !defined(NDEBUG)
+    std::true_type
+#else
+    std::false_type
+#endif
+{};
+
 
 template <typename T>
-struct DLNode {
-    DLNode  *next = null,
-            *prev = null;
-    T    *payload = null;
-    uint8_t  data[1];
+static T input() {
+    T v;
+    std::cin >> v;
+    return v;
+}
+
+enum LogType {
+    Dissolvable,
+    Always
+};
+
+/// could have a kind of Enum for LogType and LogDissolve, if fancied.
+typedef std::function<void(str &)> FnPrint;
+
+template <const LogType L>
+struct Logger {
+    FnPrint printer;
+    Logger(FnPrint printer = null) : printer(printer) { }
     ///
-    static T *alloc() {
-        DLNode<T> *b = calloc(1, sizeof(DLNode<T>) + sizeof(T));
-         b->payload  = b->data; /// this is a reasonable way to verify some integrity, and we can debug this crazy train
-        *b->payload  = T();
-        return b;
+protected:
+    void intern(str &t, array<var> &a, bool err) {
+        t = var::format(t, a);
+        if (printer != null)
+            printer(t);
+        else {
+            auto &out = err ? std::cout : std::cerr;
+            out << std::string(t) << std::endl << std::flush;
+        }
+    }
+
+public:
+    
+    /// print always prints
+    inline void print(str t, array<var> a = {}) { intern(t, a, false); }
+
+    /// log categorically as error; do not quit
+    inline void error(str t, array<var> a = {}) { intern(t, a, true); }
+
+    /// log when debugging or LogType:Always, or we are adapting our own logger
+    inline void log(str t, array<var> a = {}) {
+        if (L == Always || printer || is_debug())
+            intern(t, a, false);
+    }
+
+    /// assertion test with log out upon error
+    inline void assertion(bool a0, str t, array<var> a = {}) {
+        if (!a0) {
+            intern(t, a, true);
+            assert(a0);
+        }
+    }
+
+    /// log error, and quit
+    inline void fault(str t, array<var> a = {}) {
+        _print(t, a, true);
+        exit(1);
+    }
+
+    /// prompt for any type of data
+    template <typename T>
+    inline T prompt(str t, array<var> a = {}) {
+        _print(t, a, false);
+        return input<T>();
     }
 };
 
-template <typename T>
-struct DList {
-    DLNode<T> *first = null;
-    DLNode<T> *last = null;
+#if !defined(WIN32) && !defined(WIN64)
+#define UNIX /// its a unix system.  i know this.
+#endif
+
+/// adding these declarations here.  dont mind me.
+enum KeyState {
+    KeyUp,
+    KeyDown
 };
 
-/// the smart pointer with baked in arrays and a bit of indirection.
-template <typename T>
-struct list:ptr<DList<T>> {
-    DList<T> *m;
-    /// -------------------
-    list() { alloc(m); }
-    T *push() {
-        DLNode<T> *n = DLNode<T>::alloc();
-        ///
-        if (m->last)
-            m->last->next = n;
-        ///
-        n->prev = m->last;
-        m->last = n;
-        ///
-        if (!m->first)
-            m->first = n;
-        ///
-        return T();
-    }
-    void pop() {
-        // release taht memory
-        
-    }
+struct KeyStates {
+    bool shift;
+    bool ctrl;
+    bool meta;
 };
 
+struct KeyInput {
+    int key;
+    int scancode;
+    int action;
+    int mods;
+};
+
+enum MouseButton {
+    LeftButton,
+    RightButton,
+    MiddleButton
+};
+
+/// needs to be ex, but no handlers written yet
+/*
+enum KeyCode {
+    Key_D       = 68,
+    Key_N       = 78,
+    Backspace   = 8,
+    Tab         = 9,
+    LineFeed    = 10,
+    Return      = 13,
+    Shift       = 16,
+    Ctrl        = 17,
+    Alt         = 18,
+    Pause       = 19,
+    CapsLock    = 20,
+    Esc         = 27,
+    Space       = 32,
+    PageUp      = 33,
+    PageDown    = 34,
+    End         = 35,
+    Home        = 36,
+    Left        = 37,
+    Up          = 38,
+    Right       = 39,
+    Down        = 40,
+    Insert      = 45,
+    Delete      = 46, // or 127 ?
+    Meta        = 91
+};
 */
+extern Logger<LogType::Dissolvable> console;
+
+#include <dx/model.hpp>
+
+

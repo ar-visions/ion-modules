@@ -1,12 +1,13 @@
-#include <dx/var.hpp>
+#include <dx/dx.hpp>
+#include <dx/async.hpp>
 
-bool            Process::init;
-std::thread     Process::th_manager;
-ConditionV      Process::cv_cleanup;
-std::mutex      Process::mx_global;
-std::mutex      Process::mx_list;
-vec<Process *>  Process::processes;
-int             Process::exit_code = 0;
+bool             Process::init;
+std::thread      Process::th_manager;
+ConditionV       Process::cv_cleanup;
+std::mutex       Process::mx_global;
+std::mutex       Process::mx_list;
+array<Process *> Process::processes;
+int              Process::exit_code = 0;
 
 void Process::manager() {
     std::unique_lock<std::mutex> lock(mx_list);
@@ -80,7 +81,7 @@ void Async::thread(Process *p, int i) {
         usleep(1);
 }
 
-var &Async::result() {
+var &Async::sync() {
     for (;;) {
         mx.lock();
         if (process->join)
@@ -108,8 +109,12 @@ int Async::await() {
     return Process::exit_code;
 }
 
+Async::Async(str exec) : Async(1, [&](Process *p, int i) -> var {
+    return int(std::system(exec.cstr()));
+}) { }
+
 Async::Async() { }
-Async::Async(int count, std::function<var(Process *p, int i)> fn) {
+Async::Async(int count, FnProcess fn) {
     std::unique_lock<std::mutex>  lock(Process::mx_list);
     process = new Process;
     process->fn = fn;
@@ -156,14 +161,31 @@ Async::~Async() {
         delete process; /// data needs to stick around until this Async object is deleted
 }
 
-Future& Future::then(std::function<void(var &d)> fn) {
+/// failing at the moment, not a graceful shutdown
+void Future::sync() {
+    std::mutex mx;
+    /// requires indirection by CompleterData
+    if (cdata) {
+        cdata->mx.lock();
+        if (!cdata->completed) {
+            mx.lock();
+            FnFuture fn = [mx=&mx](var &){ mx->unlock(); };
+            cdata->l_success += fn;
+            cdata->l_failure += fn;
+        }
+        cdata->mx.unlock();
+    }
+    mx.lock();
+};
+
+Future& Future::then(FnFuture fn) {
     cdata->mx.lock();
     cdata->l_success += Customer { fn };
     cdata->mx.unlock();
     return *this;
 }
 
-Future& Future::except(std::function<void(var &d)> fn) {
+Future& Future::except(FnFuture fn) {
     cdata->mx.lock();
     cdata->l_failure += Customer { fn };
     cdata->mx.unlock();

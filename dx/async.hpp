@@ -1,5 +1,5 @@
 #pragma once
-#include <dx/var.hpp>
+#include <dx/type.hpp>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -10,15 +10,15 @@ typedef std::condition_variable ConditionV;
 
 struct Process {
 protected:
-    static bool           init;
-    static void           manager();
+    static bool             init;
+    static void             manager();
 public:
-    static ConditionV     cv_cleanup;
-    static std::thread th_manager;
-    static std::mutex     mx_global;
-    static std::mutex     mx_list;
-    static vec<Process *> processes;
-    static int            exit_code;
+    static ConditionV       cv_cleanup;
+    static std::thread      th_manager;
+    static std::mutex       mx_global;
+    static std::mutex       mx_list;
+    static array<Process *>   processes;
+    static int              exit_code;
     bool                               deletable = false;
     std::mutex                         mx_self;
     std::function<void(var &)>         on_complete;
@@ -33,44 +33,52 @@ public:
    ~Process();
 };
 
+typedef std::function<var(Process *, int)> FnProcess;
+typedef std::function<void(var &d)> FnFuture;
+
 struct Async {
     Process*        process;
     var             data;
     static void     thread(Process *, int i);
     static int      await();
-    var&            result();
+    var&            sync();
     Async          ();
-    Async          (int c, std::function<var(Process *, int i)> f);
-    Async          (std::function<var(Process *, int i)> f);
+    Async          (str exec);
+    Async          (int c, FnProcess f);
+    Async          (FnProcess f);
     Async          (const Async &r);
     Async&          operator=(const Async &r);
-    Future          then(std::function<void(var &d)> fn);
+    Future          then(FnFuture fn);
    ~Async();
     operator Future();
     std::mutex      mx;
 };
 
-struct Customer {   std::function<void(var &)> fn;   };
+struct Customer {
+    FnFuture fn;
+    Customer(FnFuture fn):fn(fn) { }
+};
 struct CompleterData;
 struct Completer;
 struct Future   {
 protected:
     CompleterData*  cdata;
 public:
-    Future&         then  (std::function<void(var &d)> fn);
-    Future&         except(std::function<void(var &d)> fn);
+    Future&         then  (FnFuture fn);
+    Future&         except(FnFuture fn);
     Future         (const Future &ref);
     Future         (Completer &c);
    ~Future         ();
     Future&         operator=(const Future &ref);
+    void            sync();
 };
 
 struct CompleterData {
     var            data;
     std::mutex      mx;
     bool            completed;
-    vec<Customer>   l_success;
-    vec<Customer>   l_failure;
+    array<Customer>   l_success;
+    array<Customer>   l_failure;
 };
 
 struct Completer {

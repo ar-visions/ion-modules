@@ -9,10 +9,10 @@ struct Composer {
     Interface    *ux;
     node         *root = null;
     FnRender      fn;
-    Args          args;
+    Map           args;
     vec2i        *sz;
     
-    vec<node *> select_at(vec2 cur, bool active = true) {
+    array<node *> select_at(vec2 cur, bool active = true) {
         auto     inside = root->select([&](node *n) {
             real      x = cur.x, y = cur.y;
             vec2      o = n->offset();
@@ -24,7 +24,7 @@ struct Composer {
         auto  actives = root->select([&](node *n) {
             return (active && n->m.active()) ? n : null;
         });
-        auto   result = vec<node *>(inside.size() + actives.size());
+        auto   result = array<node *>(inside.size() + actives.size());
         for (auto &i: inside)
               result += i;
         for (auto &i: actives)
@@ -32,7 +32,7 @@ struct Composer {
         return result;
     }
     
-    void event_dispatch(vec<node *> &dispatch, FnNode proxy) {
+    void event_dispatch(array<node *> &dispatch, FnNode proxy) {
         var      event = var(Type::Map);
         bool using_def = true;
         Fn prevent_def = [&](var &e) { using_def = false; };
@@ -82,7 +82,7 @@ struct Composer {
     /// cursor always updated before button, and always the same state:cursor (glfw enforced)
     void cursor(Window &w, real x, real y) {
         /// nullify cursor values
-        vec<node *> prev_cursor;
+        array<node *> prev_cursor;
         root->exec([&](node *n) {
             if (n->m.cursor()) {
                 prev_cursor += n;
@@ -129,7 +129,7 @@ struct Composer {
         return root ? root->process() : true;
     }
 
-    Composer(Interface *ux, FnRender fn, Args &args) : ux(ux), fn(fn), args(args) { }
+    Composer(Interface *ux, FnRender fn, Map &args) : ux(ux), fn(fn), args(args) { }
 
     bool update(node *parent, node **p_child, Element &e) {
         node *child       = *p_child;
@@ -147,9 +147,9 @@ struct Composer {
             child->standard_bind();
             child->bind();
             
-            for (auto &[name, member]: child->externals)   member->node = child;
-            for (auto &[name, member]: child->internals)   member->node = child;
-            for (auto &[name, member]: child->stationaries) member->node = child; /// call for style after all of this updating, not during
+            for (auto &[name, member]: child->externals)    member->arg = child; /// used with user-defined lambdas
+            for (auto &[name, member]: child->internals)    member->arg = child;
+            for (auto &[name, member]: child->stationaries) member->arg = child; /// call for style after all of this updating, not during
             
             node_updated = true;
         } else if (!e) {
@@ -176,7 +176,7 @@ struct Composer {
             unbound[bind.id] = true;
         
         /// change members
-        auto changed = vec<str>(e.binds.size());
+        auto changed = array<str>(e.binds.size());
         for (auto &bind: e.binds) {
             str &child_mname = bind.id; // support const str on clang++ 13 on linux, not clang++ 13 on macOS ;/ ... the things that only happen to kalen.
             ///
@@ -308,7 +308,7 @@ struct Composer {
         /// style reload on modification, when debugging. this applies to style, images and vectors
         /// it will also apply to shaders and 3D objects
         static auto css_watch = Watch::spawn(
-                {"style","images"}, {".css",".png",".svg"}, [root=root](bool init, vec<PathOp> &paths) {
+                {"style","images"}, {".css",".png",".svg"}, false, [root=root](bool init, array<PathOp> &paths) {
             if (!init) {
                 Style::unload();
                 root->exec([](node *n) {
@@ -328,7 +328,7 @@ struct Composer {
             /// update regionized rects on nodes
             int                 index      = 0;
             node               *rn         = n->parent ? n->parent : root;
-            vec<node::RegionOp> region_ops = {
+            array<node::RegionOp> region_ops = {
                 { n->m.region,            rn, rn->paths.rect, n->paths.rect },
                 { n->m.fill.image_region, n,   n->paths.rect, n->image_rect },
                 { n->m.text.region,       n,   n->paths.rect, n->text_rect  }
@@ -382,7 +382,7 @@ struct Composer {
         ux->draw(root);
     }
     
-    vec<node *> query(std::function<node *(node *)> fn) {
+    array<node *> query(std::function<node *(node *)> fn) {
         return root->select(fn);
     }
 

@@ -4,5 +4,6 @@ build*
 xcode
 ai/gen/*
 ai/data/*
-extern/*
+extern
 dx/res/*.sqlite
+web/res/server.*

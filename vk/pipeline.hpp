@@ -20,15 +20,15 @@ struct Attrib {
         ///
     }
     operator var() {
-        return Args {
+        return Map {
             {"type", int(type)},
             {"tx",   VoidRef((void *)tx.get_data())}
         };
     }
-    static vec<VkVertexInputAttributeDescription> vk(uint32_t binding, vec<Attrib> &ax) {
+    static array<VkVertexInputAttributeDescription> vk(uint32_t binding, array<Attrib> &ax) {
         uint32_t location = 0;
         uint32_t offset   = 0;
-        auto     result   = vec<VkVertexInputAttributeDescription>(ax.size());
+        auto     result   = array<VkVertexInputAttributeDescription>(ax.size());
         for (auto &a: ax) {
             result += VkVertexInputAttributeDescription {
                 .location = location++,
@@ -52,7 +52,7 @@ struct Normal3f   : Attrib { Normal3f  ()           : Attrib(Attrib::Normal3f,  
 struct Texture2f  : Attrib { Texture2f (Texture tx) : Attrib(Attrib::Texture2f,  VK_FORMAT_R32G32_SFLOAT,       tx)   { }};
 struct Color4f    : Attrib { Color4f   ()           : Attrib(Attrib::Color4f,    VK_FORMAT_R32G32B32A32_SFLOAT, null) { }};
 
-typedef vec<Attrib> VAttr;
+typedef array<Attrib> VAttr;
 
 
 /// just a solid, slab of state.  fresh out of the fires of Vulkan
@@ -75,15 +75,15 @@ struct PipelineData {
     struct Memory {
         Device                    *device;
         std::string                shader;          /// name of the shader.  worth saying.
-        vec<VkCommandBuffer>       frame_commands;  /// pipeline are many and even across swap frame idents, and we need a ubo and cmd set for each
-        vec<VkDescriptorSet>       desc_sets;       /// needs to be in frame, i think.
+        array<VkCommandBuffer>       frame_commands;  /// pipeline are many and even across swap frame idents, and we need a ubo and cmd set for each
+        array<VkDescriptorSet>       desc_sets;       /// needs to be in frame, i think.
         VkPipelineLayout           pipeline_layout; /// and what a layout
         VkPipeline                 pipeline;        /// pipeline handle
         UniformData                ubo;             /// we must broadcast this buffer across to all of the swap uniforms
         VertexData                 vbo;             ///
         IndexData                  ibo;
-        //vec<VkVertexInputAttributeDescription> attr;
-        vec<Attrib>                attr;
+        //array<VkVertexInputAttributeDescription> attr;
+        array<Attrib>                attr;
         VkDescriptorSetLayout      set_layout;
         bool                       enabled = true;
         map<std::string, Texture>  tx;
@@ -102,7 +102,7 @@ struct PipelineData {
                UniformData &ubo,
                VertexData  &vbo,
                IndexData   &ibo,
-               vec<Attrib> &attr, size_t vsize, rgba clr, std::string name, VkStateFn vk_state);
+               array<Attrib> &attr, size_t vsize, rgba clr, std::string name, VkStateFn vk_state);
         void destroy();
         void initialize();
         ~Memory();
@@ -117,7 +117,7 @@ struct PipelineData {
     void update(size_t frame_id);
     ///
     PipelineData(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-                 vec<Attrib> attr, size_t vsize, rgba clr, std::string shader,
+                 array<Attrib> attr, size_t vsize, rgba clr, std::string shader,
                  VkStateFn vk_state = null) {
             m = std::shared_ptr<Memory>(
                 new Memory { device, ubo, vbo, ibo, attr, vsize, clr, shader, vk_state }
@@ -129,7 +129,7 @@ struct PipelineData {
 template <typename V>
 struct Pipeline:PipelineData {
     Pipeline(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-             vec<Attrib> attr, rgba clr, std::string name):
+             array<Attrib> attr, rgba clr, std::string name):
         PipelineData(device, ubo, vbo, ibo, attr, sizeof(V), clr, name) { }
 };
 
@@ -140,7 +140,7 @@ struct Pipes {
         Device      *device  = null;
         VertexData   vbo     = null;
         uint32_t     binding = 0;
-        //vec<Attrib>  attr    = {};
+        //array<Attrib>  attr    = {};
         map<str, PipelineData> part;
     };
     std::shared_ptr<Data> data;
@@ -151,7 +151,7 @@ struct Pipes {
 /// model dx (using pipeline dx)
 template <typename V>
 struct Model:Pipes {
-    Model(Device &device, UniformData &ubo, vec<Attrib> &ax, std::filesystem::path p) {\
+    Model(Device &device, UniformData &ubo, array<Attrib> &ax, std::filesystem::path p) {\
         this->data = std::shared_ptr<Data>(new Data { &device });
         auto &data = *this->data;
         auto   obj = Obj<V>(p, [](auto& g, vec3& pos, vec2& uv, vec3& norm) {

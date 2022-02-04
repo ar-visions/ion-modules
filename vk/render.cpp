@@ -52,7 +52,7 @@ void Render::present() {
             sync_diff = true;
             m.sync    = sync;
             if (!m.frame_commands)
-                 m.frame_commands = vec<VkCommandBuffer> (
+                 m.frame_commands = array<VkCommandBuffer> (
                     device.frames.size(), VK_NULL_HANDLE
                  );
             for (size_t i = 0; i < device.frames.size(); i++) //
@@ -90,10 +90,10 @@ Render::Render(Device *device): device(device) {
     if (device) {
         const int ns  = device->swap_images.size();
         const int mx  = MAX_FRAMES_IN_FLIGHT;
-        image_avail   = vec<VkSemaphore>(mx, VK_NULL_HANDLE);
-        render_finish = vec<VkSemaphore>(mx, VK_NULL_HANDLE);
-        fence_active  = vec<VkFence>    (mx, VK_NULL_HANDLE);
-        image_active  = vec<VkFence>    (ns, VK_NULL_HANDLE);
+        image_avail   = array<VkSemaphore>(mx, VK_NULL_HANDLE);
+        render_finish = array<VkSemaphore>(mx, VK_NULL_HANDLE);
+        fence_active  = array<VkFence>    (mx, VK_NULL_HANDLE);
+        image_active  = array<VkFence>    (ns, VK_NULL_HANDLE);
         ///
         VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
         VkFenceCreateInfo     fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, null, VK_FENCE_CREATE_SIGNALED_BIT };
