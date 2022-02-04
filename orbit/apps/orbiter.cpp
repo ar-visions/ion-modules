@@ -7,13 +7,12 @@
 /// Orbiter is a reasonable shot at it.
 ///
 int main(int argc, const char *argv[]) {
-    URI     uri1         = "https://www.cnet.com:443/index.jsp";
-    string  ps           = uri1.proto;
-    auto    default_args = Map {{ "project", null }};
-    Map     args         = Map(argc, argv, default_args, "fields");
+    Map     def          = Map {{ "project", "" }};
+    Map     args         = Map(argc, argv, def);
+    string  proj         = string(args["project"]);
     URI     uri          = "https://localhost:2200/";
     int64_t timeout_ms   = 60000;
-    Path    project_path = args.count("project") ? Path(args["project"]) : ".";
+    Path    project_path = args["project"] ? Path(args["project"]) : ".";
     str     s_pkg        = str::read_file(project_path / "package.json");
     var     pkg          = var::parse_json(s_pkg);
     Socket  sc           = Socket::connect(uri);
@@ -32,7 +31,6 @@ int main(int argc, const char *argv[]) {
         
         Map dep = {};
         Station::send(sc, Station::Dependency, dep);
-        /// dep_msg = [&](str project, str module, str version, str uri, str branch) -> bool
 
         /// spawn file watch
         auto w = Watch::spawn({ project_path }, {}, { Path::Recursion, Path::UseGitIgnores, Path::NoHidden },

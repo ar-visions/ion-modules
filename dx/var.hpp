@@ -564,8 +564,8 @@ struct Map:var {
     static typename vpairs::iterator iterator;
     
     /// default
-    Map(::map<string,  var> m = {}) :    var()  { }
-    Map(nullptr_t n) : var(::map<string, var>()) { }
+    Map(::map<string, var> m = {}) : var(m)  { }
+    Map(nullptr_t n)               : var(::map<string, var>()) { }
     
     /// map from args
     Map(int argc, cchar_t* argv[], Map def = {}, string field_field = "");
@@ -573,13 +573,14 @@ struct Map:var {
     /// map from initializer list
     Map(std::initializer_list<pair<string, var>> args) : var(::map<string, var>()) {
         m = ::map<string, var>(args.size());
+        printf("pairs = %p\n", (void *)m.pairs.get());
         for (auto &[k,v]: args)
             m[k] = v;
     }
     
     /// assignment op and copy constructor
-    Map(const Map &m) : var(m.m) { }
-    Map(const var &m) : var(m.m) { }
+    Map(const Map &m) :  var(m.m) { }
+    Map(const var &m) :  var(m.m) { }
     Map &operator=(const Map &ref) {
         if (this != &ref) {
             t = ref.t;
