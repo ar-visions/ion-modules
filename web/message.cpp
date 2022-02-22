@@ -1,11 +1,5 @@
 #include <web/web.hpp>
 
-/**
-    [x] Web::Message -> Message in its own module
-    [x] Verify working order with Web Request, and Web Server use-cases
-    [x] Implement into Station
- **/
-
 ///
 bool Message::read_headers(Socket sc) {
     int line = 0;

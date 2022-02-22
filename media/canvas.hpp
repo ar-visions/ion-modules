@@ -1,6 +1,6 @@
 #pragma once
 #include <dx/dx.hpp>
-#include <dx/m44.hpp>b
+#include <dx/m44.hpp>
 #include <media/font.hpp>
 #include <media/color.hpp>
 #include <media/image.hpp>
@@ -237,42 +237,43 @@ struct Join:io {
 
 class SkPath;
 class SkPaint;
-struct Path {
+///
+struct Stroke {
 protected:
-    SkPath *p           = null;
-    SkPath *last_offset = 0;
-    real    o_cache     = 0; // and that cache has this member set.
-    ///
+     SkPath *p           = null;
+     SkPath *last_offset = 0;
+     real    o_cache     = 0;
+     ///
 public:
-    real            o   = 0; // if this is set, we contruct a new one and store in cache
-    rectd        rect;
-    ///
-               Path();
-               Path(rectd r);
-               Path(const Path &ref);  //
-              ~Path(); //
-    Path &operator=(Path ref); //
-    void       copy(Path &ref);
-    Path      &move(vec2 v);
-    Path      &line(vec2 v);
-    Path    &bezier(vec2 cp0, vec2 cp1, vec2 p);
-    Path      &quad(vec2 q0, vec2 q1);
-    Path   &rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl);
-    Path &rectangle(rectd r, vec2 radius = { 0, 0 },
-                    bool r_tl = true, bool r_tr = true, bool r_br = true, bool r_bl = true);
-    Path       &arc(vec2 c, double radius, double rads_from, double rads, bool move_start);
-    operator  rectd &();
-    bool    is_rect();
-    vec2         xy();
-    real          w();
-    real          h();
-    real     aspect();
-    operator   bool();
-    bool  operator!();
-    void set_offset(real);
-    SkPath *sk_path(SkPaint *);
-    bool   contains(vec2);
-    rectd   &bounds();
+     real            o   = 0;
+     rectd        rect;
+     ///
+     Stroke();
+     Stroke(rectd r);
+     Stroke(const Stroke &ref);  //
+    ~Stroke(); //
+     Stroke &operator=(Stroke ref); //
+     void         copy(Stroke &ref);
+     Stroke      &move(vec2 v);
+     Stroke      &line(vec2 v);
+     Stroke    &bezier(vec2 cp0, vec2 cp1, vec2 p);
+     Stroke      &quad(vec2 q0, vec2 q1);
+     Stroke   &rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl);
+     Stroke &rectangle(rectd r, vec2 radius = { 0, 0 },
+                     bool r_tl = true, bool r_tr = true, bool r_br = true, bool r_bl = true);
+     Stroke       &arc(vec2 c, double radius, double rads_from, double rads, bool move_start);
+     operator  rectd &();
+     bool      is_rect();
+     vec2           xy();
+     real            w();
+     real            h();
+     real       aspect();
+     operator     bool();
+     bool    operator!();
+     void   set_offset(real);
+     SkPath   *sk_path(SkPaint *);
+     bool     contains(vec2);
+     rectd     &bounds();
 };
 
 struct ColoredGlyph {
@@ -296,18 +297,18 @@ struct ColoredGlyph {
 struct DrawState {
     Canvas *host;
     Image  *im    = null;
-    double stroke_sz;
+    double outline_sz;
     double font_scale;
     double opacity;
     m44    m;
     rgba   color;
-    Path   clip;
+    Stroke clip;
     vec2   blur;
     Font   font;
     void  *b_state = null;
     
            DrawState(Canvas *h, double s, double f, double o, m44 m, rgba c, vec2 b, Font font) :
-                     host(h), stroke_sz(s), font_scale(f), opacity(o),
+                     host(h), outline_sz(s), font_scale(f), opacity(o),
                      m(m), color(c), blur(b), font(font) { }
            DrawState()             { }
     void importer(var &d)          { }
@@ -333,20 +334,20 @@ struct ICanvasBackend {
     Canvas *host;
     var *result;
     // required implementation
-    virtual void     stroke(DrawState &, Path  &) { }
-    virtual void       fill(DrawState &, Path  &) { }
-    virtual void       clip(DrawState &, Path  &) { }
-    virtual void     stroke(DrawState &, rectd &) { }
-    virtual void       fill(DrawState &, rectd &) { }
-    virtual void       clip(DrawState &, rectd &) { }
-    virtual void      flush(DrawState &)          { }
-    virtual void *     data()                     { return null; }
-    virtual vec2i      size()                     { return null; }
+    virtual void    outline(DrawState &, Stroke  &) { }
+    virtual void       fill(DrawState &, Stroke  &) { }
+    virtual void       clip(DrawState &, Stroke  &) { }
+    virtual void    outline(DrawState &, rectd &)   { }
+    virtual void       fill(DrawState &, rectd &)   { }
+    virtual void       clip(DrawState &, rectd &)   { }
+    virtual void      flush(DrawState &)            { }
+    virtual void *     data()                       { return null; }
+    virtual vec2i      size()                       { return null; }
     virtual void       text(DrawState &, str &, rectd &, vec2 &, vec2 &, bool) { }
     virtual void      image(DrawState &, Image &, rectd &, vec2 &, vec2 &)     { }
     virtual void    texture(DrawState &, Image *im);
     virtual void      clear(DrawState &);
-    virtual void      clear(DrawState &, rgba &)   { }
+    virtual void      clear(DrawState &, rgba &)    { }
     virtual TextMetrics measure(DrawState &, str &s) { assert(false); }
     
     // generically handled
@@ -370,53 +371,51 @@ struct Canvas {
 public:
     enum  Type { Undefined, Terminal, Context2D };
     enum  Text { Ellipsis = 1 };
-    
     Type  type =  Undefined;
 protected:
     typedef std::stack<DrawState> Stack;
     ICanvasBackend   *backend = null;
     Font              default_font;
     Stack             states;
-
 public:
     DrawState state = {};
-              Canvas(std::nullptr_t n = nullptr);
-              Canvas(vec2i sz, Type type, var *result = null);
-    bool  operator==(Canvas::Type t);
-    vec2i         sz();
-    void      stroke(Path  &path);
-    void        fill(Path  &path);
-    void         cap(Cap::Type cap);
-    void        join(Join::Type join);
-    void        clip(Path  &path);
-    void      stroke(rectd &path);
-    void        fill(rectd &path);
-    void        clip(rectd &path);
-    void       color(rgba   c);
-    void       clear();
-    void       clear(rgba   c);
-    void    gaussian(vec2   sz, rectd cr);
-    vec2i       size();
-    void       scale(vec2   sc);
-    void      rotate(double deg);
-    void   translate(vec2   tr);
-    void     texture(Image &im);
-    void        font(Font &f); /// need notes for this one.
-    TextMetrics measure(str s);
-    void        text(str, rectd, vec2, vec2, bool);
-    void       image(Image &, rectd, vec2, vec2);
-    void       flush();
-    void   stroke_sz(double sz);
-    void  font_scale(double sc);
-    m44   get_matrix();
-    void  set_matrix(m44 m);
-    void    defaults();
-    void        save();
-    void     restore();
-    void *      data();
-    str     get_char(int x, int y);
-    str   ansi_color(rgba c, bool text);
-    Image   resample(vec2i size, double deg = 0.0f, rectd view = null, vec2 rc = null);
+               Canvas(std::nullptr_t n = nullptr);
+               Canvas(vec2i sz, Type type, var *result = null);
+    bool   operator==(Canvas::Type t);
+    vec2i          sz();
+    void      outline(Stroke  &path);
+    void         fill(Stroke  &path);
+    void          cap(Cap::Type cap);
+    void         join(Join::Type join);
+    void         clip(Stroke  &path);
+    void      outline(rectd &path);
+    void         fill(rectd &path);
+    void         clip(rectd &path);
+    void        color(rgba   c);
+    void        clear();
+    void        clear(rgba   c);
+    void     gaussian(vec2   sz, rectd cr);
+    vec2i        size();
+    void        scale(vec2   sc);
+    void       rotate(double deg);
+    void    translate(vec2   tr);
+    void      texture(Image &im);
+    void         font(Font &f); /// need notes for this one.
+    TextMetrics  measure(str s);
+    void         text(str, rectd, vec2, vec2, bool);
+    void        image(Image &, rectd, vec2, vec2);
+    void        flush();
+    void   outline_sz(double sz);
+    void   font_scale(double sc);
+    m44    get_matrix();
+    void   set_matrix(m44 m);
+    void     defaults();
+    void         save();
+    void      restore();
+    void  *      data();
+    str      get_char(int x, int y);
+    str    ansi_color(rgba c, bool text);
+    Image    resample(vec2i size, double deg = 0.0f, rectd view = null, vec2 rc = null);
     void *copy_bstate(void *bs);
     operator     bool() { return backend != null; }
 };

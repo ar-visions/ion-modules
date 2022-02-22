@@ -6,6 +6,19 @@
 #include <string>
 #include <dx/io.hpp>
 #include <dx/array.hpp>
+#include <dx/map.hpp>
+
+/// bringing these along
+struct node;
+struct var;
+typedef std::function<bool()>                  FnBool;
+typedef std::function<void(void *)>            FnArb;
+typedef std::function<void(void)>              FnVoid;
+typedef std::function<void(var &)>             Fn;
+typedef std::function<void(var &, node *)>     FnNode;
+typedef std::function<var()>                   FnGet;
+typedef std::function<void(var &, string &)>   FnEach;
+typedef std::function<void(var &, size_t)>     FnArrayEach;
 
 /// rename all others to something in their domain.
 struct Type {
@@ -25,7 +38,26 @@ struct Type {
         Struct
     };
     
-    static size_t size(Type::Specifier t) {
+    /// thin-function not generally suited
+    template <typename T>
+    static Type::Specifier specifier(T *v) {
+             if constexpr (std::is_same_v<T,       Fn>) return Type::Lambda;
+        else if constexpr (std::is_same_v<T,     bool>) return Type::Bool;
+        else if constexpr (std::is_same_v<T,   int8_t>) return Type::i8;
+        else if constexpr (std::is_same_v<T,  uint8_t>) return Type::ui8;
+        else if constexpr (std::is_same_v<T,  int16_t>) return Type::i16;
+        else if constexpr (std::is_same_v<T, uint16_t>) return Type::ui16;
+        else if constexpr (std::is_same_v<T,  int32_t>) return Type::i32;
+        else if constexpr (std::is_same_v<T, uint32_t>) return Type::ui32;
+        else if constexpr (std::is_same_v<T,  int64_t>) return Type::i64;
+        else if constexpr (std::is_same_v<T, uint64_t>) return Type::ui64;
+        else if constexpr (std::is_same_v<T,    float>) return Type::f32;
+        else if constexpr (std::is_same_v<T,   double>) return Type::f64;
+        else if constexpr (is_map<T>())                 return Type::Map;
+        return Type::Undefined;
+    }
+    
+    static size_t size(Type::Specifier t) { // needs to be on the instance
         switch (t) {
             case Bool:  return 1;
             case i8:    return 1;
@@ -44,6 +76,11 @@ struct Type {
         return 0;
     }
     
+    size_t sz() {
+        assert(code_name == "");
+        return size(Specifier(id));
+    }
+    
     size_t      id        = 0;
     std::string code_name = "";
     
@@ -55,8 +92,10 @@ struct Type {
     bool operator> (Type::Specifier b) const { return id >  size_t(b); }
     bool operator< (Type::Specifier b) const { return id <  size_t(b); }
     bool operator!=(Type::Specifier b) const { return id != size_t(b); }
+    
     inline operator size_t()           const { return id;              }
     inline operator int()              const { return int(id);         }
+    inline operator bool()             const { return id > 0;          }
     
     ///
     template <typename T>
@@ -92,6 +131,13 @@ struct Id:Type {
     Id() : Type(0) {
         code_name = ::code_name<T>();
         id        = std::hash<std::string>()(code_name);
+        T    *ptr = null;
+        Type::Specifier ts = Type::specifier(ptr);
+        if (ts >= i8 && ts <= Array) {
+            id = ts;
+            int test = 0;
+            test++;
+        }
     }
 };
 
@@ -208,14 +254,14 @@ struct ptr {
 #define ex_shim(C,E,D) \
     static Symbols symbols;\
     C(E t = D):ex<C>(t) { }\
-    C(std::string s):ex<C>(D) { kind = resolve(s); }
+    C(string s):ex<C>(D) { kind = resolve(s); }
 
 #define enums(C,E,D,ARGS...) \
     struct C:ex<C> {\
         static Symbols symbols;\
         enum E { ARGS };\
         C(E t = D):ex<C>(t) { }\
-        C(std::string s):ex<C>(D) { kind = resolve(s); }\
+        C(string s):ex<C>(D) { kind = resolve(s); }\
     };\
 
 #define io_shim(C,E) \
@@ -330,6 +376,7 @@ public:
     /// log error, and quit
     inline void fault(str t, array<var> a = {}) {
         _print(t, a, true);
+        assert(false);
         exit(1);
     }
 
@@ -401,6 +448,5 @@ enum KeyCode {
 */
 extern Logger<LogType::Dissolvable> console;
 
-#include <dx/model.hpp>
 
 

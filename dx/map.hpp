@@ -90,7 +90,7 @@ struct map:io {
 };
 
 template<typename>
-struct is_map                     : std::false_type {};
+struct is_map                 : std::false_type {};
 
 template<typename K, typename V>
-struct is_map<map<K,V>>          : std::true_type  {};
+struct is_map<map<K,V>>       : std::true_type  {};

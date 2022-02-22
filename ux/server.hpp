@@ -14,10 +14,10 @@ struct DX:Interface {
     Async       async;
     struct ServerInternal* intern;
     /// ------------------------------------------------
-    Web::Message query(Web::Message &m, Map &a, var &p) {
-        Web::Message msg;
-        auto r = m.uri.resource;
-        auto sp = m.uri.resource.split("/");
+    Message query(Message &m, Map &a, var &p) {
+        Message msg;
+        str &r  = m.uri.resource;
+        auto sp = r.split("/");
         auto sz = sp.size();
         if (sz < 2 || sp[0])
             return { 400, "bad request" };
@@ -40,7 +40,7 @@ struct DX:Interface {
     /// ------------------------------------------------
     void run() {
         str uri = "https://0.0.0.0:443";
-        async   = Web::server(uri, [&](Web::Message &m) -> Web::Message {
+        async   = Web::server(uri, [&](Message &m) -> Message {
             Map a;
             var p = null;
             return query(m, a, p);

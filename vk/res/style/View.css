@@ -7,7 +7,7 @@ Button {
     text-label:   "This is a label 22z...";
     region:       0l 0t 0r 80h;
     image-align:  left top, 900ms ease;
-    opacity:      0.1; /* need this */
+    opacity:      0.1;
 }
 
 Car {
@@ -16,12 +16,16 @@ Car {
 }
 
 Group {
-    fill-color:   #f00; /* same-side rounded rect optimization needed */
+    fill-color:   #f00;
     region:       0l 0t 0r 0b;
     radius:       32;
     clip:         true;
     image:        "cinderella.png";
     image-align:  middle middle;
+}
+
+Group:hover {
+    fill-color:   #f0f, 200ms linear;
 }
 
 Button:hover {
@@ -33,3 +37,4 @@ Button:hover {
 Button:active {
     fill-color:   #aaf;
 }
+

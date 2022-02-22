@@ -14,21 +14,23 @@ Image::Image(var &pixels) : pixels(pixels) {
 }
 
 Image::Image(path_t p, Image::Format f) {
-    bool  rgba = (f == Format::Rgba);
-    vec3i   sh = { 0, 0, rgba ? 4 : 1 };
+    bool     g = f != Rgba;
+    vec3i   sh = { 0, 0, g ? 1 : 4 };
     uint8_t *m = (uint8_t *)stbi_load(p.string().c_str(), &sh.x, &sh.y, null, sh.z);
-    pixels     = { rgba ? Type::ui32 : Type::ui8, std::shared_ptr<uint8_t>(m), { sh.y, sh.x, 1 }};
+    pixels     = var { g ? Type::ui8 : Type::ui32, std::shared_ptr<uint8_t>(m), Shape<Major>(sh.y, sh.x, g ? 1 : 4) };
     assert(pixels.size());
 }
 
 Image::Image(vec2i sz, Format f) {
     auto g = f == Gray;
-    pixels = {g ? Type::ui8 : Type::ui32,
-              std::vector<int> { sz.y, sz.x, g ? 1 : 4 }};
+    pixels     = var { g ? Type::ui8 : Type::ui32, Shape<Major>(sz.y, sz.x, g ? 1 : 4) };
+    // make sure this is not used in vector form.  all shapes! they be shapes.
+    //pixels = {g ? Type::ui8 : Type::ui32,
+    //          std::vector<int> { sz.y, sz.x, g ? 1 : 4 }};
 }
 
 Image::Image(vec2i sz, rgba clr) {
-    pixels = { Type::ui32, std::vector<int>{ sz.y, sz.x, 4 }};
+    pixels = var { Type::ui32, Shape<Major>::rgba(sz.x, sz.y) };
 }
 
 Image::Format Image::format() {
@@ -36,7 +38,7 @@ Image::Format Image::format() {
 }
 
 vec2 Image::size() {
-    return vec2 {real(pixels.sh[1]), real(pixels.sh[0])};
+    return vec2 { real(pixels.sh[1]), real(pixels.sh[0]) };
 }
 
 Image Image::resample(vec2i sz) {

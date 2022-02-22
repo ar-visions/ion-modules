@@ -42,7 +42,7 @@ struct StTrans {
                 { "cubic-in",  CubicIn  },
                 { "cubic-out", CubicOut } /// throw all of them from W3C in. when you are feeling at ease
             };
-            type = s1.map<Curve>(None, m);
+            type = m.count(s1) ? m[s1] : None;
         } else if (sp.size() == 1) {
             type     = Linear;
             duration = sp[0];

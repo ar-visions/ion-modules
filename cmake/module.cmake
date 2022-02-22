@@ -256,6 +256,8 @@ function(load_modules r_path external_repo)
         if(external_repo)
             set_target_properties(${t_name} PROPERTIES EXCLUDE_FROM_ALL TRUE)
         else()
+            # todo:
+            # needs to iterate through all of the repos used, pkg_name for each with a target
             #target_link_libraries(${t_name} ${pkg_name}-version)
         endif()
 

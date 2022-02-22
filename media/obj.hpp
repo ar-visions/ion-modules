@@ -1,5 +1,6 @@
 #pragma once
 #include <dx/dx.hpp>
+#include <dx/vec.hpp>
 
 typedef size_t IPos;
 typedef size_t INormal;

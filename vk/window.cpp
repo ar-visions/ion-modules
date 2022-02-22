@@ -11,7 +11,7 @@ static void glfw_error  (int code, cchar_t *cstr) {
 }
 
 Window &Window::ref(GLFWwindow *h) {
-    Window *w = (Window *)glfwGetWindowUserPointer(h);
+    auto w = (Window *)glfwGetWindowUserPointer(h);
     return *w;
 }
 
@@ -39,11 +39,14 @@ static void glfw_cursor (GLFWwindow *handle, double x, double y) {
         win.fn_cursor(x, y);
 }
 
+static int resize_count = 0;
+
 static void glfw_resize (GLFWwindow *handle, int32_t w, int32_t h) {
-    auto    win = Window::ref(handle);
-    win.size    = vec2i { w, h };
+    auto &win = Window::ref(handle);
+    win.size  = vec2i { w, h };
     if (win.fn_resize)
         win.fn_resize();
+    resize_count++; /// test.
 }
 
 vec2 Window::cursor() {
@@ -102,6 +105,8 @@ Window::Window(vec2i     sz): size(sz) {
     glfwSetMouseButtonCallback    (handle, glfw_mbutton);
     glfwSetErrorCallback          (glfw_error);
 }
+
+GLFWAPI int glfwIsInit(void);
 
 int Window::loop(std::function<void()> fn) {
     /// render loop with node event processing

@@ -173,7 +173,7 @@ uint32_t Device::attachment_index(Texture::Data *tx) {
 /// this is an initialize as well, and its also called when things change (resize or pipeline changes)
 /// recreate pipeline may be a better name
 void Device::update() {
-    auto sz = vec2i { int(extent.width), int(extent.height) };
+    auto     sz          = vec2i { int(extent.width), int(extent.height) };
     uint32_t frame_count = frames.size();
     render.sync++;
     tx_color = ColorTexture { this, sz, null };
@@ -196,7 +196,7 @@ void Device::update() {
     tx_depth.push_stage(Texture::Stage::Shader);
     ///
     for (size_t i = 0; i < frame_count; i++) {
-        Frame &frame   = frames[i];
+        Frame &frame = frames[i];
         frame.update();
     }
     tx_color.pop_stage();

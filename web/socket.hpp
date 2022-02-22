@@ -7,6 +7,10 @@ struct Socket {
         RequireCert,
         AllowInsecure,
     };
+    enum Role {
+        Client,
+        Server
+    };
     URI uri;
     std::shared_ptr<SocketInternal> intern;
     

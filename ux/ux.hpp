@@ -6,7 +6,6 @@
 typedef var &Event;
 
 /// compile-time transition controls on members; certain ones you want and certain ones you may not want.
-/// it will be important to allow transitions on Region
 template <class T>
 struct uxTransitions { static const bool enabled = false; };
 

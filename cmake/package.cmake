@@ -6,6 +6,7 @@ endif()
 set(PackageGuard yes)
 
 function(read_package location package_name package_name_ucase subdirs)
+    #if(exists ${location})
     file(READ ${location} package_contents)
     if(NOT package_contents)
         message(FATAL_ERROR "package.json not in package root")

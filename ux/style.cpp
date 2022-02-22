@@ -3,9 +3,9 @@
 #include <ux/node.hpp>
 //#include <regex> in time.
 
-map<path_t, Style> Style::cache            = {};
+map<path_t, Style> Style::cache              = {};
 map<str, array<ptr<StBlock>>> Style::members = {};
-std::unordered_map<str, int> Unit::u_flags = {
+std::unordered_map<str, int> Unit::u_flags   = {
     { "cm", Metric   | Distance },
     { "in", Standard | Distance },
     { "x",  Distance },
@@ -17,7 +17,7 @@ std::unordered_map<str, int> Unit::u_flags = {
     { "b",  Distance },
     { "w",  Distance },
     { "h",  Distance },
-    { "%",  Percent },
+    { "%",  Percent  },
     { "px", Distance }
 };
 
@@ -39,7 +39,7 @@ StPair *Style_pair(Member *member) {
     /// find top style pair for this member
     for (auto ptr:blocks) {
         StBlock *block = ptr;
-        double score = block->match((node *)member->arg);
+        double score = block->match((node *)(void *)member->arg);
         if (score > 0 && score >= best_score) {
             match = block->pair(member->name);
             best_score = score;
@@ -280,8 +280,7 @@ Style *Style::for_class(cchar_t *class_name) {
 size_t StBlock::score(node *n) {
     double best_sc = 0;
     for (auto &q:quals) {
-        auto    &node_id  = n->element.id();
-        bool    id_match  = q.id    && q.id == node_id;
+        bool    id_match  = q.id    && q.id == n->id;
         bool   id_reject  = q.id    && !id_match;
         bool  type_match  = q.type  && q.type == n->class_name;
         bool type_reject  = q.type  && !type_match;
@@ -334,8 +333,9 @@ double StBlock::match(node *n) {
     return total_score;
 }
 
-void Style::init(path_t path) {
-    resources(path, {".css"}, false, [&](path_t &p) -> void {
-        for_class(p.stem().string().c_str());
+void Style::init(path_t p) {
+    Path path = p;
+    path.resources({".css"}, {}, [&](Path p) -> void {
+        for_class(p.cstr());
     });
 }

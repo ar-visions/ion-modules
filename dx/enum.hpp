@@ -41,3 +41,4 @@ struct ex:EnumData {
     ///
     ex(var &v) { kind = resolve(v); }
 };
+

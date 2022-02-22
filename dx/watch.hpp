@@ -18,13 +18,15 @@ struct PathOp {
         Modified,
         Created
     } type;
-    Path path;
-    PathOp(Path &path, Op type): type(type), path(path) { }
+    Path   path;
+    size_t path_index; /// identity of element at index in path array given to Watch
+    PathOp(Path &path, size_t path_index, Op type): type(type), path(path), path_index(path_index) { }
     bool operator==(Op t) { return t == type; }
 };
 
 struct PathState {
     Path        path;
+    size_t      path_index;
     int64_t     modified;
     bool        found;
 };
@@ -63,6 +65,7 @@ public:
                     v.found = false;
                 
                 /// populate modified and created
+                size_t path_index = 0;
                 for (Path path:watch.paths) {
                     path.resources(watch.exts, flags, [&](Path p) {
                         if (!p.exists())
@@ -72,17 +75,18 @@ public:
                         ///
                         if (watch.path_states.count(key) == 0) {
                             PathOp::Op op    = (watch.iter == 0) ? PathOp::None : PathOp::Created;
-                            watch.ops       += { p, op };
-                            watch.path_states[key] = { p, mtime, true };
+                            watch.ops       += { p, path_index, op };
+                            watch.path_states[key] = { p, path_index, mtime, true };
                         } else {
                             PathState &ps    = watch.path_states[key];
                             ps.found         = true;
                             if (ps.modified != mtime) {
-                                watch.ops   += { p, PathOp::Modified };
+                                watch.ops   += { p, path_index, PathOp::Modified };
                                 ps.modified  = mtime;
                             }
                         }
                     });
+                    path_index++;
                 }
                 
                 /// populate deleted
@@ -91,7 +95,7 @@ public:
                     cont = false;
                     for (auto &[k,v]: watch.path_states) {
                         if (!v.found) {
-                            watch.ops += { v.path, PathOp::Deleted };
+                            watch.ops += { v.path, v.path_index, PathOp::Deleted };
                             watch.path_states.erase(k);
                             cont = true;
                             break;

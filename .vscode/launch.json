@@ -5,7 +5,7 @@
             "name":             "Debug",
             "type":             "cppdbg",
             "request":          "launch",
-            "program":          "${workspaceFolder}/build/orbiter",
+            "program":          "${workspaceFolder}/build/ux-app",
             "args":             [],
             "stopAtEntry":      false,
             "cwd":              "${workspaceFolder}/vk/res",

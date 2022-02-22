@@ -14,7 +14,7 @@ void Frame::update() {
     VkFramebufferCreateInfo ci {};
     ci.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     ci.renderPass      = device.render_pass;
-    ci.attachmentCount = uint32_t(views.size());
+    ci.attachmentCount = views.size();
     ci.pAttachments    = views.data();
     ci.width           = device.extent.width;
     ci.height          = device.extent.height;

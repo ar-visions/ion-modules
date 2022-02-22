@@ -25,13 +25,12 @@ PipelineData::Memory::~Memory() {
 }
 
 /// constructor for pipeline memory; worth saying again.
-PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
-                             VertexData  &vbo,     IndexData &ibo,
-                             array<Attrib> &attr,       size_t vsize,
-                             rgba         clr,   std::string shader,
-                             VkStateFn    vk_state):
-        device(&device),   shader(shader),  ubo(ubo),
-        vbo(vbo), ibo(ibo), attr(attr), vsize(vsize), clr(clr)
+PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
+                             VertexData    &vbo,     IndexData   &ibo,
+                             array<Attrib> &attr,    size_t       vsize,
+                             rgba           clr,     string       shader,
+                             VkStateFn      vk_state):
+        device(&device), shader(shader), ubo(ubo), vbo(vbo), ibo(ibo), attr(attr), vsize(vsize), clr(clr)
 {
     /// obtain data via usage
     auto bindings = array<VkDescriptorSetLayoutBinding> {
@@ -74,8 +73,8 @@ PipelineData::Memory::Memory(Device &device,     UniformData &ubo,
         vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
     }
     ///
-    auto vert = device.module(var::format("shaders/{0}.vert.spv", {shader}), Device::Vertex);
-    auto frag = device.module(var::format("shaders/{0}.frag.spv", {shader}), Device::Fragment);
+    auto vert = device.module(var::format("shaders/{0}.vert.spv", { shader }), Device::Vertex);
+    auto frag = device.module(var::format("shaders/{0}.frag.spv", { shader }), Device::Fragment);
     ///
     array<VkPipelineShaderStageCreateInfo> stages {{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,

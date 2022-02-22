@@ -33,7 +33,7 @@ struct Interface {
     operator int();
     /// ------------------------------------------------
     void bootstrap(int c, cchar_t *v[], Map &defaults) {
-        args = var::args(c, v);
+        args = Map(c, v);
         for (auto &[k,v]: defaults)
             if (args.count(k) == 0)
                 args[k] = v;

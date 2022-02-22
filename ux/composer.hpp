@@ -24,7 +24,7 @@ struct Composer {
         auto  actives = root->select([&](node *n) {
             return (active && n->m.active()) ? n : null;
         });
-        auto   result = array<node *>(inside.size() + actives.size());
+        auto   result = array<node *>(size_t(inside.size()) + size_t(actives.size()));
         for (auto &i: inside)
               result += i;
         for (auto &i: actives)
@@ -89,7 +89,8 @@ struct Composer {
                 n->m.cursor = vec2(null);
             }
         });
-        /// select all within cursor, including active
+        
+        /// select all within cursor (can be a rect potentially as a ortho selection cursor), including active
         auto nodes = select_at(w.cursor(), true);
         event_dispatch(nodes, FnNode([&](Event ev, node *n) {
             vec2  o = n->offset();
@@ -99,14 +100,18 @@ struct Composer {
             if (prev_cursor.count(n) == 0) {
                 n->m.hover = true;
                 auto &fn_hover = n->m.ev.hover();
-                if (fn_hover)
+                if (fn_hover) {
+                    int test = 0;
+                    test++;
                     fn_hover(ev);
+                }
             }
             n->m.cursor = p;
             Fn &fn  = (n->m.ev.cursor)();
             if (fn)
                 fn(ev);
         }));
+        
         /// notify uncursored
         for (node *n:prev_cursor)
             if (!n->m.cursor()) {
@@ -125,32 +130,44 @@ struct Composer {
     
     void character(Window &win, uint32_t c) { }
     
-    bool process() {
-        return root ? root->process() : true;
-    }
+    bool process() { return root ? root->process() : true; }
 
     Composer(Interface *ux, FnRender fn, Map &args) : ux(ux), fn(fn), args(args) { }
 
-    bool update(node *parent, node **p_child, Element &e) {
-        node *child       = *p_child;
-        bool node_updated = false;
-        
+    static void children_update(vec2i &sz, node *child, Element &e, map<string, bool> &u) {
+        assert(e.ref() == child);
+        auto fn_update = [&](Element &ie) {
+            str    &id = ie.ident();
+            u[id]      = false;
+            update(sz, child, &child->mounts[id], ie);
+        };
+        ///
+        for (auto &ie: child->elements) {
+            if (ie.constructable())
+                fn_update(ie);
+            else for (auto &ae: ie.e->elements)
+                fn_update(ae);
+        }
+    }
+
+    /// allocation from factory call if null with valid Element
+    static node *read_child(vec2i &sz, node *parent, node **p_child, Element &e, bool &node_updated) {
+        node *child = *p_child;
         if (!child) {
-            child         = (*p_child = e.factory());
-            child->root   = parent ? parent->root : child;
+            child           = (*p_child = e.factory()); /// the factory gives it  what
+            child->root     = parent ? parent->root : child;
             if (!parent) {
                 /// root element is initialized with the window size
                 /// use routine on paths to determine if mouse is inside.
-                child->paths.rect = rectd { 0.0, 0.0, double(ux->sz.x), double(ux->sz.y) };
+                child->paths.rect = rectd { 0.0, 0.0, double(sz.x), double(sz.y) };
             }
-            child->parent = parent;
+            child->parent   = parent;
+            child->binds    = e.binds();
+            child->elements = e.elements();
+            child->id       = e.ident();
             child->standard_bind();
             child->bind();
-            
-            for (auto &[name, member]: child->externals)    member->arg = child; /// used with user-defined lambdas
-            for (auto &[name, member]: child->internals)    member->arg = child;
-            for (auto &[name, member]: child->stationaries) member->arg = child; /// call for style after all of this updating, not during
-            
+            ///
             node_updated = true;
         } else if (!e) {
             assert(false);
@@ -159,156 +176,134 @@ struct Composer {
                     child->umount();
                 child->parent = null;
                 delete child;
-                child = null;
                *p_child = null;
+                child   = null;
             }
-            return true;
         }
-        
-        /// style reload, the watcher is going to knock out the style handles when it changes.
-        if (!child->style)
-             child->style = Style::for_class(child->class_name);
-        
+        return child;
+    }
+
+    static array<str> update_binds(vec2i &sz, node *parent, node *child, Element &e, bool &node_updated) {
         /// initialize unbound check
-        var d_null = nullptr;
-        map<std::string, bool> unbound;
+        map<string, bool> unbound;
         for (auto &bind: child->binds)
             unbound[bind.id] = true;
-        
+
         /// change members
-        auto changed = array<str>(e.binds.size());
-        for (auto &bind: e.binds) {
-            str &child_mname = bind.id; // support const str on clang++ 13 on linux, not clang++ 13 on macOS ;/ ... the things that only happen to kalen.
-            ///
-            bool child_ctx = child->stationaries.count(child_mname) > 0;
-            if (child_ctx) {
-                *child->stationaries[child_mname] = bind.to;
-            } else {
-                str &parent_mname = bind.to;
-                ///
-                bool has_ext   = parent->externals.count(parent_mname) > 0;
-                bool has_int   = parent->internals.count(parent_mname) > 0;
-                
-                /// id is an assignment
-                if (has_ext || has_int) { /// child member is never actually registered
-                    str &child_id = child->m.id;
-                    str  child_cn = child->class_name;
-                    
-                    /// external must be available on child
-                    if (child->externals.count(bind.id) == 0)
-                        console.fault("external:{0} not found on {1}:{2}",
-                                      {child_mname, child_cn, child_id});
-                    auto & child_member = (Member &)*child->externals[child_mname];
-                    auto &parent_member = (Member &)(has_int ? *parent->internals  [parent_mname] : /// internal has precedence
-                                                               *parent->externals  [parent_mname]);
-                    /// change member, if different
-                    if (!(child_member == parent_member)) {
-                        child_member   = parent_member;
-                        changed       += bind.id;
-                    }
-                } else {
-                    /// no external/internal member exists on parent
-                    str parent_id = parent->m.id;
-                    str parent_cn = parent->class_name;
-                    console.fault("{0} not found on {1}:{2}", {parent_mname, parent_cn, parent_id});
+        auto changed = array<str>(e.e->binds.size());
+
+        for (Bind &bind: e.e->binds) {
+            /// the ref is just a member ref (it could potentially be grabbed backwards but only nutters would)
+            /// so the receiver child gets its member set to this ref, deref'd
+            if (bind.shared) {
+                Member &child_member = (Member &)*child->externals[bind.id];
+                /// could be nice to have direct set access through generic shared interface
+                if (!(child_member.shared == bind.shared)) {
+                    child_member.lambdas->type_set(child_member, bind.shared);
+                    changed += bind.id;
                 }
+            } else {
+                assert(false);
             }
             if (unbound.count(bind.id))
                 unbound[bind.id] = false;
         }
         
         /// unset all unbound members
-        bool cycle;
-        do {
-            size_t index = 0;
-            cycle        = false;
-            for (auto &bind: child->binds) {
-                if (unbound[bind.id]) {
-                    changed += bind.id;
-                    assert(child->externals.count(bind.id) == 1);
-                    auto &member = *child->externals[bind.id];
-                    member.fn->unset(member);
-                    child->binds.erase(index);
-                    cycle = true;
-                    break;
-                }
-                index++;
+        bool set_binds = false;
+        for (auto &bind: child->binds) {
+            if (unbound[bind.id]) {
+                changed += bind.id;
+                assert(child->externals.count(bind.id) == 1);
+                auto &member = *child->externals[bind.id];
+                member.lambdas->unset(member);
+                set_binds = true;
+                break;
             }
-        } while (cycle);
-        
-        /// check if the elements are different
-        if (child->elements != e.elements) {
-            child->elements  = e.elements;
-            node_updated = true;
         }
         
-        if (changed.size())
-            node_updated = true;
-        auto u = map<std::string, bool>();
-        for (auto &[id, nn]: child->mounts)
-            u[id] = true;
+        /// check if the elements are different
+        if (set_binds || child->elements != e.e->elements) {
+            child->binds    = e.e->binds;
+            child->elements = e.e->elements;
+            node_updated    = true;
+        }
+        return changed;
+    }
+    
+    /// update_node at the point of parent node instance and child(element)
+    /// it needs to be reduced further, to lose the p_child 
+    static bool update(vec2i &sz, node *parent, node **p_child, Element &e) {
+        bool node_updated = false;
+        node *child       = read_child(sz, parent, p_child, e, node_updated);
+        if (!child)
+            return true;
         
-        /// render uses elements data to produce the instances
+        /// style reload, the watcher is going to knock out the style handles when it changes.
+        if (!child->style)
+             child->style = Style::for_class(child->class_name);
+        
+        /// update binds, get list of changed members on the child
+        auto changed = update_binds(sz, parent, child, e, node_updated);
+        
         if (!child->mounted) {
              child->mount();
              child->mounted = true;
         }
         
-        /// call changed before a render, of course.
+        /// call changed before a render
         if (node_updated)
             child->changed(changed);
         
-        /// render child, and call update with those elements
+        /// render child
         Element ee = child->render();
-        if (ee.ref) { /// hunt these cases down.
-            assert(ee.ref == child);
-            node    *child = ee.ref;
-            size_t      sz = child->elements.size();
-            auto        um = map<std::string, bool>(sz);
-            for (size_t  i = 0; i < child->elements.size(); i++) {
-                auto  &eee = child->elements[i];
-                std::string &id = eee.id();
-                update(child, &child->mounts[id], eee);
-                u[id] = false;
-            }
-        } else if (ee.factory) {
-            std::string &id = ee.id();
-            update(child, &child->mounts[id], ee);
+
+        /// flag for removal
+        auto u = map<string, bool>();
+        for (auto &[id, nn]: child->mounts)
+            u[id] = true;
+        
+        /// and call update with those elements (rendered elements: ee)
+        if (ee.ref()) { /// end-point render (end of indirection, that is. time to do things.. call again, yeah thats right)
+            children_update(sz, child, ee, u);
+        } else if (ee.constructable()) {
+            str &id = ee.ident();
+            update(sz, child, &child->mounts[id], ee);
             u[id] = false;
+        } else {
+            /// it can definitely be a element array from filter or map call, so we're on notice here.
+            assert(false);
         }
         
         /// perform unmounting
-        Element e_null = nullptr;
         for (auto &[id, unmount]: u)
             if (unmount) {
-                std::string i = id;
-                update(child, &child->mounts[id], e_null);
+                static Element e_null;
+                update(sz, child, &child->mounts[id], e_null);
                 node_updated = true;
             }
         
-        /// perform this just for root
-        if (!parent && child) {
-            // set style if conditions are met:
-            // -> node added, removed
-            // -> state change at all in the entire tree
-            child->exec([&](node *n) {
-                /// no internals, they read only makes them ideal for state match
+        /// perform this just for root (should be done by the ux, after this call; after-all we may not even host style facility in the app)
+        if (!parent && child)
+            child->exec([](node *n) {
                 for (auto &[name, member]: n->externals)
-                    member->fn->compute_style(*member);
+                    member->lambdas->compute_style(*member);
             });
-        }
+        
         return node_updated;
     }
     
     void render() {
         Element  e = fn();
-        update(null, &root, e);
+        update(ux->sz, null, &root, e);
         
 #if !defined(NDEBUG)
         /// style reload on modification, when debugging. this applies to style, images and vectors
         /// it will also apply to shaders and 3D objects
         static auto css_watch = Watch::spawn(
-                {"style","images"}, {".css",".png",".svg"}, false, [root=root](bool init, array<PathOp> &paths) {
+              {"style","images"}, {".css",".png",".svg"}, null,
+            [root=root] (bool init, array<PathOp> &paths) {
+            ///
             if (!init) {
                 Style::unload();
                 root->exec([](node *n) {
@@ -320,27 +315,22 @@ struct Composer {
         });
 #endif
         rectd   rect = { real(0), real(0), real(sz->x), real(sz->y) };
-        bool resized = (root->paths.rect != rect);
+        bool resized = root->paths.rect != rect;
         if (resized)
             root->paths.rect = rect;
         ///
         root->exec([&](node *n) -> node* {
             /// update regionized rects on nodes
-            int                 index      = 0;
-            node               *rn         = n->parent ? n->parent : root;
+            int                   index      = 0;
+            node                 *rn         = n->parent ? n->parent : root;
             array<node::RegionOp> region_ops = {
                 { n->m.region,            rn, rn->paths.rect, n->paths.rect },
                 { n->m.fill.image_region, n,   n->paths.rect, n->image_rect },
                 { n->m.text.region,       n,   n->paths.rect, n->text_rect  }
             };
             
-            for (auto &r_op:region_ops) {
-                if (str(n->class_name) == "Button") {
-                    int test = 0;
-                    test++;
-                }
-                r_op(n, index++);
-            }
+            for (node::RegionOp &reg_op:region_ops)
+                reg_op(n, index++);
             ///
             rectd &r = n->paths.rect;
             real  TL = n->m.radius(node::Members::Radius::TL);
@@ -356,8 +346,6 @@ struct Composer {
                   sg += (1000  * 1234)  * r.w;
                   sg += (10000 * 54321) * r.h;
             ///
-            /// region replaces padding margin and whatever nonsense
-            /// wha we need is an image rect updated
             if (resized || n->paths.last_sg != sg) {
                 n->paths.last_sg  = sg;
                 vec2 v00 = r.xy();
@@ -368,13 +356,18 @@ struct Composer {
                 vec4 x10 = vec4(v10.x, v10.y, TR, TR);
                 vec4 x11 = vec4(v11.x, v11.y, BR, BR);
                 vec4 x01 = vec4(v01.x, v01.y, BL, BL);
-                n->paths.fill   = Path();
+                /// --------------------------------
+                /// binds  (can specify  a lambda  of your own, a 
+                /// member  of  your  own  or  a  direct value in
+                /// string or T form; T is copied into shared_ptr
+                /// and passed in), then elements
+                n->paths.fill   = Stroke();
                 n->paths.fill.rect_v4(x00, x10, x11, x01);
                 n->paths.border = n->paths.fill;
                 n->paths.child  = n->paths.fill;
-                n->paths.fill.set_offset(fo);
+                n->paths.fill.  set_offset(fo);
                 n->paths.border.set_offset(bo);
-                n->paths.child.set_offset(co);
+                n->paths.child. set_offset(co);
             }
             return null;
         });

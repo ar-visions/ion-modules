@@ -3,9 +3,9 @@
 	"tasks": [
 	  {
 		"label": "build",
-		"type": "shell-game",
+		"type": "shell",
 		"options": {"cwd": "${workspaceFolder}/build"},
-		"command": "make orbiter -j16",
+		"command": "make ux-app -j16",
 		"presentation": {
 		  "reveal": "silent",
 		  "panel": "shared"

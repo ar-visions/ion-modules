@@ -7,7 +7,7 @@ struct Rendering:ex<Rendering> {
     enum Type { None, Shader, Wireframe };
     static Symbols symbols;
     Rendering(Type t = None):ex<Rendering>(t) { }
-    Rendering(std::string s):ex<Rendering>(None) {
+    Rendering(string s):ex<Rendering>(None) {
         kind = resolve(s);
     }
 };

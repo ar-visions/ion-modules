@@ -1,18 +1,20 @@
-#include <dx/io.hpp>
-#include <dx/map.hpp>
-#include <dx/type.hpp>
+#include <dx/dx.hpp>
+
+//#include <dx/io.hpp>
+//#include <dx/map.hpp>
+//#include <dx/type.hpp>
 
 Logger<LogType::Dissolvable> console;
 
 void _print(str t, ::array<var> &a, bool error) {
     t = var::format(t, a);
     auto &out = error ? std::cout : std::cerr;
-    out << string(t) << std::endl << std::flush;
+    out << str(t) << std::endl << std::flush;
 }
 
 bool   var::is_numeric   (cchar_t *s)    { return (s && (*s == '-' || isdigit(*s))); }
 
-string var::parse_numeric(char **cursor) {
+str var::parse_numeric(char **cursor) {
     char *s = *cursor;
     if (*s != '-' && !isdigit(*s))
         return "";
@@ -28,14 +30,14 @@ string var::parse_numeric(char **cursor) {
     if (number_len == 0 || number_len > max_sane_number)
        return "";
     *cursor = &number_start[number_len];
-    string result = "";
+    str result = "";
     for (int i = 0; i < int(number_len); i++)
         result += number_start[i];
     return result;
 }
 
 /// \\ = \ ... \x = \x
-string var::parse_quoted(char **cursor, size_t max_len) {
+str var::parse_quoted(char **cursor, size_t max_len) {
     cchar_t *first = *cursor;
     if (*first != '"')
         return "";
@@ -56,7 +58,7 @@ string var::parse_quoted(char **cursor, size_t max_len) {
     if (max_len > 0 && len > max_len)
         return "";
     *cursor = &s[1];
-    string result = "";
+    str result = "";
     for (int i = 0; i < int(len); i++)
         result += start[i];
     return result;
@@ -135,7 +137,7 @@ void var::clear() {
     if (v.t == Type::Array)
         v.a = ::array<var>();
     if (v.t == Type::Map)
-        v.m = ::map<string, var>();
+        v.m = ::map<str, var>();
 }
 
 ::map<int, int> b64_encoder() {
@@ -238,13 +240,13 @@ void var::write(path_t p, enum var::Format format) {
 
 // construct data from file ref
 var::var(std::ifstream &f, enum var::Format format) {
-    auto st = [&]() -> string {
+    auto st = [&]() -> str {
         int len;
         f.read((char *)&len, sizeof(int));
         char *v = (char *)malloc(len + 1);
         f.read(v, len);
         v[len] = 0;
-        return string(v, len);
+        return str(v, len);
     };
     
     auto rd = std::function<void(var &)>();
@@ -256,7 +258,7 @@ var::var(std::ifstream &f, enum var::Format format) {
         int meta_sz = 0;
         f.read((char *)&meta_sz, sizeof(int));
         for (int i = 0; i < meta_sz; i++) {
-            string key = st();
+            str key = st();
             rd(d[key]);
         }
         if (d == Type::Array) {
@@ -288,13 +290,13 @@ var::var(std::ifstream &f, enum var::Format format) {
             int sz;
             f.read((char *)&sz, sizeof(int));
             for (int i = 0; i < sz; i++) {
-                string key = st();
+                str key = st();
                 rd(d[key]);
             }
         } else if (d == Type::Str) {
             int len;
             f.read((char *)&len, sizeof(int));
-            d.s = string(st());
+            d.s = str(st());
         } else {
             size_t ts = Type::size(d.t);
             assert(d.t >= Type::i8 && d.t <= Type::Bool);
@@ -307,9 +309,9 @@ var::var(std::ifstream &f, enum var::Format format) {
 }
 
 void var::write(std::ofstream &f, enum var::Format format) {
-    auto wri_str = std::function<void(string &)>();
+    auto wri_str = std::function<void(str &)>();
     
-    wri_str = [&](string &str) {
+    wri_str = [&](str &str) {
         int len = int(str.size());
         f.write((char *)&len, sizeof(int));
         f.write(str.cstr(), size_t(len));
@@ -327,7 +329,7 @@ void var::write(std::ofstream &f, enum var::Format format) {
         f.write((cchar_t *)&meta_sz, sizeof(int));
         if (meta_sz)
             for (auto &[k,v]: d.m) {
-                string kname = k;
+                str kname = k;
                 wri_str(k);
                 wri(v);
             }
@@ -390,7 +392,7 @@ void var::write(std::ofstream &f, enum var::Format format) {
 }
 
 // silver-c. #join with your friend at first.
-var::operator string() {
+var::operator str() {
     var &r = var::resolve(*this);
     switch (size_t(r.t)) {
         case Type::i8:     [[fallthrough]];
@@ -405,7 +407,7 @@ var::operator string() {
         case Type::f64:  return std::to_string(*((double  *)r.n));
         case Type::Str:  return r.s;
         case Type::Array: {
-            string ss = "[";
+            str ss = "[";
             if (c >= Type::i8 && c <= Type::Bool) {
                 size_t  sz = size_t(sh);
                 size_t  ts = Type::size(c);
@@ -428,7 +430,7 @@ var::operator string() {
                 for (auto &value: r.a) {
                     if (ss.size() != 1)
                         ss += ",";
-                    ss += string(value);
+                    ss += str(value);
                 }
             }
             ss += "]";
@@ -437,19 +439,19 @@ var::operator string() {
         case Type::Map: {
             if (r.s)
                 return r.s; /// use-case: var-based Model names
-            string ss = "{";
+            str ss = "{";
             if (r.m)
                 for (auto &[field, value]: r.m) {
                     if (ss.size() != 1)
                         ss += ",";
-                    ss += string(field);
+                    ss += str(field);
                     ss += ":";
                     if (value == Type::Str) {
                         ss += "\"";
-                        ss += string(value);
+                        ss += str(value);
                         ss += "\"";
                     } else
-                        ss += string(value);
+                        ss += str(value);
                 }
             ss += "}";
             return ss;
@@ -458,9 +460,9 @@ var::operator string() {
             if (r.n) {
                 char buf[64];
                 sprintf(buf, "%p", (void *)r.n);
-                return string(buf);
+                return str(buf);
             }
-            return string(""); // null reference; context needed for null str
+            return str(""); // null reference; context needed for null str
         }
         default:
             break;
@@ -496,6 +498,8 @@ bool var::operator!() {
     return !(var::operator bool());
 }
 
+var::var(Type::Specifier c, std::shared_ptr<uint8_t> d, Shape<Major> sh) : t(Type::Array), c(c), d(d), sh(sh) { }
+
 /// design should definitely have Type t and Type c, not Specifier
 /// i am holding off on this, though
 /// what it needs is basic error facilities for conversion at runtime
@@ -506,7 +510,7 @@ var::var(Type::Specifier t, Type::Specifier c, size_t sz)  : t(t == Type::Undefi
     if (this->t == Type::Array)
         a = ::array<var>(sz);
     else if (this->t == Type::Map)
-        m = ::map<string, var>();
+        m = ::map<str, var>();
     else
         n = &n_value;
 }
@@ -533,14 +537,14 @@ var::var(size_t v) : t(Type::ui64) {
 /// merge these two use cases into VoidRef, Ref, singular Ref struct (likely quite usable for data Modeling as well)
 var::var(void* v)         : t(Type::Ref)                { n = (u *)v;    }
 var::var(VoidRef vr)      : t(Type::Ref)                { n = (u *)vr.v; }
-var::var(string    str)   : t(Type::Str), s(str)        { }
+var::var(str       str)   : t(Type::Str), s(str)        { }
 var::var(cchar_t *cstr)   : t(Type::Str), s(cstr)       { }
 var::var(path_t p)        : t(Type::Str), s(p.string()) { }
 var::var(const var &ref) {
     copy((var &)ref);
 }
 
-char *var::parse_obj(var &scope, char *start, string field, FieldFlags &flags) {
+char *var::parse_obj(var &scope, char *start, str field, FieldFlags &flags) {
     char *cur = start;
     assert(*cur == '{');
     ws(&(++cur));
@@ -1070,3 +1074,30 @@ Map::Map(int argc, cchar_t* argv[], Map def, string first_field) {
         }
     }
 }
+
+/// attach to enum? so map with name, those names app-based or general
+Symbols Build::Role::symbols = {
+    { Undefined,        "undefined" },
+    { Terminal,         "terminal"  },
+    { Mobile,           "mobile"    },
+    { Desktop,          "desktop"   },
+    { AR,               "ar"        },
+    { VR,               "vr"        },
+    { Cloud,            "cloud"     }};
+
+Symbols Build::OS::symbols = {
+    { Undefined,        "undefined" },  /// Arb behaviour with this null state
+    { macOS,            "macOS"     },  /// Simple binary
+    { Linux,            "Linux"     },  /// Simple binary
+    { Windows,          "Windows"   },  /// Universal App Packaging (if its actually a thing for compiled apps)
+    { iOS,              "iOS"       },  /// Universal App Packaging
+    { Android,          "Android"   }}; /// Universal Binaries as done with the bin images in zip
+
+Symbols Build::Arch::symbols = {
+    { Undefined,        "undefined" },
+    { x86,              "x86"       },
+    { x86_64,           "x86_64"    },
+    { Arm32,            "arm32"     },
+    { Arm64,            "arm64"     }, 
+    { Mx,               "Mx"        }};
+

@@ -158,20 +158,20 @@ int Vulkan::main(Composer *composer) {
     Map      &args = composer->args;
     vec2i       sz = {args.count("window-width")  ? int(args["window-width"])  : 512,
                       args.count("window-height") ? int(args["window-height"]) : 512};
-    s_rect         = recti { 0, 0, sz.x, sz.y };
+            s_rect = recti { 0, 0, sz.x, sz.y };
     Internal    &i = Internal::handle();
     Window      &w = *i.window;
     Device &device =  i.device;
     Canvas  canvas = Canvas(sz, Canvas::Context2D);
     Texture &tx_canvas = i.tx_skia;
+    
     ///
     composer->sz = &w.size;
     composer->ux->canvas = canvas;
+    
     ///
     i.device.initialize(&w);
     w.show();
-    
-    
     
     /// canvas polygon data (pos, norm, uv, color)
     auto   vertices = Vertex::square();
@@ -206,21 +206,24 @@ int Vulkan::main(Composer *composer) {
             vk_subsystem_init();
             init = true;
         }
+        
         ///
         canvas.clear(rgba {0.0, 0.01, 0.05, 1.0});
         composer->render();
         canvas.flush();
+        
         ///
         i.tx_skia.push_stage(Texture::Stage::Shader);
         device.render.push(pl);
         device.render.present();
         i.tx_skia.pop_stage();
+        
         ///
         if (composer->root)
             w.set_title(composer->root->m.text.label);
-        ///
-        if (!composer->process())
-            glfwWaitEventsTimeout(1.0);
+
+        composer->process();
+        //glfwWaitEventsTimeout(1.0);
     });
     return 0;
 }

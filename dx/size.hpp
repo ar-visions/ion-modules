@@ -1,40 +1,39 @@
 #pragma once
 
-//
 enum Stride { Major, Minor };
-
-// going for NumPy interface, and int is a must
-// our size is never to hold an address. not its domain.  disambiguationwithrepresentation is the key
-
 struct string;
 
+/// give us your integral, your null, your signed and unsigned huddled bits.  they are all sizes to us.
 struct Size {
     ssize_t        isz;
     Size(nullptr_t n = null) : isz(0)   { }
-    Size(int       isz)      : isz(isz) { }
+    Size(int32_t   isz)      : isz(isz) { }
+    Size(uint32_t  isz)      : isz(isz) { }
     Size(size_t    isz)      : isz(isz) { }
     Size(ssize_t   isz)      : isz(isz) { }
-
+    Size(int64_t   isz)      : isz(isz) { }
+    Size(uint64_t  isz)      : isz(isz) { }
     ///
     virtual int      dims() const          { return 1;   }
     virtual size_t   size() const          { return isz; }
     virtual size_t  operator [] (size_t i) { assert(i == 0); return size_t(isz); }
 
     ///
-             operator  bool() { return size() >  0;    }
-    bool     operator     !() { return size() <= 0;    }
-    operator        ssize_t() { return        size();  }
-    operator            int() { return    int(size()); }
-    operator         size_t() { return size_t(size()); }
-    
-    ///
+             operator  bool() { return   size() >  0;    }
+    bool     operator     !() { return   size() <= 0;    }
+    operator        ssize_t() { return          size();  }
+    operator            int() { return      int(size()); }
+    operator         size_t() { return   size_t(size()); }
+    operator       uint32_t() { return uint32_t(size()); }
     bool operator <  (Size b) { return operator ssize_t() <  ssize_t(b); }
     bool operator <= (Size b) { return operator ssize_t() <= ssize_t(b); }
     bool operator >  (Size b) { return operator ssize_t() >  ssize_t(b); }
     bool operator >= (Size b) { return operator ssize_t() >= ssize_t(b); }
     bool operator == (Size b) { return operator ssize_t() == ssize_t(b); }
     bool operator != (Size b) { return operator ssize_t() != ssize_t(b); }
-
+    Size operator +  (Size b) { return operator ssize_t() + ssize_t(b); }
+    Size operator -  (Size b) { return operator ssize_t() - ssize_t(b); }
+    
     operator std::string();
 };
 

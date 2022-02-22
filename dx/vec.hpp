@@ -146,10 +146,10 @@ struct Vec2: Vector<T> {
         };
     }
     
-    operator var() { return std::vector<T> { x, y }; }
-    
+    operator var() { return array<T> { x, y }; }
+    ///
     bool operator== (const Vec2<T> &r) const { return x == r.x && y == r.y; }
-
+    ///
     void operator += (Vec2<T>  r)   { x += r.x; y += r.y; }
     void operator -= (Vec2<T>  r)   { x -= r.x; y -= r.y; }
     void operator *= (Vec2<T>  r)   { x *= r.x; y *= r.y; }
@@ -388,12 +388,8 @@ struct Rect: Vector<T> {
     operator Rect<int>()     { return {    int(x),    int(y),    int(w),    int(h) }; }
     operator Rect<float>()   { return {  float(x),  float(y),  float(w),  float(h) }; }
     operator Rect<double>()  { return { double(x), double(y), double(w), double(h) }; }
-
-    operator var() {
-        return std::vector<T> { x, y, w, h };
-    }
-    
-    Rect<T>(var &d) {
+    operator var()           { return ::array<T> { x, y, w, h }; }
+    Rect<T>(var &d)          {
         if (d.size()) {
             x = T(d[size_t(0)]);
             y = T(d[size_t(1)]);

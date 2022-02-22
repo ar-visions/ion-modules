@@ -52,9 +52,7 @@ void Render::present() {
             sync_diff = true;
             m.sync    = sync;
             if (!m.frame_commands)
-                 m.frame_commands = array<VkCommandBuffer> (
-                    device.frames.size(), VK_NULL_HANDLE
-                 );
+                 m.frame_commands = array<VkCommandBuffer> (device.frames.size(), VK_NULL_HANDLE);
             for (size_t i = 0; i < device.frames.size(); i++) //
                 m.update(i); /// make singular, frame index param
         }
@@ -78,10 +76,10 @@ void Render::present() {
         s_signal, 1, &device.swap_chain, &image_index };
     VkResult             presult = vkQueuePresentKHR(device.queues[GPU::Present], &present);
     
-    if ((presult == VK_ERROR_OUT_OF_DATE_KHR || presult == VK_SUBOPTIMAL_KHR) && !sync_diff) {
+    if ((presult == VK_ERROR_OUT_OF_DATE_KHR || presult == VK_SUBOPTIMAL_KHR)) {// && !sync_diff) {
         device.update(); /// cframe needs to be valid at its current value
-    } else
-        assert(result == VK_SUCCESS);
+    }// else
+     //   assert(result == VK_SUCCESS);
     
     cframe = (cframe + 1) % MAX_FRAMES_IN_FLIGHT; /// ??
 }

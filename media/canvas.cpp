@@ -143,7 +143,6 @@ struct Context2D:ICanvasBackend {
     
     /// console would just think of everything in char units. like it is.
     /// measuring text would just be its length, line height 1.
-    
     TextMetrics measure(DrawState &ds, str &text) {
         SkFontMetrics mx;
         SkFont     &font = *ds.font.handle();
@@ -162,11 +161,10 @@ struct Context2D:ICanvasBackend {
     /// the text out has a rect, controls line height, scrolling offset and all of that nonsense we need to handle
     /// as a generic its good to have the rect and alignment enums given.  there simply isnt a user that doesnt benefit
     /// it effectively knocks out several redundancies to allow some components to be consolidated with style difference alone
-
     str ellipsis(DrawState &ds, str &text, rectd &rect, TextMetrics &tm) {
         const str el = "...";
         str       cur, *p = &text;
-        int       trim = p->len();
+        int       trim = p->size();
         tm             = measure(ds, (str &)el);
         
         if (tm.w >= rect.w)
@@ -200,11 +198,11 @@ struct Context2D:ICanvasBackend {
             rgba    *px = image.pixels.data<rgba>();
             SkImageInfo info = SkImageInfo::Make(isz.x, isz.y, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType);
             bm.installPixels(info, px, image.stride());
-            sk_sp<SkImage> *im = new sk_sp<SkImage>(SkImage::MakeFromBitmap(bm)); /// smarter than smart.
+            sk_sp<SkImage> *im = new sk_sp<SkImage>(SkImage::MakeFromBitmap(bm)); /// meta-smart.
             image.pixels.attach("sk-image", im, [im](var &) { delete im; });
         }
         
-        /// now its just of matter of scaling the little idiot to fit in the box.
+        /// now its just of matter of scaling the little guy to fit in the box.
         real scx = std::min(1.0, rect.w / isz.x);
         real scy = std::min(1.0, rect.h / isz.y);
         real sc  = (scy > scx) ? scx : scy;
@@ -242,7 +240,7 @@ struct Context2D:ICanvasBackend {
         } else
             tm     = measure(ds, *ptext);
         ///
-        auto    tb = SkTextBlob::MakeFromText(ptext->cstr(), ptext->len(), (const SkFont &)f, SkTextEncoding::kUTF8);
+        auto    tb = SkTextBlob::MakeFromText(ptext->cstr(), ptext->size(), (const SkFont &)f, SkTextEncoding::kUTF8);
         ///
         pos.x = (align.x == Align::End)    ? rect.x + rect.w     - tm.w :
                 (align.x == Align::Middle) ? rect.x + rect.w / 2 - tm.w / 2 :
@@ -259,7 +257,7 @@ struct Context2D:ICanvasBackend {
         assert(false);
     }
 
-    void stroke(DrawState &ds, rectd &rect) {
+    void outline(DrawState &ds, rectd &rect) {
     }
     
     void cap(DrawState &ds, Cap::Type c) {
@@ -305,7 +303,7 @@ struct Context2D:ICanvasBackend {
     }
     
     // we are to put everything in path.
-    void fill(DrawState &ds, Path &path) {
+    void fill(DrawState &ds, Stroke &path) {
         if (path.is_rect())
             return fill(ds, path.rect);
         ///
@@ -321,7 +319,7 @@ struct Context2D:ICanvasBackend {
         sk_canvas->drawPath(*path.sk_path(&ps), ps);
     }
     
-    void clip(DrawState &ds, Path &path) {
+    void clip(DrawState &ds, Stroke &path) {
         State   *s = (State *)ds.b_state;
         SkPaint ps = SkPaint(s->ps);
         sk_canvas->clipPath(*path.sk_path(&ps));
@@ -344,7 +342,7 @@ struct Context2D:ICanvasBackend {
 
 void DrawState::copy(const DrawState &r) {
     host       = r.host;
-    stroke_sz  = r.stroke_sz;
+    outline_sz = r.outline_sz;
     font       = r.font;
     font_scale = r.font_scale;
     opacity    = r.opacity;
@@ -357,8 +355,8 @@ void DrawState::copy(const DrawState &r) {
 
 /// this is a very KiSS-oriented Terminal Canvas
 struct Terminal:ICanvasBackend {
-    static fmap<str, str> t_text_colors_8;
-    static fmap<str, str> t_bg_colors_8;
+    static map<str, str> t_text_colors_8;
+    static map<str, str> t_bg_colors_8;
     cchar_t *reset = "\u001b[0m";
     vec2i sz = { 0, 0 };
     array<ColoredGlyph> glyphs;
@@ -490,10 +488,10 @@ struct Terminal:ICanvasBackend {
         assert(false);
     }
 
-    void stroke(DrawState &state, rectd &rect) {
+    void outline(DrawState &state, rectd &rect) {
         assert(rect);
         recti r = rect;
-        int  ss = std::min(2.0, std::round(state.stroke_sz));
+        int  ss = std::min(2.0, std::round(state.outline_sz));
 
         ColoredGlyph cg_0 = {ss, "-", null, state.color};
         ColoredGlyph cg_1 = {ss, "|", null, state.color};
@@ -592,7 +590,7 @@ TextMetrics Canvas::measure(str s)      { return backend->measure(state, s);    
 vec2i Canvas::size()                    { return backend->size();                          }
 void *Canvas::copy_bstate(void *bs)     { return type ? backend->copy_bstate(bs) : null;   }
 
-void  Canvas::stroke_sz( double sz)     { state.stroke_sz = sz;                            }
+void  Canvas::outline_sz( double sz)    { state.outline_sz = sz;                           }
 void  Canvas::font(Font &f)             { state.font = f;                                  }
 void  Canvas::font_scale(double sc)     { state.font_scale  = sc;                          }
 void  Canvas::scale(vec2 sc)            { state.m = state.m.scale(sc);                     }
@@ -601,12 +599,12 @@ void  Canvas::translate(vec2 tr)        { backend->translate(state, tr);        
 void  Canvas::texture(Image &im)        { backend->texture  (state, im ? &im : null);      }
 void  Canvas::color(rgba c)             { backend->color    (state, c);                    }
 void  Canvas::gaussian(vec2 s, rectd c) { backend->gaussian (state, s, c);                 }
-void  Canvas::clip(Path &path)          { backend->clip     (state, path);                 }
+void  Canvas::clip(Stroke &path)        { backend->clip     (state, path);                 }
 void  Canvas::clip(rectd &rect)         { backend->clip     (state, rect);                 }
-void  Canvas::fill(Path &path)          { backend->fill     (state, path);                 }
+void  Canvas::fill(Stroke &path)        { backend->fill     (state, path);                 }
 void  Canvas::fill(rectd &rect)         { backend->fill     (state, rect);                 }
-void  Canvas::stroke(Path &path)        { backend->stroke   (state, path);                 }
-void  Canvas::stroke(rectd &rect)       { backend->stroke   (state, rect);                 }
+void  Canvas::outline(Stroke &path)     { backend->outline  (state, path);                 }
+void  Canvas::outline(rectd &rect)      { backend->outline  (state, rect);                 }
 void  Canvas::clear()                   { backend->clear    (state);                       }
 void  Canvas::clear(rgba c)             { backend->clear    (state, c);                    }
 void  Canvas::flush()                   { backend->flush    (state);                       }
@@ -625,24 +623,24 @@ void  Canvas::text(str text, rectd rect, vec2 align, vec2 offset, bool ellipsis)
 void  Canvas::image(Image &image, rectd rect, vec2 align, vec2 offset) {
     backend->image(state, image, rect, align, offset);
 }
-Path::Path()                    { }
-Path::Path(rectd r) : rect(r)   { }
-Path::Path(const Path &ref)     { copy((Path &)ref); }
-Path::operator rectd &()        {
+Stroke::Stroke()                    { }
+Stroke::Stroke(rectd r) : rect(r)   { }
+Stroke::Stroke(const Stroke &ref)   { copy((Stroke &)ref); }
+Stroke::operator rectd &()          {
     bounds();
     return rect;
 }
-Path &Path::operator=(Path ref) {
+Stroke &Stroke::operator=(Stroke ref) {
     if (this != &ref)
         copy(ref);
     return *this;
 }
 
-bool Path::is_rect() {
+bool Stroke::is_rect() {
     return !p && rect;
 }
 
-void Path::copy(Path &ref) {
+void Stroke::copy(Stroke &ref) {
     delete last_offset; last_offset = null;
     delete p;           p           = null;
     if (ref.p)
@@ -650,7 +648,7 @@ void Path::copy(Path &ref) {
     rect = ref.rect;
 }
 
-Path &Path::rectangle(rectd r, vec2 radius, bool r_tl, bool r_tr, bool r_br, bool r_bl) {
+Stroke &Stroke::rectangle(rectd r, vec2 radius, bool r_tl, bool r_tr, bool r_br, bool r_bl) {
     if ((radius.x == 0 && radius.y == 0) || !(r_tl || r_tr || r_br || r_bl))
         rect = r;
     else {
@@ -667,37 +665,37 @@ Path &Path::rectangle(rectd r, vec2 radius, bool r_tl, bool r_tr, bool r_br, boo
     return *this;
 }
 
-Path::~Path() {
+Stroke::~Stroke() {
     delete last_offset;
     delete p;
 }
 
-Path &Path::move(vec2 v) {
+Stroke &Stroke::move(vec2 v) {
     if (!p) p = new SkPath();
     p->moveTo ( v.x,  v.y);
     return *this;
 }
 
-Path &Path::line(vec2 v) {
+Stroke &Stroke::line(vec2 v) {
     if (!p) p = new SkPath();
     p->lineTo ( v.x,  v.y);
     return *this;
 }
 
-Path &Path::bezier(vec2 p0, vec2 p1, vec2 v) {
+Stroke &Stroke::bezier(vec2 p0, vec2 p1, vec2 v) {
     if (!p) p = new SkPath();
     p->cubicTo(p0.x, p0.y, p1.x, p1.y, v.x, v.y);
     return *this;
 }
 
-Path &Path::quad(vec2 q0, vec2 q1) {
+Stroke &Stroke::quad(vec2 q0, vec2 q1) {
     if (!p) p = new SkPath();
     p->quadTo(q0.x, q0.y, q1.x, q1.y);
     return *this;
 }
 
 /// using degrees, everywhere...
-Path &Path::arc(vec2 c, double r, double d_from, double d, bool m) {
+Stroke &Stroke::arc(vec2 c, double r, double d_from, double d, bool m) {
     if (!p) p = new SkPath();
     if (d  > 360.0)
         d -= 360.0 * std::floor(d / 360.0);
@@ -709,7 +707,7 @@ Path &Path::arc(vec2 c, double r, double d_from, double d, bool m) {
     return *this;
 }
 
-Path &Path::rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl) {
+Stroke &Stroke::rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl) {
     /// --------------------------
     /// tl_p tl_x            tr_x tr_p
     /// tl_y                      tr_y
@@ -778,25 +776,25 @@ Path &Path::rect_v4(vec4 tl, vec4 tr, vec4 br, vec4 bl) {
 
 /// we are only supporting the path use-case here.
 /// the offset is read only, less we read it back from skia (data is opaque i believe)
-void Path::set_offset(real o) {
+void Stroke::set_offset(real o) {
     this->o    = o;
     this->rect = null;
 }
 
-bool Path::contains(vec2 v) {
+bool Stroke::contains(vec2 v) {
     SkPath *sk = last_offset ? last_offset : p; /// up to three areas here..
     return  sk ? sk->contains(v.x, v.y)    : rect.contains(v);
 }
 
-Path::operator bool() {
+Stroke::operator bool() {
     return p || rect;
 }
 
-bool Path::operator!() {
+bool Stroke::operator!() {
     return !(operator bool());
 }
 
-rectd &Path::bounds() {
+rectd &Stroke::bounds() {
     if (!rect) {
         SkRect r = p->computeTightBounds(); /// 'getBounds' has a segfault on valid input feature so i am trying this one
         rect.x = r.fLeft;
@@ -807,15 +805,15 @@ rectd &Path::bounds() {
     return rect;
 }
 
-real Path::w()      { return bounds().w; };
-real Path::h()      { return bounds().h; };
-real Path::aspect() { return bounds().h / bounds().w; };
-vec2 Path::xy()     {
+real Stroke::w()      { return bounds().w; };
+real Stroke::h()      { return bounds().h; };
+real Stroke::aspect() { return bounds().h / bounds().w; };
+vec2 Stroke::xy()     {
     bounds();
     return rect.xy();
 }
 
-SkPath *Path::sk_path(SkPaint *paint) {
+SkPath *Stroke::sk_path(SkPaint *paint) {
     if (bool(last_offset) and o_cache == o)
         return last_offset;
     ///

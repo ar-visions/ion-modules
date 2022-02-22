@@ -69,11 +69,10 @@ int Audio::channels() {
     return p->api.info.channels;
 }
 
-std::vector<short> Audio::data() {
-    auto res = std::vector<short>();
-    res.reserve(p->sz);
+array<short> Audio::data() {
+    auto res = array<short>(p->sz);
     for (int i = 0; i < p->sz; i++)
-        res.push_back(p->buf[i]);
+        res += p->buf[i];
     return res;
 }
 

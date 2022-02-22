@@ -326,22 +326,16 @@ Async Socket::listen(URI url, std::function<void(Socket)> fn) {
             
             /// handshake through said tubes
             for (;;) {
-                printf("server: calling hs...\n");
                 int hs = mbedtls_ssl_handshake(&ci.ssl);
-                printf("server: mbedtls_ssl_handshake = %d\n", hs);
                 ///
                 if (hs == 0)
                     break;
                 ///
                 if (hs != MBEDTLS_ERR_SSL_WANT_READ && hs != MBEDTLS_ERR_SSL_WANT_WRITE) {
-                    printf("server: quitting\n");
-                    fflush(stdout);
+                    console.log("server: abort during handshake");
                     return false;
                 }
             }
-            
-            printf("break\n");
-            fflush(stdout);
             
             /// spawn thread for the given callback
             Async(1, [&, sc_client=sc_client, uri=uri, fn=fn](auto process, int t_index) -> var {

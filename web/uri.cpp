@@ -37,7 +37,7 @@ str URI::encode(str s) {
                 st <<        std::hex << int(c);
             else
                 st << "0" << std::hex << int(c);
-            std::string n(st.str());
+            string n(st.str());
             v += n[0];
             v += n[1];
         } else
@@ -55,11 +55,7 @@ str URI::decode(str e) {
     size_t sz = e.size();
     auto    v = ::array<char>(sz * 4 + 1);
     size_t  i = 0;
-    auto is_hex = [](cchar_t c) {
-        return ((c >= '0' and c <= '9') ||
-                (c >= 'a' and c <= 'f') ||
-                (c >= 'A' and c <= 'F'));
-    };
+    
     while (i < sz) {
         cchar_t c0 = e[i];
         if (c0 == '%') {
@@ -72,21 +68,10 @@ str URI::decode(str e) {
                 if (i >= sz + 2)
                     break;
                 cchar_t c2 = e[i + 2];
-                if (!is_hex(c1) || !is_hex(c2))
-                    v += ' ';
-                else {
-                    char b[3] = { c1, c2, 0 };
-                    std::stringstream ss;
-                    ss << std::hex << b;
-                    unsigned char vv;
-                    ss >> vv;
-                    v  += vv; // todo: add some hex parsing utility; should work to return strings or data
-                }
+                v += string::char_from_nibs(c1, c2);
             }
-        } else if (c0 == '+') {
-            v += ' ';
         } else
-            v += c0;
+            v += (c0 == '+') ? ' ' : c0;
         i++;
     }
     return str(v.data(), v.size());

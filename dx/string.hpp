@@ -155,7 +155,22 @@ public:
         std::transform(c.begin(), c.end(), c.begin(), ::toupper);
         return c;
     }
+    
+    static int nib_value(cchar_t c) {
+        return (c >= '0' and c <= '9') ? (     c - '0') :
+               (c >= 'a' and c <= 'f') ? (10 + c - 'a') :
+               (c >= 'A' and c <= 'F') ? (10 + c - 'A') : -1;
+    }
+    
+    static cchar_t char_from_nibs(cchar_t c1, cchar_t c2) {
+        int nv0 = nib_value(c1);
+        int nv1 = nib_value(c2);
+        return (nv0 == -1 || nv1 == -1) ? ' ' : ((nv0 * 16) + nv1);
+    }
 
+    ///
+    /// the view is oriented around emotion. you can sort of have everything but you can also just have a narrow cone.
+    /// think of it as a sphere of emotion and you can have many parts in aggregate.
     ///
     string replace(string sfrom, string sto, bool all = true) const {
         size_t start_pos = 0;
@@ -236,7 +251,7 @@ public:
     }
     
     int index_of(string s)     const { return index_of(s.cstr()); }
-    int index_of(MatchType ct, const char *mp) const {
+    int index_of(MatchType ct, const char *mp = null) const {
         typedef std::function<bool(const char &)>    Fn;
         typedef std::unordered_map<MatchType, Fn>    Map;
         ///
@@ -352,7 +367,6 @@ public:
 };
 
 typedef string str;
-typedef std::filesystem::path path_t;
 
 typedef array<str> Strings;
 
@@ -368,9 +382,15 @@ namespace std {
     };
 }
 
-
-
 template<typename>
 struct is_strable                 : std::false_type {};
-
 template<> struct is_strable<str> : std::true_type  {};
+
+///
+struct Symbol {
+    int      value;
+    string   symbol;
+    bool operator==(int v) { return v == value; }
+};
+
+typedef array<Symbol> Symbols;

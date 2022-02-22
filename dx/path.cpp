@@ -5,19 +5,21 @@
 
 Path::Path(std::filesystem::directory_entry ent): p(ent.path()) { }
 Path::Path(std::nullptr_t n)        { }
-Path::Path(cchar_t *p)    : p(p) { }
-Path::Path(path_t p)         : p(p) { }
-Path::Path(var v)            : p(v) { }
+Path::Path(cchar_t *p)       : p(p) { }
+Path::Path(path_t   p)       : p(p) { }
+Path::Path(var      v)       : p(v) { }
+Path::Path(str      s)       : p(s) { }
+cchar_t *Path::cstr() const { return p.c_str(); }
 str  Path::ext ()                   { return p.extension().string(); }
 Path Path::file()                   { return std::filesystem::is_regular_file(p) ? Path(p) : Path(null); }
-Path Path::link(Path alias) const   {
+Path Path::link(Path alias)   const {
     std::error_code ec;
     std::filesystem::create_symlink(p, alias, ec);
     return alias.exists() ? alias : null;
 }
 Path Path::link()             const { return std::filesystem::is_symlink(p)      ? Path(p) : Path(null); }
 Path::operator bool()         const { return p.string().length() > 0; }
-Path::operator path_t()             { return p; }
+Path::operator path_t()       const { return p; }
 Path::operator std::string()  const { return p.string(); }
 Path::operator str()          const { return p.string(); }
 Path::operator var()          const { return var(path_t(p)); }
@@ -30,9 +32,14 @@ Path Path::uid(Path base) {
 }
 
 ///
-void Path::remove_all() const {
-    if (std::filesystem::exists(p))
-        std::filesystem::remove_all(p);
+bool Path::remove_all() const {
+    std::error_code ec;
+    return std::filesystem::remove_all(p, ec);
+}
+
+bool Path::remove() const {
+    std::error_code ec;
+    return std::filesystem::remove(p, ec);
 }
 
 bool Path::is_hidden() const {
@@ -41,8 +48,8 @@ bool Path::is_hidden() const {
 }
 
 bool Path::exists()                     const { return  std::filesystem::exists(p); }
-bool Path::dir()                        const { return  std::filesystem::is_directory(p); }
-bool Path::file()                       const { return !std::filesystem::is_directory(p) && std::filesystem::is_regular_file(p); }
+bool Path::is_dir()                     const { return  std::filesystem::is_directory(p); }
+bool Path::is_file()                    const { return !std::filesystem::is_directory(p) && std::filesystem::is_regular_file(p); }
 Path Path::operator / (cchar_t   *s)    const { return Path(p / s); }
 Path Path::operator / (const path_t &s) const { return Path(p / s); }
 //Path Path::operator / (const str    &s) { return Path(p / path_t(s)); }
@@ -54,6 +61,52 @@ int64_t Path::modified_at() const {
     lstat(ps.c_str(), &st);
     return int64_t(st.st_ctime);
 }
+
+bool Path::read(size_t bs, std::function<void(const char *, size_t)> fn) {
+    try {
+        std::error_code ec;
+        size_t rsize = std::filesystem::file_size(p, ec); /// this should be independent of any io caching facilities; it should work down to a second
+        if (!ec)
+            return false; /// no exceptions
+        ///
+        std::ifstream f(p);
+        char *buf = new char[bs];
+        for (int i = 0, n = (rsize / bs) + (rsize % bs != 0); i < n; i++) {
+            size_t sz = i == (n - 1) ? rsize - (rsize / bs * bs) : bs;
+            fn((const char *)buf, sz);
+        }
+        delete[] buf;
+    } catch (std::ofstream::failure e) {
+        console.fault("read failure on resource: {0}", { p });
+    }
+    return true;
+}
+
+bool Path::write(array<uint8_t> bytes) {
+    try {
+        size_t        sz = bytes.size();
+        std::ofstream f(p, std::ios::out | std::ios::binary);
+        if (sz)
+            f.write((const char *)bytes.data(), sz);
+    } catch (std::ofstream::failure e) {
+        console.fault("read failure on resource: {0}", { p });
+    }
+    return true;
+}
+
+bool Path::append(array<uint8_t> bytes) {
+    try {
+        size_t        sz = bytes.size();
+        std::ofstream f(p, std::ios::out | std::ios::binary | std::ios::app);
+        if (sz)
+            f.write((const char *)bytes.data(), sz);
+    } catch (std::ofstream::failure e) {
+        console.fault("read failure on resource: {0}", { p });
+    }
+    return true;
+}
+
+bool Path::same_as(Path b) const { std::error_code ec; return std::filesystem::equivalent(p, b, ec); }
 
 void Path::resources(array<str> exts, FlagsOf<Flags> flags, Path::Fn fn) {
     bool use_gitignore = flags(UseGitIgnores);
@@ -100,21 +153,21 @@ void Path::resources(array<str> exts, FlagsOf<Flags> flags, Path::Fn fn) {
             return false;
         };
         ///
-        if (p.dir()) {
+        if (p.is_dir()) {
             if (!no_hidden || !p.is_hidden())
                 for (Path p: std::filesystem::directory_iterator(p)) {
                     Path link = p.link();
                     if (link)
                         continue;
                     Path pp = link ? link : p;
-                    if (recursive && pp.dir()) {
+                    if (recursive && pp.is_dir()) {
                         if (fetched_dir.count(pp) > 0)
                             return;
                         fetched_dir[pp] = true;
                         res(pp);
                     }
                     ///
-                    if (pp.file())
+                    if (pp.is_file())
                         fn_filter(pp);
                 }
         } else if (p.exists())

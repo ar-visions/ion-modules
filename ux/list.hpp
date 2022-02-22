@@ -45,7 +45,7 @@ struct List:node {
         }
         
         inline var exporter() {
-            return std::vector<var> { id, size, scale, final, align };
+            return array<var> { id, size, scale, final, align };
         }
         
         io_shim(Column, id);
@@ -65,7 +65,7 @@ struct List:node {
         struct ColumnConf:Cell {
             Extern<Columns>     ids;
         } column;
-        Extern<rgba>        odd_bg;
+        Extern<rgba>            odd_bg;
     } m;
     
     void bind() {
@@ -111,12 +111,12 @@ struct List:node {
             return;
         rectd r = {path.rect.x, path.rect.y, path.rect.w, 1.0};
         ///
-        /// would be nice to just draw 1 stroke here, canvas should work with that.
+        /// would be nice to just draw 1 outline here, canvas should work with that.
         auto draw_rect = [&](rgba &c, rectd r) {
             Path path = r; // todo: decide on final xy scaling for text and gfx; we need a the same unit scales
             canvas.save();
             canvas.color(c);
-            canvas.stroke(path);
+            canvas.outline(path);
             canvas.restore();
         };
         ///
@@ -138,7 +138,7 @@ struct List:node {
         auto pad_rect = [&](rectd r) -> rectd {
             return {r.x + 1.0, r.y, r.w - 2.0, r.h};
         };
-        /// paint column text, fills and strokes
+        /// paint column text, fills and outlines
         if (columns) {
             bool prev = false;
             Border &border = node::m.border;

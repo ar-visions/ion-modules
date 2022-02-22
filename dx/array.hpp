@@ -3,8 +3,11 @@
 #include <queue>
 #include <list>
 #include <random>
+#include <filesystem>
 #include <dx/rand.hpp>
 #include <dx/size.hpp>
+
+typedef std::filesystem::path path_t;
 
 template <class T>
 struct array:io {
@@ -24,45 +27,62 @@ struct array:io {
     
 public:
     typedef T value_type;
-
-    array(std::initializer_list<T> v) { realloc(v.size()); for (auto &i: v) a->push_back(i); }
-    array(const T *d, Size sz)        { realloc(sz);       for (size_t i = 0; i < sz; i++) a->push_back(d[i]); }
-    array(Size sz, T v)               { realloc(sz);       for (size_t i = 0; i < sz; i++) a->push_back(v);    }
+    
+/* ~array() { }
+    array &operator=(array<T> &ref) {
+        if (this != &ref)
+            a = ref.a;
+        return *this;
+    }
+    array(array<T> &ref) : a(ref.a) { } */
+    array(std::initializer_list<T> v) { realloc(v.size());      for (auto &i: v) a->push_back(i); }
+    array(const T *d, Size sz)        { assert(d); realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(d[i]); }
+    array(Size sz, T v)               {            realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(v); }
     array(std::nullptr_t n = null)    { }
     array(Size sz)                    { realloc(sz); }
-    
-    void               expand(Size sz, T f)  { for (size_t i = 0; i < sz; i++) a->push_back(f); }
-    void                erase(int index)     { if (index >= 0) a->erase(a->begin() + size_t(index)); }
-    T                   &back()              { return ref().back();          }
-    T                  &front()              { return ref().front();         }
-    Size                 size()        const { return a ? a->size()     : 0; }
-    Size             capacity()        const { return a ? a->capacity() : 0; }
-    std::vector<T>    &vector()              { return ref();                 }
-    typeof(iterator)    begin()              { return ref().begin();         }
-    typeof(iterator)      end()              { return ref().end();           }
+    array(std::filesystem::path path);
+    T                   &back()              { return ref().back();                }
+    T                  &front()              { return ref().front();               }
+    Size                 size()        const { return a ? a->size()     : 0;       }
+    Size             capacity()        const { return a ? a->capacity() : 0;       }
+    std::vector<T>    &vector()              { return ref();                       }
+    typeof(iterator)    begin()              { return ref().begin();               }
+    typeof(iterator)      end()              { return ref().end();                 }
     T                   *data()        const { return (T *)(a ? a->data() : null); }
-    void      operator    += (T v)           { ref().push_back(v);           }
-    void      operator    -= (int i)         { return erase(i);              }
-              operator   bool()        const { return a->size() > 0;         }
-    bool      operator      !()        const { return !(operator bool());    }
-    T&        operator     [](size_t i)      { return ref()[i];              }
-    array<T> &operator=(const array<T> &ref) { if (this != &ref) a = ref.a; return *this; }
-    bool      operator!=     (array<T> b)    { return (operator==(b)); }
+    void      operator    += (T v)           { ref().push_back(v);                 }
+    void      operator    -= (int i)         { return erase(i);                    }
+              operator   bool()        const { return a && a->size() > 0;          }
+    bool      operator      !()        const { return !(operator bool());          }
+    T&        operator     [](size_t i)      { return ref()[i];                    }
+    bool      operator!=     (array<T> b)    { return (operator==(b));             }
+    ///
     bool      operator==     (array<T> b)    {
-        if (size() != b.size())
-            return false;
-        T *a_v = (T *)a->data();
-        T *b_v = (T *)b->data();
-        for (size_t i = 0; i < size(); i++)
-            if (a_v[i] != b_v[i])
-                return false;
-        return true;
+        if (!a && !b.a)
+            return true;
+        size_t sz = size();
+        bool sz_equal = sz == b.size();
+        if ( sz_equal && sz ) {
+            T *a_v = (T *)a->data();
+            T *b_v = (T *)b.data();
+            for (size_t i = 0; i < size(); i++)
+                if (a_v[i] != b_v[i])
+                    return false;
+        }
+        return sz_equal;
     }
-    
+    ///
+    array<T> &operator=(const array<T> &ref) {
+        if (this != &ref)
+            a = ref.a;
+        return *this;
+    }
+    ///
+    void   expand(Size sz, T f)         { for (size_t i = 0; i < sz; i++) a->push_back(f); }
+    void   erase(int index)             { if (index >= 0) a->erase(a->begin() + size_t(index)); }
     void   reserve(size_t sz)           { ref().reserve(sz); }
     void   clear(size_t sz = 0)         { ref().clear(); if (sz) reserve(sz); }
     void   resize(size_t sz, T v = T()) { ref().resize(sz, v); }
-
+    ///
     static array<T> import(std::vector<T> v) {
         array<T> a(v.size());
         for (auto &i: v)
@@ -73,21 +93,19 @@ public:
     template <typename R>
     array<R> convert() {
         array<R> out(a->size());
-        for (auto &i: *a)
+        if (a) for (auto &i: *a)
             out += i;
         return out;
     }
     
     int count(T v) const {
         int r = 0;
-        for (auto &i: *a)
+        if (a) for (auto &i: *a)
             if (v == i)
                 r++;
         return r;
     }
     
-    /// i eh.. normally dont decide this but its better for this to be mutable for performance
-    /// and you muuuust lose non-randomness at all cost. haha.
     void shuffle() {
         std::vector<std::reference_wrapper<const T>> v(a->begin(), a->end());
         std::shuffle(v.begin(), v.end(), Rand::global_engine());
@@ -98,7 +116,7 @@ public:
     /// its a vector operation it deserves to expand
     template <typename R>
     R select_first(std::function<R(T &)> fn) const {
-        for (auto &i: *a) {
+        if (a) for (auto &i: *a) {
             R r = fn((T &)i);
             if (r)
                 return r;
@@ -109,7 +127,7 @@ public:
     /// todo: all, all delim use int, all. not a single, single one use size_t.
     int index_of(T v) const { 
         int index = 0;
-        for (auto &i: *a) {
+        if (a) for (auto &i: *a) {
             if (i == v)
                 return index;
             index++;
@@ -140,25 +158,30 @@ struct Shape:Size {
                 r    *= s;
         return size_t(r);
     }
+    
     /// switching to ssize_t after its established
     size_t operator [] (size_t i) { return size_t(shape[i]); }
-    Shape(size_t sz = 0)           : shape(sz) { }
-    Shape(::array<int> sz)         : shape(sz) { }
-    Shape(const Size &ref)         : shape(std::vector<ssize_t> { ssize_t((Size &)ref) }) { }
-
+    ///
+    Shape(::array<int> sz)                : shape(sz) { }
+    Shape(int d0, int d1, int d2, int d3) : shape({ d0, d1, d2, d3 }) { }
+    Shape(int d0, int d1, int d2)         : shape({ d0, d1, d2     }) { }
+    Shape(int d0, int d1)                 : shape({ d0, d1         }) { }
+    Shape(int d0)                         : shape({ d0             }) { }
+    Shape()                               { }
+    ///
+    Shape(const Size &ref)                : shape(std::vector<ssize_t> { ssize_t((Size &)ref) }) { }
+    ///
+    static Shape<S> rgba(int w, int h) {
+        if constexpr (S == Major)
+            return { h, w, 4 };
+        assert(false);
+        return { h, 4, w }; /// decision needed on this
+    };
+    ///
     inline typeof(iterator) begin() { return shape.begin();    }
     inline typeof(iterator) end()   { return shape.end();      }
 };
-
-///
-struct Symbol {
-    int         value;
-    std::string symbol;
-    bool operator==(int v) { return v == value; }
-};
-
-typedef array<Symbol> Symbols;
-
+  
 template<typename>
 struct serializable              : std::true_type {};
 

@@ -46,17 +46,6 @@ static inline void memclear(T &dst, size_t count = 1, int value = 0) { memset(&d
 template <typename T>
 static inline void memcopy(T *dst, T *src, size_t count = 1)         { memcpy(dst, src, count * sizeof(T)); }
 
-struct node;
-struct var;
-typedef std::function<bool()>                      FnBool;
-typedef std::function<void(void *)>                FnArb;
-typedef std::function<void(void)>                  FnVoid;
-typedef std::function<void(var &)>                 Fn;
-typedef std::function<void(var &, node *)>         FnNode;
-typedef std::function<var()>                       FnGet;
-typedef std::function<void(var &, string &)>       FnEach;
-typedef std::function<void(var &, size_t)>         FnArrayEach;
-
 struct VoidRef {
     void *v;
     VoidRef(void *v) : v(v) { }
@@ -139,14 +128,17 @@ public:
     void write_binary(path_t p);
     ///
     var(std::nullptr_t p);
-    var(Type::Specifier t, void *v) : t(t) {
+    var(Type::Specifier t, void *v) : t(t), sh(0) {
         assert(t == Type::Arb);
         n_value.vstar = (void *)v;
     }
     var(Type::Specifier t = Type::Undefined, Type::Specifier c = Type::Undefined, size_t count = 0);
-    var(Type::Specifier t, u *n) : t(t), n((u *)n) { }
+    var(Type::Specifier t, u *n) : t(t), n((u *)n) {
+        /// unsafe pointer use-case.
+        // assert(false);
+    }
     var(Type::Specifier t, string str);
-    var(Size   sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); }
+    var(Size   sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); n = &n_value; } // clean this area up. lol [gets mop; todo]
     var(var *vref) : t(Type::Ref), n(null) {
         assert(vref);
         while (vref->t == Type::Ref)
@@ -199,6 +191,7 @@ public:
         assert(c >= Type::i8 && c <= Type::f64);
     }
     
+    var(Type::Specifier c, std::shared_ptr<uint8_t> d, Shape<Major> sh);
     var(path_t p);
     operator path_t();
     static bool type_check(var &a, var &b);
@@ -221,6 +214,7 @@ public:
     var(::array<var> data_array);
     var(string str);
     var(const char *str);
+    
     static var load(path_t p);
     
     template <typename T>
@@ -233,7 +227,7 @@ public:
         return result;
     }
     
-    map<string, var> &map() { return var::resolve(*this).m; }
+    map<string, var> &map()   { return var::resolve(*this).m; }
     ::array<var>     &array() { return var::resolve(*this).a; }
     var   operator()(var &d) {
         var &v = var::resolve(*this);
@@ -245,8 +239,8 @@ public:
     
     template <typename T>
     T convert() {
-        var &v = var::resolve(*this);
-        assert(v == Type::ui8);
+        //var &v = var::resolve(*this);
+        //assert(v == Type::ui8);
         assert(d != null);
         assert(size() == sizeof(T)); /// C3PO: that isn't very reassuring.
         return T(*(T *)d.get());
@@ -268,7 +262,7 @@ public:
     var(::array<T> aa) : t(Type::Array) {
         T     *va = aa.data();
         Size   sz = aa.size();
-        c         = data_type(va);
+        c         = Type::specifier(va);
         a.reserve(sz);
         ///
         if constexpr ((std::is_same_v<T,     bool>)
@@ -283,43 +277,23 @@ public:
             flags     = Flags::Compact;
             T *vdata  = (T *)d.get();
             memcopy(vdata, va, sz);
-            assert(data_type(vdata) == c);
+            assert(Type::specifier(vdata) == c);
             for (size_t i = 0; i < sz; i++)
                 a += var {c, (var::u *)&vdata[i]};
           } else
               for (size_t i = 0; i < sz; i++)
                   a += aa[i];
     }
-             
-    /// needs to go in Type
-    template <typename T>
-    static Type::Specifier data_type(T *v) {
-             if constexpr (std::is_same_v<T,       Fn>) return Type::Lambda;
-      //else if constexpr (std::is_same_v<T, FnFilter>) return Type::Filter; -- global 'filter' notion not strong enough, and requires high amounts of internal conversion
-        else if constexpr (std::is_same_v<T,     bool>) return Type::Bool;
-        else if constexpr (std::is_same_v<T,   int8_t>) return Type::i8;
-        else if constexpr (std::is_same_v<T,  uint8_t>) return Type::ui8;
-        else if constexpr (std::is_same_v<T,  int16_t>) return Type::i16;
-        else if constexpr (std::is_same_v<T, uint16_t>) return Type::ui16;
-        else if constexpr (std::is_same_v<T,  int32_t>) return Type::i32;
-        else if constexpr (std::is_same_v<T, uint32_t>) return Type::ui32;
-        else if constexpr (std::is_same_v<T,  int64_t>) return Type::i64;
-        else if constexpr (std::is_same_v<T, uint64_t>) return Type::ui64;
-        else if constexpr (std::is_same_v<T,    float>) return Type::f32;
-        else if constexpr (std::is_same_v<T,   double>) return Type::f64;
-        else return Type::Map;
-        assert(false);
-    }
     
     template <typename T>
-    var(T *v, ::array<int> sh) : t(Type::Array), c(data_type(v)), sh(sh) {
+    var(T *v, ::array<int> sh) : t(Type::Array), c(Type::specifier(v)), sh(sh) {
         d = std::shared_ptr<uint8_t>((uint8_t *)new T[size_t(sh)]);
         memcopy(d.get(), (uint8_t *)v, size_t(sh) * sizeof(T)); // in bytes
         flags = Compact;
     }
     
     template <typename T>
-    var(T *v, Size sz) : t(Type::Array), c(data_type(v)), sh(sz) {
+    var(T *v, Size sz) : t(Type::Array), c(Type::specifier(v)), sh(sz) {
         d = std::shared_ptr<uint8_t>((uint8_t *)new T[sz]);
         memcopy(d.get(), (uint8_t *)v, size_t(sh) * sizeof(T)); // in bytes
         flags = Compact;
@@ -573,9 +547,8 @@ struct Map:var {
     /// map from initializer list
     Map(std::initializer_list<pair<string, var>> args) : var(::map<string, var>()) {
         m = ::map<string, var>(args.size());
-        printf("pairs = %p\n", (void *)m.pairs.get());
         for (auto &[k,v]: args)
-            m[k] = v;
+            m[k ] = v;
     }
     
     /// assignment op and copy constructor

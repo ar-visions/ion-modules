@@ -65,22 +65,22 @@ static str sqtype_from_var(var &v) {
 static bool create(sqlite3 *db, str table_name, var &model) {
     char       *err = null;
     const size_t sz = model.size();
-    auto     fields = std::string("");
+    string   fields = string(1024);
     int       index = 0;
     ///
     for (auto &[k,v]: model.map()) {
-        str  field_name = k;
-        bool    is_last = index   == sz - 1;
-        bool  primary_k = index++ == 0;
-        str      sqtype = sqtype_from_var(v);
-        fields         += "\t" + std::string(field_name) + " " + std::string(sqtype);
+        string field_name = k;
+        bool      is_last = index   == sz - 1;
+        bool    primary_k = index++ == 0;
+        string     sqtype = sqtype_from_var(v);
+        fields           += "\t" + field_name + " " + sqtype;
         if (primary_k)
-            fields += " PRIMARY KEY";
+            fields       += " PRIMARY KEY";
         if (!is_last)
-            fields += ",\n";
+            fields       += ",\n";
     }
     assert(index > 0);
-    std::string q = "CREATE TABLE IF NOT EXISTS " + std::string(table_name) + " (\n" + fields + ")";
+    string q = "CREATE TABLE IF NOT EXISTS " + table_name + " (\n" + fields + ")";
     console.log(q);
     int rc  = sqlite3_exec(db, q.c_str(), null, null, &err);
     if (rc != SQLITE_OK) {
@@ -117,7 +117,7 @@ static int process_raw(ModelCache &cache, int count, char **field_values, char *
 
 /// resolve fields
 bool SQLite::reset(var &view) {
-    std::string table_name = view;
+    string table_name = view;
     sqlite3  *db = null;
     char    *err = null;
     int       rc = sqlite3_open(uri.cstr(), &db);
@@ -142,7 +142,7 @@ void SQLite::resolve(str model_name) {
         var rec = record(table);
         int  n_field = raw.fields.size();
         for (int i = 0; i < n_field; i++) {
-            std::string vstr = raw.values[i];
+            string vstr = raw.values[i];
             /// if its an id, we will lookup
             var &v = rec[raw.fields[i]];
                  v = var { v.t, vstr };
@@ -185,7 +185,7 @@ void SQLite::observe(str model_name) {
             ///
             if (value == Type::Map) {
                 for (auto &[peer_name, v_fields]: refs.map()) {
-                    std::string speer_name = peer_name;
+                    string speer_name = peer_name;
                     var field_names_used = v_fields;
                     if (refs.count(peer_name) && refs[peer_name].count(field)) {
                         auto peer_key = ctx->first_fields[peer_name];
@@ -220,7 +220,7 @@ void SQLite::observe(str model_name) {
                         fields += ", ";
                         values += ", ";
                     }
-                    auto s_field = std::string(field);
+                    auto s_field = field;
                     var    &rval = var::resolve(row[s_field]);
                     fields      += field;
                     values      += explicit_key ? explicit_key : str_from_value(field, rval);
@@ -256,7 +256,7 @@ void SQLite::fetch() {
     for (auto &[model_name, model]: ctx.models) {
         ModelCache &cache = *(ctx.mcache[model_name] = new ModelCache);
         /// open db and query table
-        std::string  m = str(model);
+        string       m = str(model);
         sqlite3    *db = null;
         int         rc = sqlite3_open(uri.cstr(), &db);
         assert(     rc == SQLITE_OK);

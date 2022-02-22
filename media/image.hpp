@@ -101,25 +101,31 @@ struct Image {
                 pixel<uint8_t>(tx.x + 0, tx.y + 1) * (1.0 - blend.x) * (      blend.y);
     }
     
+    /// this can be cleaner but i am just finishing a refactor here with shape.
     template <typename T>
     inline T &pixel(int x, int y) {
-        auto   &sh = pixels.sh;
-        assert(sh.size() == 3 && sh[0] && sh[1]);
-        int     xp = (x < 0) ? 0 : ((x >= sh[1]) ? (sh[1] - 1) : x);
-        int     yp = (y < 0) ? 0 : ((y >= sh[0]) ? (sh[0] - 1) : y);
-        vec2i orig = pixels.count("crop") ? vec2i(pixels["crop"]) : vec2i { 0, 0 };
-        T    *data = pixels.data<T>();
-        return data[(orig.y + yp) * sh[1] + (orig.x + xp)];
+        auto   &sh   = pixels.sh;
+        int     sh_w = int(sh[1]);
+        int     sh_h = int(sh[0]);
+        assert(sh.size() == 3 && sh_h && sh_w);
+        int       xp = (x < 0) ? 0 : ((x >= sh_w) ? (sh_w - 1) : x);
+        int       yp = (y < 0) ? 0 : ((y >= sh_h) ? (sh_h - 1) : y);
+        vec2i   orig = pixels.count("crop") ? vec2i(pixels["crop"]) : vec2i { 0, 0 };
+        T      *data = pixels.data<T>();
+        return data[(orig.y + yp) * sh_w + (orig.x + xp)];
     }
     
     inline void filter(std::function<rgba(rgba &, int, int)> fn) {
         assert(pixels.c == Type::ui32 || pixels.c == Type::i32);
-        auto    sh = pixels.shape();
-        assert(sh[2] == 4);
-        recti crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh[1], sh[0] };
-        rgba    *o = (rgba *)pixels.data<uint32_t>() + crop.y * sh[1] + crop.x;
+        auto    sh   = pixels.shape();
+        int     sh_d = int(sh[2]);
+        int     sh_w = int(sh[1]);
+        int     sh_h = int(sh[0]);
+        assert( sh_d == 4 );
+        recti crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh_w, sh_h };
+        rgba    *o = (rgba *)pixels.data<uint32_t>() + crop.y * sh_w + crop.x;
         for (int y = 0; y < crop.h; y++) {
-            rgba *p = &o[sh[1] * y];
+            rgba *p = &o[sh_w * y];
             for (int x = 0; x < crop.w; x++, p++)
                 *p = fn(*p, x, y);
         }
@@ -127,12 +133,15 @@ struct Image {
     
     inline void filter(std::function<uint8_t(uint8_t &, int, int)> fn) {
         assert(pixels.c == Type::ui8 || pixels.c == Type::i8);
-        auto    sh = pixels.shape();
-        assert(sh[2] == 1);
-        recti crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh[1], sh[0] };
-        uint8_t *o = (uint8_t *)pixels.data<uint8_t>() + crop.y * sh[1] + crop.x;
-        for (int y = 0; y < crop.h; y++) {
-            uint8_t *p = &o[sh[1] * y];
+        auto    sh   = pixels.shape();
+        int     sh_d = int(sh[2]);
+        int     sh_w = int(sh[1]);
+        int     sh_h = int(sh[0]);
+        assert( sh_d == 1 );
+        recti   crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh_w, sh_h };
+        uint8_t   *o = &pixels.data<uint8_t>()[crop.y * sh_w + crop.x];
+        for (int   y = 0; y < crop.h; y++) {
+            uint8_t *p = &o[sh_w * y];
             for (int x = 0; x < crop.w; x++, p++)
                 *p = fn(*p, x, y);
         }
@@ -140,12 +149,15 @@ struct Image {
     
     inline void each(std::function<void(uint8_t &, int, int)> fn) {
         assert(pixels.c == Type::ui8 || pixels.c == Type::i8);
-        auto    sh = pixels.shape();
-        assert(sh[2] == 1);
-        recti crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh[1], sh[0] };
-        uint8_t *o = (uint8_t *)pixels.data<uint8_t>() + crop.y * sh[1] + crop.x;
-        for (int y = 0; y < crop.h; y++) {
-            uint8_t *p = &o[sh[1] * y];
+        auto    sh   = pixels.shape();
+        int     sh_d = int(sh[2]);
+        int     sh_w = int(sh[1]);
+        int     sh_h = int(sh[0]);
+        assert( sh_d == 1 );
+        recti   crop = pixels.count("crop") ? recti(pixels["crop"]) : recti { 0, 0, sh_w, sh_h };
+        uint8_t   *o = (uint8_t *)pixels.data<uint8_t>() + crop.y * sh_w + crop.x;
+        for (int   y = 0; y < crop.h; y++) {
+            uint8_t *p = &o[sh_w * y];
             for (int x = 0; x < crop.w; x++, p++)
                 fn(*p, x, y);
         }

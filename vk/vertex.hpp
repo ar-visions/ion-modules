@@ -73,7 +73,7 @@ struct IndexBuffer:IndexData {
 };
 
 struct Shaders {
-    map<std::string, std::string> map;
+    map<string, string> map;
     /// default construction
     Shaders(std::nullptr_t n = null) {
         map["*"] = "main";
@@ -87,20 +87,20 @@ struct Shaders {
     bool operator!() { return !map.size(); }
     
     /// group=shader
-    Shaders(str v) { /// str is the only interface in it.  everything else is just too messy for how simple the map is
+    Shaders(string v) { /// str is the only interface in it.  everything else is just too messy for how simple the map is
         auto sp = v.split(",");
         for (auto v: sp) {
             auto a = v.split("=");
             assert(a.size() == 2);
-            std::string key   = a[0];
-            std::string value = a[1];
+            string key   = a[0];
+            string value = a[1];
             map[key] = value;
         }
     }
-    std::string &operator[](std::string n) {
+    string &operator[](string n) {
         return map[n];
     }
-    size_t count(std::string n) {
+    size_t count(string n) {
         return map.count(n);
     }
 };

@@ -102,7 +102,7 @@ struct PipelineData {
                UniformData &ubo,
                VertexData  &vbo,
                IndexData   &ibo,
-               array<Attrib> &attr, size_t vsize, rgba clr, std::string name, VkStateFn vk_state);
+               array<Attrib> &attr, size_t vsize, rgba clr, string name, VkStateFn vk_state);
         void destroy();
         void initialize();
         ~Memory();
@@ -117,7 +117,7 @@ struct PipelineData {
     void update(size_t frame_id);
     ///
     PipelineData(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-                 array<Attrib> attr, size_t vsize, rgba clr, std::string shader,
+                 array<Attrib> attr, size_t vsize, rgba clr, string shader,
                  VkStateFn vk_state = null) {
             m = std::shared_ptr<Memory>(
                 new Memory { device, ubo, vbo, ibo, attr, vsize, clr, shader, vk_state }
@@ -128,8 +128,7 @@ struct PipelineData {
 /// pipeline dx
 template <typename V>
 struct Pipeline:PipelineData {
-    Pipeline(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-             array<Attrib> attr, rgba clr, std::string name):
+    Pipeline(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo, array<Attrib> attr, rgba clr, string name):
         PipelineData(device, ubo, vbo, ibo, attr, sizeof(V), clr, name) { }
 };
 

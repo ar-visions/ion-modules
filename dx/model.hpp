@@ -39,50 +39,33 @@ struct Ident   : Remote {
        Ident() : Remote(null) { }
 };
 
-/*
-template <typename T>
-struct DLNode {
-    DLNode  *next = null,
-            *prev = null;
-    T    *payload = null;
-    uint8_t  data[1];
-    ///
-    static T *alloc() {
-        DLNode<T> *b = calloc(1, sizeof(DLNode<T>) + sizeof(T));
-         b->payload  = b->data;
-        *b->payload  = T();
-        return b;
-    }
+struct node;
+struct Raw {
+    std::vector<std::string> fields;
+    std::vector<std::string> values;
 };
 
-template <typename T>
-struct DList {
-    DLNode<T> *first = null;
-    DLNode<T> *last = null;
+typedef std::vector<Raw>                        Results;
+typedef std::unordered_map<std::string, var>    Idents;
+typedef std::unordered_map<std::string, Idents> ModelIdents;
+
+struct ModelCache {
+    Results       results;
+    Idents        idents; /// lookup fmap needed for optimization
 };
 
-/// the smart pointer with baked in array and a bit of indirection.
-template <typename T>
-struct list:ptr<DList<T>> {
-    DList<T> *m;
-    /// -------------------
-    list() { alloc(m); }
-    T *push() {
-        DLNode<T> *n = DLNode<T>::alloc();
-        ///
-        if (m->last)
-            m->last->next = n;
-        ///
-        n->prev = m->last;
-        m->last = n;
-        ///
-        if (!m->first)
-            m->first = n;
-        ///
-        return T();
-    }
-    void pop() {
-        // release taht memory
-    }
+struct ModelContext {
+    ModelMap      models;
+    std::unordered_map<std::string, std::string> first_fields;
+    std::unordered_map<std::string, ModelCache *> mcache;
+    var           data;
 };
-*/
+
+struct Adapter { // this was named DX, it needs a different name than this, though.  DX is the API end of an app, its data experience or us
+    ModelContext &ctx;
+    str           uri;
+    Adapter(ModelContext &ctx, str uri) : ctx(ctx), uri(uri) { }
+    virtual var record(var &view, int64_t primary_key  = -1) = 0;
+    virtual var lookup(var &view, int64_t primary_key) = 0;
+    virtual bool reset(var &view) = 0;
+};
