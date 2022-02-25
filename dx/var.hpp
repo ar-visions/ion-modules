@@ -138,9 +138,8 @@ public:
         /// unsafe pointer use-case. [merge]
         // assert(false);
     }
-    
     var(Type::Specifier t, string str);
-    var(Size   sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); n = &n_value; 
+    var(Size   sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); n = &n_value; } // clean this area up. lol [gets mop; todo]
     var(var *vref) : t(Type::Ref), n(null) {
         assert(vref);
         while (vref->t == Type::Ref)
