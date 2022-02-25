@@ -311,22 +311,12 @@ struct DrawState {
                      host(h), outline_sz(s), font_scale(f), opacity(o),
                      m(m), color(c), blur(b), font(font) { }
            DrawState()             { }
+          ~DrawState();
     void importer(var &d)          { }
     var  exporter()                { return null; }
     void        copy(const DrawState &r);
     
-    /// io_shim(DrawState, true);
-    DrawState(std::nullptr_t n) : DrawState() { }
-    DrawState(const DrawState &ref) { copy(ref);            }
-    DrawState(var &d)            { importer(d);          }
-    operator var()               { return exporter();    }
-    operator bool()  const       { return true;          }
-    bool operator!() const       { return false;         }
-    DrawState &operator=(const DrawState &ref) {
-        if (this != &ref)
-            copy(ref);
-        return *this;
-    }
+    io_shim(DrawState, true);
 };
 
 struct  Canvas;

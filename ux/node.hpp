@@ -25,30 +25,42 @@ size_t                      StPair_instances_count(struct StPair *p, Type &t);
 
 struct Style;
 struct Element;
-struct Shared2 {
-    int x;
-    operator bool() { return true; }
+
+///
+struct Arg {
+    Shared shared;
+    template <typename T>
+    Arg(T v) {
+        if constexpr (std::is_base_of<Shared, T>()) {
+            shared = v;
+        } else if constexpr (std::is_same_v<const char *, T> || std::is_same_v<char *, T>) {
+            shared = new str(v);
+        } else {
+            shared = new T(v);
+        }
+    }
 };
 
-/// reduce Bind, translate the member to member::shared value
 ///
 struct Bind {
     str       id;
     Shared    shared;
     
-    Bind(str id, Member &m) : id(id), shared(m.shared) { }
-    
-    template <typename T>
-    Bind(str id, T v)       : id(id), shared(1, new T(v)) { }
+    Bind(str id, Arg a) : id(id), shared(a.shared) {
+        int test = 0;
+        test++;
+    }
+    Bind(Arg a)         :         shared(a.shared) { }
     
     bool operator==(Bind &b) { return id == b.id; }
     bool operator!=(Bind &b) { return !operator==(b); }
 };
 
+/// something not possible with array<Bind> [/kicks rock]
+/*
 struct Binds {
     std::vector<Bind> a;
     static typename std::vector<Bind>::iterator iterator;
-
 
     Bind                &back()              { return a.back();       }
     Bind               &front()              { return a.front();      }
@@ -78,6 +90,9 @@ struct Binds {
             a.push_back(i);
     }
 };
+*/
+
+typedef array<Bind> Binds;
 
 struct  node;
 typedef node         * (*FnFactory)();
@@ -201,47 +216,56 @@ struct node {
             StTrans      *trans        = null;
             bool          manual_trans = false;
             int64_t       timer_start  = 0;
-            T             t_start      = T();
-            T             t_value      = T();
-            T            *s_value      = null;
-            Alloc<T>      d_value;
+            Alloc<T>      t_start;       // transition start value (could be in middle of prior transition, for example, whatever its start is)
+            Alloc<T>      t_value;       // current transition value
+            Alloc<T>      s_value;       // style value
+            Alloc<T>      d_value; // default value
             
             ///
-            T &current() {
-                assert(host);
-                return host->shared    ? *(T *)host->shared :
-                      (transitioning() ?  t_value :
-                       s_value         ? *s_value :
-                                         *(T *)d_value);
-            }
+            inline T &current() { return (T &)(Alloc<T> &)host->shared_value(); }
             
             ///
             T &auto_update() {
                 assert(host);
-                if (!host->shared && transitioning() && !manual_trans)
-                    t_value = (*trans)(t_start, *s_value, transition_pos());
+                if (!host->shared && transitioning() && !manual_trans) {
+                    int test = 0;
+                    test++;
+                    *t_value = (*trans)(*t_start, *s_value, transition_pos());
+                }
                 return current();
             }
             
             void manual_transition(bool manual) { manual_trans = manual; }
             bool transitioning()  const { return (!trans || trans->type == StTrans::None) ? false : (timer_start + trans->duration.millis) > ticks(); }
-            real transition_pos() const {
-                return (!trans || trans->type == StTrans::None) ? 1.0 :
+            real transition_pos() const { return (!trans || trans->type == StTrans::None) ? 1.0 :
                          std::clamp((ticks() - timer_start) / real(trans->duration.millis), real(0.0), real(1.0));
             }
             
             inline void changed(T &snapshot, T *s_value, StTrans *t) {
                 if (t != trans) {
-                    t_start     = snapshot;
-                    timer_start = ticks();
-                    trans       = t;
+                    if (t) {
+                        if (!t_value)
+                             t_value = new T(snapshot);
+                        t_start = new T(snapshot);
+                        timer_start = ticks();
+                    }
+                    trans = t;
                 }
-                this->s_value   = s_value;
+                this->s_value = Persistent("m1", s_value); // s_value ? new T(*s_value) : (T *)null;
+                if (this->s_value.p)
+                    this->s_value.p->bark_if_freeing = true;
             }
         };
         size_t        cache = 0;
         Alloc<T>      d_value;
         StyleValue    style;
+        
+        virtual Shared &shared_value() {
+            return                   shared ? shared        : ///
+                      style.transitioning() ? style.t_value : /// more freedom than the shared_ptr, and it has attachment potential
+                     style.s_value.is_set() ? style.s_value : /// style value (transition-to parameter as well)
+                                                    d_value ; /// default value (base value, if none above are set and not in transition)}
+        }
         
         /// this cannot use style, because its used by style
         bool state_bool() {
@@ -253,8 +277,9 @@ struct node {
             else
                 return bool(v);
         }
-        virtual T &current() { return  style.auto_update(); }
-        void      *ptr()     { return &current(); }
+        virtual T    &current() { return  style.auto_update(); }
+        void             *ptr() { return &current();           }
+        Shared     shared_ptr() { return  current();           }
     
         void style_value_set(void *ptr, StTrans *t) {
             T &cur = current();
@@ -306,7 +331,8 @@ struct node {
                                 p->instances.set(m.type, new T(conv));
                             }
                         }
-                        mm.style_value_set(p ? p->instances.get<T>(m.type) : null, p ? &p->trans : null);
+                        /// merge instances, and var std::shared use-cases with Shared
+                        mm.style_value_set(p ? p->instances.get<T>(m.type) : null, (p && p->trans) ? &p->trans : null);
                     };
                 else
                     lambdas->compute_style = null;
@@ -409,6 +435,10 @@ struct node {
             Shared sh = Alloc<T>(v);
             Member::lambdas->type_set(*this, sh);
         }
+        operator Arg() {
+            Shared sh = NMember<T, Member::Intern>::shared_value();
+            return Arg { sh };
+        }
     };
     
     ///
@@ -417,11 +447,9 @@ struct node {
         typedef T value_type;
         std::function<T(C &)> lambda;
         ///
-        T &current() {
-            T *v = new T(lambda(*(C *)Intern<T>::arg));
-            Member::shared = v;
-            return (T &)Member::shared;
-        }
+        Shared &shared_value() { return (Shared &)(Member::shared = new T(lambda(*(C *)Intern<T>::arg))); }
+        T &current()           { return (T &)shared_value(); }
+        operator Arg()         { return Arg { shared_value() }; }
     };
     
     ///
@@ -432,6 +460,7 @@ struct node {
             Shared sh = Alloc<T>(v);
             Member::lambdas->type_set(*this, sh);
         }
+        operator Arg() { return Arg { Member::shared_value() }; }
     };
     
     struct Border {
@@ -502,7 +531,7 @@ struct node {
         nmem.member        = Member::Extern;
         nmem.name          = name;
         nmem.d_value       = new T(def);
-        nmem.arg           = this;
+        nmem.arg           = this; ///
         externals[name]    = &nmem;
         nmem.integrate();
     }
@@ -618,9 +647,9 @@ struct node {
             auto root = n->root ? n->root : n;
             if (reg.style.transitioning()) {
                 root->flags      |= node::StyleAnimate;
-                rectd      rect0  =  rel->region_rect(index,  reg.style.t_start, rect, n);
-                rectd      rect1  =  rel->region_rect(index, *reg.style.s_value, rect, n);
-                real       p      =  reg.style.transition_pos();
+                rectd      rect0  = rel->region_rect(index, *reg.style.t_start, rect, n);
+                rectd      rect1  = rel->region_rect(index, *reg.style.s_value, rect, n);
+                real       p      = reg.style.transition_pos();
                 result            = (rect0 * (1.0 - p)) + (rect1 * p);
             } else
                 result            = rel->region_rect(index, reg, rect, n);

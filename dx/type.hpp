@@ -32,7 +32,7 @@ struct Type {
         Bool,
         
         /// high level types...
-        Str, Map, Array, Ref, Arb, Node, Lambda, Any,
+        Str, Map, Array, Ref, Arb, Node, Lambda, Member, Any,
         
         /// and the mighty general
         Struct
@@ -132,35 +132,29 @@ struct Id:Type {
         code_name = ::code_name<T>();
         id        = std::hash<std::string>()(code_name);
         T    *ptr = null;
-        Type::Specifier ts = Type::specifier(ptr);
-        if (ts >= i8 && ts <= Array) {
-            id = ts;
+        if (code_name == "Member") {
             int test = 0;
             test++;
         }
+        Type::Specifier ts = Type::specifier(ptr);
+        if (ts >= i8 && ts <= Array) { id = ts; }
     }
 };
 
 namespace std {
-    template<> struct hash<Type> {
-        size_t operator()(Type const& id) const { return id; }
-    };
+    template<> struct hash<Type>      { size_t operator()(Type const& id) const { return id; } };
 }
 
 /// definitely want this pattern for var
 struct Instances {
     std::unordered_map<Type, void *> allocs;
-    inline size_t count(Type &id) { return allocs.count(id); }
+    inline size_t count(Type &id)     { return allocs.count(id); }
     
     template <typename T>
-    inline T *get(Type &id) {
-        return (T *)allocs[id];
-    }
+    inline T *get(Type &id)           { return (T *)allocs[id]; }
     
     template <typename T>
-    inline void set(Type &id, T *ptr) {
-        allocs[id] = ptr;
-    }
+    inline void set(Type &id, T *ptr) { allocs[id] = ptr; }
 };
 
 /// the smart pointer with baked in arrays and a bit of indirection.
@@ -169,21 +163,21 @@ struct Instances {
 template <typename T>
 struct ptr {
     struct Alloc {
-        Type              type   = 0;
-        std::atomic<long> refs   = 0;
-        int               ksize  = 0; // ksize = known size, when we manage it ourselves, otherwise -1 when we are importing a pointer of unknown size
-        alignas(16) void *mstart; // imported pointers are not aligned to this spec but our own pointers are.
+        Type                     type   = 0;
+        std::atomic<long>        refs   = 0;
+        int                      ksize  = 0; // ksize = known size, when we manage it ourselves, otherwise -1 when we are importing a pointer of unknown size
+        alignas(16) void        *mstart; // imported pointers are not aligned to this spec but our own pointers are.
     } *info;
     ///
     private:
     void alloc(T *&p) {
-        size_t   asz = sizeof(Alloc) + sizeof(T);
-        info         = (Alloc *)calloc(asz, 1);
-        info->type   = Id<T>();
-        info->refs   =  2; /// and i thought i saw a two...
-        info->ksize  = sizeof(T);
-        info->mstart = null;
-        p            = &info->mstart;
+        size_t   asz       = sizeof(Alloc) + sizeof(T);
+        info               = (Alloc *)calloc(asz, 1);
+        info->type         = Id<T>();
+        info->refs         =  2; /// and i thought i saw a two...
+        info->ksize        = sizeof(T);
+        info->mstart       = null;
+        p                  = &info->mstart;
     }
     public:
     ///

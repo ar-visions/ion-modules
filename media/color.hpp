@@ -12,8 +12,14 @@ void rgba_set_data(double  *, var &);
 template <typename T>
 struct RGBA {
     alignas(T) T r = 0, g = 0, b = 0, a = 0;
-    RGBA(std::nullptr_t n = nullptr) { }
-    RGBA(real r, real g, real b, real a) {
+    int cur = 1;
+    
+    RGBA() {
+        static int seq = 10000;
+        cur = seq++;
+    }
+    RGBA(std::nullptr_t n):RGBA() { }
+    RGBA(real r, real g, real b, real a):RGBA() {
         if constexpr (std::is_same_v<T, uint8_t>) {
             const auto sc = real(255.0);
             this->r = std::clamp(r * sc, 0.0, 255.0);
@@ -27,7 +33,7 @@ struct RGBA {
             this->a = a;
         }
     }
-    RGBA(vec4 v) {
+    RGBA(vec4 v):RGBA() {
         if constexpr (std::is_same_v<T, uint8_t>) {
             r = v.x * 255.0;
             g = v.y * 255.0;
@@ -40,10 +46,10 @@ struct RGBA {
             a = v.w;
         }
     }
-    RGBA(cchar_t *pc) {
+    RGBA(cchar_t *pc):RGBA() {
         parse(pc);
     }
-    RGBA(var &d) {
+    RGBA(var &d):RGBA() {
         if (d == Type::Str) {
             parse(d);
         } else {

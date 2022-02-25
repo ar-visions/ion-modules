@@ -90,15 +90,14 @@ struct StPair {
 };
 ///
 struct StBlock {
-    StBlock          *parent = null;
+    StBlock            *parent = null;
     array<StQualifier>  quals;
     array<StPair>       pairs;
-    array<ptr<StBlock>> blocks;
-    double match(node *n);
-    size_t score(node *n);
-    
-    StBlock() { }
-    StBlock(StBlock &ref) { }
+    array<ptr<StBlock>> blocks; /// use Alloc
+    double match(node  *n);
+    size_t score(node  *n);
+    StBlock()                { }
+    StBlock(StBlock    &ref) { }
     
     size_t count(str &s) {
         for (auto &p:pairs)

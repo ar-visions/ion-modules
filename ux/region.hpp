@@ -47,14 +47,14 @@ struct Region:io {
             sides = array<Unit> { "0l", "0t", "0r", "0b" };
     }
     ///
-    inline rectd operator()(rectd container) {
+    inline rectd operator()(rectd ref) {
         if (!sides)
-            return container;
+            return ref;
         int index = 0;
-        real   x0 = container.x;
-        real   y0 = container.y;
-        real   x1 = container.x + container.w;
-        real   y1 = container.y + container.h;
+        real   x0 = ref.x;
+        real   y0 = ref.y;
+        real   x1 = ref.x + ref.w;
+        real   y1 = ref.y + ref.h;
         for (auto &s:sides) {
             real  &v = s;
             switch (index++) {
@@ -65,14 +65,16 @@ struct Region:io {
                 default: assert(false);
             }
         }
-        return rectd { x0 - container.x, y0 - container.y, std::max(0.0, x1-x0), std::max(0.0, y1-y0) };
+        return rectd { x0 - ref.x, y0 - ref.y, std::max(0.0, x1-x0), std::max(0.0, y1-y0) };
     }
     ///
     inline var exporter()       { return sides; }
     ///
     void importer(var& d)       { sides = array<Unit>(d); }
     ///
-    void copy(const Region &rg) { sides = rg.sides; }
+    void copy(const Region &rg) {
+        sides = rg.sides;
+    }
     
     void assert_region() {
         auto &s = sides;

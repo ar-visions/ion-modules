@@ -116,7 +116,7 @@ struct Texture {
     {
         rgba *px = null;
         if (clr) {
-            px = (rgba *)malloc(sz.x * sz.y * 4);
+            px = (rgba *)malloc(sz.x * sz.y * sizeof(rgba));
             for (int i = 0; i < sz.x * sz.y; i++)
                 px[i] = clr;
         }

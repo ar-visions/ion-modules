@@ -197,6 +197,9 @@ struct Composer {
             /// so the receiver child gets its member set to this ref, deref'd
             if (bind.shared) {
                 Member &child_member = (Member &)*child->externals[bind.id];
+                //str     b_id         = bind.id;
+                //Type   &type         = bind.shared.type();
+                //if (type == Type::Member) {
                 /// could be nice to have direct set access through generic shared interface
                 if (!(child_member.shared == bind.shared)) {
                     child_member.lambdas->type_set(child_member, bind.shared);

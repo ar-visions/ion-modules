@@ -125,7 +125,7 @@ void node::standard_bind() {
     external <real>        ("text-offset",      m.text.offset,     real(0));
     external <Region>      ("text-region",      m.text.region,     null);
     /// --------------------------------------------------------------------------
-    external <rgba>        ("fill-color",       m.fill.color,      null);
+    external <rgba>        ("fill-color",       m.fill.color,      rgba(0,255,0,0));
     external <real>        ("fill-offset",      m.fill.offset,     real(0));
     external <VAlign>      ("image-align",      m.fill.align,      VAlign(null));
     external <Image>       ("image",            m.fill.image,        null);
@@ -208,7 +208,7 @@ node *node::focused() {
 }
 
 void node::draw(Canvas &canvas) {
-    if (m.fill.color()) {
+    if (m.fill.color()) { /// free'd prematurely during style change (not a transition)
         canvas.color(m.fill.color());
         canvas.fill(paths.fill);
     }

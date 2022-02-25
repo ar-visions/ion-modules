@@ -9,12 +9,14 @@
 
 typedef std::filesystem::path path_t;
 
+
 template <class T>
 struct array:io {
 //protected:
     static typename std::vector<T>::iterator iterator;
     typedef std::shared_ptr<std::vector<T>> vshared;
     vshared a;
+    int seq;
     
     vshared &realloc(Size res) {
         a = vshared(new std::vector<T>());
@@ -35,10 +37,14 @@ public:
         return *this;
     }
     array(array<T> &ref) : a(ref.a) { } */
+    array() {
+        static int cur = 60;
+        seq = cur++;
+    }
     array(std::initializer_list<T> v) { realloc(v.size());      for (auto &i: v) a->push_back(i); }
     array(const T *d, Size sz)        { assert(d); realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(d[i]); }
     array(Size sz, T v)               {            realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(v); }
-    array(std::nullptr_t n = null)    { }
+    array(std::nullptr_t n)           { }
     array(Size sz)                    { realloc(sz); }
     array(std::filesystem::path path);
     T                   &back()              { return ref().back();                }

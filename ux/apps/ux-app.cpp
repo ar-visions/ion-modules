@@ -97,12 +97,12 @@ struct Shell:node {
     ///
     struct Members {
         Extern<ViewMap> views; // fix this around ambiguity related to size_t
-        Intern<str>     button_text;
+        Intern<str>     text_label;
     } m;
     
     ///
     void bind() {
-        internal<str>("button-text", m.button_text, "Some button");
+        internal<str>("text-label", m.text_label, "Some button");
     }
     
     //Element::filter<str>({"hi","hi2"}, [&](str &v) {
@@ -111,8 +111,13 @@ struct Shell:node {
     
     ///
     Element render() {
-        return Group("dock", {}, { /// better to have id, attribs, and children. i think
-            Button("butt", {{"text-label", str("some text!")}})
+        return Group("dock", {}, {
+            //Button("b", {{"text-label", str("some text!")}})
+            Element::filter<str>({"hi","hi2"}, [&](str &v) {
+                int test = 0;
+                test++;
+                return Button(v, {{"text-label", m.text_label}});
+            })
         });
     }
 };

@@ -353,6 +353,10 @@ void DrawState::copy(const DrawState &r) {
     b_state    = r.host ? r.host->copy_bstate(r.b_state) : null;
 }
 
+DrawState::~DrawState() {
+    delete (Context2D::State *)b_state;
+}
+
 /// this is a very KiSS-oriented Terminal Canvas
 struct Terminal:ICanvasBackend {
     static map<str, str> t_text_colors_8;

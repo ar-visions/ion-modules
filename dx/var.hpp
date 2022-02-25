@@ -130,15 +130,17 @@ public:
     var(std::nullptr_t p);
     var(Type::Specifier t, void *v) : t(t), sh(0) {
         assert(t == Type::Arb);
+        /// unsafe pointer use-case. [merge]
         n_value.vstar = (void *)v;
     }
     var(Type::Specifier t = Type::Undefined, Type::Specifier c = Type::Undefined, size_t count = 0);
     var(Type::Specifier t, u *n) : t(t), n((u *)n) {
-        /// unsafe pointer use-case.
+        /// unsafe pointer use-case. [merge]
         // assert(false);
     }
+    
     var(Type::Specifier t, string str);
-    var(Size   sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); n = &n_value; } // clean this area up. lol [gets mop; todo]
+    var(Size   sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); n = &n_value; 
     var(var *vref) : t(Type::Ref), n(null) {
         assert(vref);
         while (vref->t == Type::Ref)
@@ -150,9 +152,10 @@ public:
     Shape<Major> shape();
     void set_shape(Shape<Major> &v_shape);
     void attach(string name, void *arb, std::function<void(var &)> fn) {
-        map()[name]        = var { Type::Arb, arb };
-        map()[name].flags |= DestructAttached;
-        map()[name].fn     = fn;
+        auto &m = map();
+        m[name]        = var { Type::Arb, arb };
+        m[name].flags |= DestructAttached;
+        m[name].fn     = fn;
     }
 
     size_t attachments() {

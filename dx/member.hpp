@@ -40,8 +40,9 @@ struct Member {
     virtual ~Member() { }
     
     ///
-    virtual void *ptr()        { return null; }
-    virtual bool  state_bool() {
+    virtual void   *ptr()          { return null; }
+    virtual Shared &shared_value() { static Shared s_null; return s_null; }
+    virtual bool    state_bool()   {
         assert(false);
         return bool(false);
     }
@@ -65,11 +66,6 @@ struct Member {
     }
     void         operator= (Member &v);
     virtual bool operator==(Member &m) { return bound_to == &m && peer_cache == m.peer_cache; }
-    //template <typename T, typename... U>
-    //size_t fn_id(std::function<T(U...)> &fn) {
-    //    typedef T(fnType)(U...);
-    //    fnType ** fp = fn.template target<fnType *>();
-    //    return size_t(*fp);
-    //};
+
     virtual void style_value_set(void *ptr, StTrans *) { }
 };
