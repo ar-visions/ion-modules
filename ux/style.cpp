@@ -45,6 +45,7 @@ StPair *Style_pair(Member *member) {
             best_score = score;
         }
     }
+    
     return match;
 }
 
@@ -260,9 +261,7 @@ void Style::unload() {
     cache   = {};
 }
 
-Style::~Style() {
-    console.log("destructor.");
-}
+Style::~Style() { }
 
 Style Style::load(path_t path) {
     if (cache.count(path) == 0) {
@@ -286,6 +285,7 @@ size_t StBlock::score(node *n) {
         bool type_reject  = q.type  && !type_match;
         bool state_match  = q.state && n->state<bool>(q.state);
         bool state_reject = q.state && !state_match;
+        
         ///
         if (!id_reject && !type_reject && !state_reject) {
             double sc = size_t(   id_match) << 1 |
@@ -308,7 +308,7 @@ double StBlock::match(node *n) {
         bool   is_root   = !block->parent;
         double score     = 0;
         ///
-        while (n) { /// we have to get the best score for this block, and we are not.
+        while (n) { ///
             auto sc = block->score(n);
             n = n->parent;
             if (sc == 0 && is_root) {

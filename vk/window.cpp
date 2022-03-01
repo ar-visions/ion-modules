@@ -52,7 +52,6 @@ static void glfw_resize (GLFWwindow *handle, int32_t w, int32_t h) {
 vec2 Window::cursor() {
     vec2 result = { 0, 0 };
     glfwGetCursorPos(handle, &result.x, &result.y);
-    console.log("cursor: {0}", { result });
     return result;
 }
 

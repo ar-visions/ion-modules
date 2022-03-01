@@ -158,7 +158,8 @@ struct Texture {
 public:
     /// pass-through operators
     operator  bool()                   { return    data &&  *data; }
-    bool operator!()                   { return  !data  || !*data; }
+    bool operator!()                   { return   !data || !*data; }
+    bool operator==(Texture &tx)       { return    data == tx.data; }
     operator VkImage &()               { return   *data; }
     operator VkImageView &()           { return   *data; }
     operator VkDeviceMemory &()        { return   *data; }

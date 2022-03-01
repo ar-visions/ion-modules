@@ -96,6 +96,8 @@ struct StBlock {
     array<ptr<StBlock>> blocks; /// use Alloc
     double match(node  *n);
     size_t score(node  *n);
+    
+    
     StBlock()                { }
     StBlock(StBlock    &ref) { }
     
@@ -111,6 +113,10 @@ struct StBlock {
                 return &p;
         return null;
     }
+    
+    /// these are called from the Type Basics (boolean, compare, alloc, free, possibly hash)
+    operator bool()             { return quals || pairs || blocks; }
+    bool operator==(StBlock &b) { return this == &b; }
 };
 
 struct Style {

@@ -92,7 +92,7 @@ Internal &Internal::bootstrap() {
     appInfo.applicationVersion  = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName         = "ion";
     appInfo.engineVersion       = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion          = VK_API_VERSION_1_0;
+    appInfo.apiVersion          = VK_MAKE_VERSION(1, 1, 0);//VK_API_VERSION_1_0; -- this seems to fix
     ///
     VkInstanceCreateInfo ci {};
     ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -258,5 +258,5 @@ uint32_t Vulkan::queue_index() {
 }
 
 uint32_t Vulkan::version() {
-    return VK_API_VERSION_1_0;
+    return VK_MAKE_VERSION(1, 1, 0); //VK_API_VERSION_1_0;
 }

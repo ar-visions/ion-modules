@@ -268,10 +268,9 @@ Socket Socket::connect(URI uri, Trust trust_level) {
 }
 
 /// listen on https using mbedtls
-Async Socket::listen(URI url, std::function<void(Socket)> fn) {
-    auto t1 = ((URI *)&url)->type();
+Async Socket::listen(URI url, std::function<void(Socket)> fn)
+{
     return Async(1, [&, url=url, fn=fn](auto process, int t_index) -> var {
-        auto t2 = ((URI *)&url)->type();
         URI         uri = url.methodize(URI::Method::Get);
         auto  sc_listen = Socket(Server); /// remove the interfacing in this case
         auto         &i = *(sc_listen.intern);
@@ -316,7 +315,6 @@ Async Socket::listen(URI url, std::function<void(Socket)> fn) {
             console.log("server: accepting new connection...\n");
             
             /// the following should never block the acceptance thread for any undesirable time
-            
             /// accept connection
             if (mbedtls_net_accept(&i.ctx, &ci.ctx, cip, sizeof(cip), &cip_len) != 0)
                 return false;

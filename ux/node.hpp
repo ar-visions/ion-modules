@@ -29,14 +29,16 @@ struct Element;
 ///
 struct Arg {
     Shared shared;
+    
+    /// constructor selection needs disambiguation and clarity in C++, i think silver could do a better job with less syntax and more usability
     template <typename T>
     Arg(T v) {
         if constexpr (std::is_base_of<Shared, T>()) {
             shared = v;
         } else if constexpr (std::is_same_v<const char *, T> || std::is_same_v<char *, T>) {
-            shared = new str(v);
+            shared = Managed<str> { new str((const char *)v) };
         } else {
-            shared = new T(v);
+            shared = Managed<T>   { new T(v) };
         }
     }
 };
@@ -46,10 +48,7 @@ struct Bind {
     str       id;
     Shared    shared;
     
-    Bind(str id, Arg a) : id(id), shared(a.shared) {
-        int test = 0;
-        test++;
-    }
+    Bind(str id, Arg a) : id(id), shared(a.shared) { }
     Bind(Arg a)         :         shared(a.shared) { }
     
     bool operator==(Bind &b) { return id == b.id; }
@@ -167,6 +166,10 @@ struct Element {
 
 typedef std::function<Element(void)> FnRender;
 
+/// purpose-built for multi-domain use component model.
+/// your business logic encapsulated in isolated design,
+/// a sort of lexical type lookup (closest in scope)
+/// for type-strict context usage-case.
 struct node {
     enum Flags {
         Focused      = 1,
@@ -190,9 +193,11 @@ struct node {
     map<std::string, PipelineData> objects;
     Style             *style = null;
     rectd              image_rect, text_rect;
-    //map<str, Member *> stationaries; /// it works but it needs a bit more method around it in usefulness
     map<str, Member *> internals;
     map<str, Member *> externals;
+    
+    bool operator==(node &b) { return this == &b; }
+    operator bool()          { return true; }
     
     virtual bool value_update(void *v_value) {
         assert(false);
@@ -210,28 +215,26 @@ struct node {
     /// member type-specific struct
     template <typename T, const Member::MType MT>
     struct NMember:Member {
+        
         struct StyleValue {
             public:
             NMember<T, MT> *host       = null;
             StTrans      *trans        = null;
             bool          manual_trans = false;
             int64_t       timer_start  = 0;
-            Alloc<T>      t_start;       // transition start value (could be in middle of prior transition, for example, whatever its start is)
-            Alloc<T>      t_value;       // current transition value
-            Alloc<T>      s_value;       // style value
-            Alloc<T>      d_value; // default value
+            sh<T>         t_start;       // transition start value (could be in middle of prior transition, for example, whatever its start is)
+            sh<T>         t_value;       // current transition value
+            sh<T>         s_value;       // style value
+            sh<T>         d_value; // default value
             
             ///
-            inline T &current() { return (T &)(Alloc<T> &)host->shared_value(); }
+            inline T &current() { return (T &)(sh<T> &)host->shared_value(); }
             
             ///
             T &auto_update() {
                 assert(host);
-                if (!host->shared && transitioning() && !manual_trans) {
-                    int test = 0;
-                    test++;
+                if (!host->shared && transitioning() && !manual_trans)
                     *t_value = (*trans)(*t_start, *s_value, transition_pos());
-                }
                 return current();
             }
             
@@ -244,32 +247,30 @@ struct node {
             inline void changed(T &snapshot, T *s_value, StTrans *t) {
                 if (t != trans) {
                     if (t) {
+                        t_start = new T(snapshot);
                         if (!t_value)
                              t_value = new T(snapshot);
-                        t_start = new T(snapshot);
                         timer_start = ticks();
                     }
                     trans = t;
                 }
-                this->s_value = Persistent("m1", s_value); // s_value ? new T(*s_value) : (T *)null;
-                if (this->s_value.p)
-                    this->s_value.p->bark_if_freeing = true;
+                this->s_value = s_value ? new T(*s_value) : (T *)null;
             }
         };
         size_t        cache = 0;
-        Alloc<T>      d_value;
+        sh<T>         d_value;
         StyleValue    style;
         
         virtual Shared &shared_value() {
-            return                   shared ? shared        : ///
-                      style.transitioning() ? style.t_value : /// more freedom than the shared_ptr, and it has attachment potential
-                     style.s_value.is_set() ? style.s_value : /// style value (transition-to parameter as well)
-                                                    d_value ; /// default value (base value, if none above are set and not in transition)}
+            return                   shared ? (Shared &)shared        : ///
+                      style.transitioning() ? (Shared &)style.t_value : /// more freedom than the shared_ptr, and it has attachment potential
+                     style.s_value.is_set() ? (Shared &)style.s_value : /// style value (transition-to parameter as well)
+                                              (Shared &)      d_value ; /// default value (base value, if none above are set and not in transition)}
         }
         
         /// this cannot use style, because its used by style
         bool state_bool() {
-            if (!shared)
+            if (!shared.raw())
                 return false;
             T v = *(T *)shared;
             if constexpr (std::is_same_v<T, std::filesystem::path>)
@@ -339,13 +340,14 @@ struct node {
                 
                 lambdas->type_set = [](Member &m, Shared &shared) -> void {
                     NMember<T,MT> &mm  =  (NMember<T,MT> &)m;
+                    ///
                     if constexpr (is_func<T>()) {
-                        T *fv = shared.memory<T>();
-                        if (fn_id(*(T *)mm.shared) != fn_id(*fv)) {
-                            mm.shared = *fv;
+                        /// nice technique shared
+                        if (fn_id((T &)mm.shared) != fn_id((T &)shared)) {
+                            mm.shared = shared;
                             mm.cache++;
                         }
-                    } else if (mm.shared != shared) { /// the check is needed for cache (peer-cache used to determine when to update)
+                    } else if (mm.shared != shared) {
                         mm.shared = shared;
                         mm.cache++;
                     }
@@ -365,9 +367,9 @@ struct node {
                         NMember<T,MT> &mm = (NMember<T,MT> &)m;
                         if constexpr (is_vec<T>()) {
                             size_t sz = v.size();
-                            T    conv = T(sz);
+                            T   *conv = new T(sz);
                             for (auto &i: v.a)
-                                conv += static_cast<typename T::value_type>(i); /// static_cast not required, i think.  thats why its here.
+                                *conv += static_cast<typename T::value_type>(i); /// static_cast not required, i think.  thats why its here.
                             mm.shared = conv;
                             mm.cache++;
                         } else if constexpr (is_map<T>()) {
@@ -418,26 +420,17 @@ struct node {
            operator bool() { return bool(ref()); }
     };           ///
     
-    /* was used for id and nothing else.. sort of didnt even want the idea. stationaries always end up in a drawer for a decade
-    template <typename T>
-    struct Stationary:NMember<T, Member::Stationary> {
-        inline void operator=(T v) {
-            assert(Member::lambdas_map[type].type_set != null);
-            Member::lambdas_map[type].type_set(*this, (void *)&v);
-        }
-    };*/
-    
     ///
     template <typename T>
     struct Intern:NMember<T, Member::Intern> {
         typedef T value_type;
         inline void operator=(T v) {
-            Shared sh = Alloc<T>(v);
-            Member::lambdas->type_set(*this, sh);
+            Shared s = sh<T>(new T(v));
+            Member::lambdas->type_set(*this, s);
         }
         operator Arg() {
-            Shared sh = NMember<T, Member::Intern>::shared_value();
-            return Arg { sh };
+            Shared s = NMember<T, Member::Intern>::shared_value();
+            return Arg { s };
         }
     };
     
@@ -457,8 +450,8 @@ struct node {
     struct Extern:NMember<T, Member::Extern> {
         typedef T value_type;
         inline void operator=(T v) {
-            Shared sh = Alloc<T>(v);
-            Member::lambdas->type_set(*this, sh);
+            Shared s = sh<T>(new T(v));
+            Member::lambdas->type_set(*this, s);
         }
         operator Arg() { return Arg { Member::shared_value() }; }
     };
@@ -492,24 +485,14 @@ struct node {
     };
     
     /// staaaaaation.
-    /*
-    template <typename T>
-    void stationary(str name, Stationary<T> &nmem, T def) {
-        nmem.type          =  Id<T>();
-        nmem.member        =  Member::Stationary;
-        nmem.name          =  name;
-        nmem.def           =  def;
-        nmem.arg           = this; // should only be set here friends
-        stationaries[name] = &nmem;
-    }*/
-    
     template <typename T>
     void internal(str name, Intern<T> &nmem, T def) {
         nmem.type          = Id<T>();
         nmem.member        = Member::Intern;
         nmem.name          = name;
-        nmem.d_value       = new T(def);
-        nmem.arg           = this;
+        nmem.d_value       = Managed <T>  { new T(def) };
+        nmem.arg           = Unsafe<node> { this };
+        /// even with an unsafe ptr you can attach some stuff when the 'share pool' is no longer. it just doesnt free the dingy
         internals[name]    = &nmem;
         nmem.integrate();
     }
@@ -520,7 +503,7 @@ struct node {
         nmem.member        = Member::Intern;
         nmem.name          = name;
         nmem.lambda        = std::function<R(T &)>(fn);
-        nmem.arg           = this;
+        nmem.arg           = Unsafe <node> { this };
         internals[name]    = &nmem;
         nmem.integrate();
     }
@@ -530,19 +513,19 @@ struct node {
         nmem.type          = Id<T>();
         nmem.member        = Member::Extern;
         nmem.name          = name;
-        nmem.d_value       = new T(def);
-        nmem.arg           = this; ///
+        nmem.d_value       = Managed <T>   { new T(def) };
+        nmem.arg           = Unsafe <node> { this };
         externals[name]    = &nmem;
         nmem.integrate();
     }
     
     vec2 offset() {
-        node *n = this;
+        node *n = parent;
         vec2  o = { 0, 0 };
         while (n) {
             rectd &rect = n->paths.rect;
-            o  -= rect.xy();
-            o  += n->scroll;
+            o  += rect.xy();
+            o  -= n->scroll;
             n   = n->parent;
         }
         return o;
@@ -566,8 +549,8 @@ struct node {
         externals[m.name] = &m;
     }
     
+    /// todo: Structify these and register them in stack formation, we're looking at an array of these as a model of 'Component'
     struct Members {
-        //Stationary<str> id;
         Extern<str>    bind;
         Extern<int>    tab_index;
         Text           text;
@@ -613,7 +596,7 @@ struct node {
             Extern<Fn> cursor;
         } ev;
     } m;
-                            node(std::nullptr_t n);
+                            node(std::nullptr_t n = null);
                             node(cchar_t *cn, str id, Binds b, Elements e);
     virtual                ~node();
             void   standard_bind();

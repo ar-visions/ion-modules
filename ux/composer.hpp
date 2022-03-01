@@ -21,14 +21,14 @@ struct Composer {
             n->m.cursor = in ? vec2(x, y) : vec2(null);
             return (in && (!active || !n->m.active())) ? n : null;
         });
-        auto  actives = root->select([&](node *n) {
+        auto    actives = root->select([&](node *n) {
             return (active && n->m.active()) ? n : null;
         });
         auto   result = array<node *>(size_t(inside.size()) + size_t(actives.size()));
         for (auto &i: inside)
-              result += i;
+            result += i;
         for (auto &i: actives)
-              result += i;
+            result += i;
         return result;
     }
     
@@ -83,12 +83,16 @@ struct Composer {
     void cursor(Window &w, real x, real y) {
         /// nullify cursor values
         array<node *> prev_cursor;
+ 
         root->exec([&](node *n) {
-            if (n->m.cursor()) {
+            if (n->m.cursor()) { /// the cursor is referencing freed memory.  so its reference should have not been freed since its still in use.  track it.
                 prev_cursor += n;
-                n->m.cursor = vec2(null);
+                n->m.cursor  = vec2(null);
             }
         });
+        
+        console.log("n[hi].hover = {0}", { root->mounts["dock"]->mounts["hi"]->m.hover() });
+        
         
         /// select all within cursor (can be a rect potentially as a ortho selection cursor), including active
         auto nodes = select_at(w.cursor(), true);
@@ -100,14 +104,11 @@ struct Composer {
             if (prev_cursor.count(n) == 0) {
                 n->m.hover = true;
                 auto &fn_hover = n->m.ev.hover();
-                if (fn_hover) {
-                    int test = 0;
-                    test++;
+                if (fn_hover)
                     fn_hover(ev);
-                }
             }
             n->m.cursor = p;
-            Fn &fn  = (n->m.ev.cursor)();
+            Fn &fn = (n->m.ev.cursor)();
             if (fn)
                 fn(ev);
         }));
@@ -197,9 +198,6 @@ struct Composer {
             /// so the receiver child gets its member set to this ref, deref'd
             if (bind.shared) {
                 Member &child_member = (Member &)*child->externals[bind.id];
-                //str     b_id         = bind.id;
-                //Type   &type         = bind.shared.type();
-                //if (type == Type::Member) {
                 /// could be nice to have direct set access through generic shared interface
                 if (!(child_member.shared == bind.shared)) {
                     child_member.lambdas->type_set(child_member, bind.shared);
@@ -274,7 +272,7 @@ struct Composer {
             update(sz, child, &child->mounts[id], ee);
             u[id] = false;
         } else {
-            /// it can definitely be a element array from filter or map call, so we're on notice here.
+            /// it can definitely be an element array from filter or map call, so we're on notice here.
             assert(false);
         }
         
@@ -339,7 +337,7 @@ struct Composer {
             real  TL = n->m.radius(node::Members::Radius::TL);
             real  TR = n->m.radius(node::Members::Radius::TR);
             real  BR = n->m.radius(node::Members::Radius::BR);
-            real  BL = n->m.radius(node::Members::Radius::BL); /// we likely need a region.set_relative(), just a rectd ref is fine.
+            real  BL = n->m.radius(node::Members::Radius::BL);
             real  fo = n->m.fill.offset;
             real  bo = n->m.border.offset;
             real  co = n->m.child.offset;

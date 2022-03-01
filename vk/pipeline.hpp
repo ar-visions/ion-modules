@@ -2,6 +2,8 @@
 #include <vk/device.hpp>
 #include <vk/vk.hpp>
 
+/// many changes coming very shortly.
+///
 struct Attrib {
     enum Type {
         Position3f,
@@ -45,6 +47,7 @@ struct Attrib {
         }
         return result;
     }
+    bool operator==(Attrib &b) { return type == b.type && format == b.format && tx == b.tx; }
 };
 
 struct Position3f : Attrib { Position3f()           : Attrib(Attrib::Position3f, VK_FORMAT_R32G32B32_SFLOAT,    null) { }};

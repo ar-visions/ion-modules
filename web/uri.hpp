@@ -81,7 +81,9 @@ struct Lambda:M<std::function<F>> {
     rtype last_result;
 };
 
+///
 #define struct_shim(C)\
+bool operator==(C &b) { return Struct::operator==(b); }\
 C():Struct() { bind_base(false); }\
 C(var &ref)  { t = ref.t; c = ref.c; m = ref.m; a = ref.a; bind_base(true); }\
 inline C &operator=(var ref) {\
@@ -191,8 +193,23 @@ struct Struct:var {
         }
         bound = true;
     }
+    bool operator==(Struct &b) {
+        size_t a_sz =   members.size();
+        size_t b_sz = b.members.size();
+        bool   i_sz = a_sz == b_sz;
+        for (size_t i = 0; i_sz && i < a_sz; i++) {
+            Member &am = *  members[i];
+            Member &bm = *b.members[i];
+            if (am.shared != bm.shared)
+                return false;
+        }
+        return i_sz;
+    }
+    
+    virtual ~Struct() { }
 };
 
+///
 struct URI: Struct<URI> {
     enums(Method, Type, Undefined, Undefined, Response, Get,  Post,  Put, Delete);
     
@@ -357,25 +374,7 @@ struct URI: Struct<URI> {
     }
     
     ///
-    //struct_shim(URI);
-    
-    
-
-    URI():Struct() { bind_base(false); }
-    URI(var &ref)  { t = ref.t; c = ref.c; m = ref.m; a = ref.a; bind_base(true); }
-    inline URI &operator=(var ref) {
-        if (this != &ref) { t = ref.t; c = ref.c; m = ref.m; a = ref.a; }
-        if (!bound)       { bind_base(true); } else { assert(false); }
-        return *this;
-    }
-    URI(const URI &ref) {
-        ctype = ref.ctype;
-        t = ref.t; c = ref.c; m = ref.m; a = ref.a;
-        bind_base(false);
-        for (size_t i = 0; i < members.size(); i++)
-            members[i]->copy_fn(members[i], ((::array<Member *> &)ref.members)[i]);
-    }
-
+    struct_shim(URI);
 };
 
 

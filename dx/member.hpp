@@ -14,24 +14,24 @@ struct StTrans;
 struct Member {
     enum MType { /// multi-planetary enum.
         Undefined,
-        Stationary,
         Intern,
         Extern,
         Configurable = Intern
     };
     std::function<void(Member *, Member *)> copy_fn;
-    var *serialized = null;
+    
     var &nil() {
         static var n;
         return n;
     }
     
     ///
+    var     *serialized = null;
     Type     type       =  Type::Undefined;
     MType    member     = MType::Undefined;
     str      name       = null;
     Shared   shared;    /// having a shared arg might be useful too.
-    Shared   arg;       /// simply a node * pass-through for the NMember case
+    Shared   arg;       /// simply a node * pass-through for the NMember case.  Shared doesnt have to free it but it can load in some EOL lambda stubs for decentralized resource management
     ///
     size_t   cache      = 0;
     size_t   peer_cache = 0xffffffff;

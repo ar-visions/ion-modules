@@ -1,10 +1,18 @@
 Shell {
     region:       0l 0y 0r 0b;
-    fill-color:   #222;
+    fill-color:   #090b14;
 }
 
-Button {
+Group {
+    fill-color:   #2485;
+    region:       0l 0t 350w 0b;
     radius:       0;
+    clip:         true;
+    image-align:  middle middle;
+}
+
+
+Button {
     fill-color:   #348;
     image:        "menu.png";
     image-region:  5l 5t 5r 5b;
@@ -15,24 +23,15 @@ Button {
     opacity:      0.1;
 }
 
-Button.hi {
+Button.hi  {
     region:       0l 80t 0r 80h;
-}
-Button.hi2 {
-    region:       0l 160t 0r 80h;
+    fill-color:   #228;
 }
 
-Group {
-    fill-color:   #f00;
-    region:       0l 0t 0r 0b;
-    radius:       0;
-    clip:         true;
-    image-align:  middle middle;
+Button.hi:hover  {
+    fill-color:   #aa2;
 }
 
-Group:hover {
-    fill-color:   #f0f;
-}
 
 Button:hover {
     fill-color:   #faa;
@@ -41,4 +40,6 @@ Button:hover {
 Button:active {
     fill-color:   #aaf;
 }
+
+
 

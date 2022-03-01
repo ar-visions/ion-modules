@@ -17,7 +17,7 @@ struct Object:node {
     declare(Object);
     
     struct Members {
-        Extern<path_t>      model;
+        Extern<Path>        model;
         Extern<Shaders>     shaders;
         Extern<UniformData> ubo;
         Extern<array<Attrib>> attr;
@@ -31,9 +31,9 @@ struct Object:node {
     ///
     void bind() {
         external("uniform", m.ubo,       UniformData   { null     });
-        external("model",   m.model,     path_t        { ""       });
+        external("model",   m.model,     Path          { ""       });
         external("shaders", m.shaders,   Shaders       { "*=main" });
-        external("attr",    m.attr,      array<Attrib>   {          });
+        external("attr",    m.attr,      array<Attrib> {          });
         external("render",  m.render,    Rendering     { Rendering::Shader });
         /// ------------------------------------------------
         internal("pipes",   m.pipes,     Pipes         { null });
@@ -43,7 +43,7 @@ struct Object:node {
     void changed(PropList list) {
         if (list.count("model") == 0 || !m.attr())
             return;
-        path_t &mod = m.model;
+        Path   &mod = m.model;
         m.pipes     = model<Vertex>(mod, m.ubo, m.attr, m.shaders);
     }
     

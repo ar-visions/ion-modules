@@ -115,53 +115,50 @@ bool node::process() {
 node::~node() { }
 
 void node::standard_bind() {
-  //stationary<str>        ("id",               m.id,              str(""));
-    /// --------------------------------------------------------------------------
-    external <int>         ("tab-index",        m.tab_index,       -1);
-    /// --------------------------------------------------------------------------
-    external <str>         ("text-label",       m.text.label,      str(""));
-    external <VAlign>      ("text-align",       m.text.align,      VAlign { Align::Middle, Align::Middle });
-    external <rgba>        ("text-color",       m.text.color,      rgba("#fff") );
-    external <real>        ("text-offset",      m.text.offset,     real(0));
-    external <Region>      ("text-region",      m.text.region,     null);
-    /// --------------------------------------------------------------------------
-    external <rgba>        ("fill-color",       m.fill.color,      rgba(0,255,0,0));
-    external <real>        ("fill-offset",      m.fill.offset,     real(0));
-    external <VAlign>      ("image-align",      m.fill.align,      VAlign(null));
+    /// -----------------------------------------------------------------------
+    external <int>         ("tab-index",        m.tab_index,         -1);
+    external <str>         ("text-label",       m.text.label,        str(""));
+    external <VAlign>      ("text-align",       m.text.align,        VAlign { Align::Middle, Align::Middle });
+    external <rgba>        ("text-color",       m.text.color,        rgba("#fff") );
+    external <real>        ("text-offset",      m.text.offset,       real(0));
+    external <Region>      ("text-region",      m.text.region,       null);
+    external <rgba>        ("fill-color",       m.fill.color,        rgba(0,255,0,0));
+    external <real>        ("fill-offset",      m.fill.offset,       real(0));
+    external <VAlign>      ("image-align",      m.fill.align,        VAlign(null));
     external <Image>       ("image",            m.fill.image,        null);
     external <Region>      ("image-region",     m.fill.image_region, null);
-    external <double>      ("border-size",      m.border.size,     double(0));
-    external <rgba>        ("border-color",     m.border.color,    rgba("#000f"));
-    external <bool>        ("border-dash",      m.border.dash,     bool(false));
-    external <real>        ("border-offset",    m.border.offset,   real(0));
-    external <real>        ("child-offset",     m.child.offset,    real(0));
-    external <real>        ("fill-offset",      m.fill.offset,     real(0));
-    external <Cap>         ("border-cap",       m.border.cap,      Cap(Cap::Round));
-    external <Join>        ("border-join",      m.border.join,     Join(Join::Round));
-    external <Region>      ("region",           m.region,          Region());
+    external <double>      ("border-size",      m.border.size,       double(0));
+    external <rgba>        ("border-color",     m.border.color,      rgba("#000f"));
+    external <bool>        ("border-dash",      m.border.dash,       bool(false));
+    external <real>        ("border-offset",    m.border.offset,     real(0));
+    external <real>        ("child-offset",     m.child.offset,      real(0));
+    external <real>        ("fill-offset",      m.fill.offset,       real(0));
+    external <Cap>         ("border-cap",       m.border.cap,        Cap(Cap::Round));
+    external <Join>        ("border-join",      m.border.join,       Join(Join::Round));
+    external <Region>      ("region",           m.region,            Region());
+    /// ---------------------------------------------------------------------------
+    external <Fn>          ("ev-hover",         m.ev.hover,          null);
+    external <Fn>          ("ev-out",           m.ev.out,            null);
+    external <Fn>          ("ev-down",          m.ev.down,           null);
+    external <Fn>          ("ev-up",            m.ev.up,             null);
+    external <Fn>          ("ev-key",           m.ev.key,            null);
+    external <Fn>          ("ev-focus",         m.ev.focus,          null);
+    external <Fn>          ("ev-blur",          m.ev.blur,           null);
+    external <Fn>          ("ev-cursor",        m.ev.cursor,         null);
     /// --------------------------------------------------------------------------
-    external <Fn>          ("ev-hover",         m.ev.hover,        null);
-    external <Fn>          ("ev-out",           m.ev.out,          null);
-    external <Fn>          ("ev-down",          m.ev.down,         null);
-    external <Fn>          ("ev-up",            m.ev.up,           null);
-    external <Fn>          ("ev-key",           m.ev.key,          null);
-    external <Fn>          ("ev-focus",         m.ev.focus,        null);
-    external <Fn>          ("ev-blur",          m.ev.blur,         null);
-    external <Fn>          ("ev-cursor",        m.ev.cursor,       null);
+    external <real>        ("radius",           m.radius.val,        dx::nan<real>());
+    external <real>        ("radius-tl",        m.radius.tl,         dx::nan<real>());
+    external <real>        ("radius-tr",        m.radius.tr,         dx::nan<real>());
+    external <real>        ("radius-bl",        m.radius.bl,         dx::nan<real>());
+    external <real>        ("radius-br",        m.radius.br,         dx::nan<real>());
     /// --------------------------------------------------------------------------
-    external <real>        ("radius",           m.radius.val,      dx::nan<real>());
-    external <real>        ("radius-tl",        m.radius.tl,       dx::nan<real>());
-    external <real>        ("radius-tr",        m.radius.tr,       dx::nan<real>());
-    external <real>        ("radius-bl",        m.radius.bl,       dx::nan<real>());
-    external <real>        ("radius-br",        m.radius.br,       dx::nan<real>());
+    internal <bool>        ("captured",         m.captured,          false);
+    internal <bool>        ("focused",          m.focused,           false); /// internals cannot be set in style but they can be selected by boolean or value op
     /// --------------------------------------------------------------------------
-    internal <bool>        ("captured",         m.captured,        false);
-    internal <bool>        ("focused",          m.focused,         false); /// internals cannot be set in style but they can be selected by boolean or value op
-    /// --------------------------------------------------------------------------
-    internal <vec2>        ("cursor",           m.cursor,          vec2(null));
-    internal <bool>        ("hover",            m.hover,           false);
-    internal <bool>        ("active",           m.active,          false);
-
+    internal <vec2>        ("cursor",           m.cursor,            vec2(null));
+    internal <bool>        ("hover",            m.hover,             false);
+    internal <bool>        ("active",           m.active,            false);
+    
     ///
     m.region.style.manual_transition(true);
     m.fill.image_region.style.manual_transition(true);

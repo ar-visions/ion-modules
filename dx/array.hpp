@@ -71,7 +71,7 @@ public:
             T *a_v = (T *)a->data();
             T *b_v = (T *)b.data();
             for (size_t i = 0; i < size(); i++)
-                if (a_v[i] != b_v[i])
+                if (!(a_v[i] == b_v[i]))
                     return false;
         }
         return sz_equal;
@@ -196,12 +196,6 @@ struct is_vec                    : std::false_type {};
 
 template<typename T>
 struct is_vec<array<T>>          : std::true_type  {};
-
-template<typename>
-struct is_func                   : std::false_type {};
-
-template<typename T>
-struct is_func<std::function<T>> : std::true_type  {};
 
 template <typename T>
 bool equals(T v, array<T> values) { return values.index_of(v) >= 0; }

@@ -20,7 +20,7 @@ typedef std::function<var()>                   FnGet;
 typedef std::function<void(var &, string &)>   FnEach;
 typedef std::function<void(var &, size_t)>     FnArrayEach;
 
-/// rename all others to something in their domain.
+///
 struct Type {
     enum Specifier {
         Undefined, /// null state and other uses
@@ -34,7 +34,7 @@ struct Type {
         /// high level types...
         Str, Map, Array, Ref, Arb, Node, Lambda, Member, Any,
         
-        /// and the mighty general
+        /// and the mighty meta
         Struct
     };
     
@@ -57,7 +57,7 @@ struct Type {
         return Type::Undefined;
     }
     
-    static size_t size(Type::Specifier t) { // needs to be on the instance
+    static size_t size(Type::Specifier t) {
         switch (t) {
             case Bool:  return 1;
             case i8:    return 1;
@@ -76,13 +76,29 @@ struct Type {
         return 0;
     }
     
-    size_t sz() {
-        assert(code_name == "");
+    /// needs a few assertions for runtime safety
+    void    lock()                       const {   basics->mx.lock(); }
+    void  unlock()                       const { basics->mx.unlock(); }
+    
+    template <typename T>
+    int  compare(T *a, T *b)             const { return basics->fn_compare(a, b); }
+    
+    template <typename T>
+    int  boolean(T *a)                   const { return basics->fn_boolean(a); }
+    
+    template <typename T>
+    void   free(T *ptr, size_t count)    const { return basics->fn_free((void *)ptr, count); }
+    
+    template <typename T>
+    T *alloc(size_t count)               const { return (T *)basics->fn_alloc(count); }
+    
+    size_t   sz()                        const {
+        assert(!basics); /// this should be the null one for cases designed
         return size(Specifier(id));
     }
     
     size_t      id        = 0;
-    std::string code_name = "";
+    TypeBasics *basics    = null;
     
     bool operator==(const Type &b)     const { return id == b.id;      }
     bool operator==(Type &b)           const { return id == b.id;      }
@@ -99,12 +115,12 @@ struct Type {
     
     ///
     template <typename T>
-    T name() { return code_name.length() ? code_name.c_str() : specifier_name(id); }
+    T name() { return basics ? basics->code_name.c_str() : specifier_name(id); }
     
     /// could potentially use an extra flag for knowing origin
-    Type(Specifier id, std::string code_name = "") : id(size_t(id)), code_name(code_name) { }
-    Type(size_t    id, std::string code_name = "") : id(id),         code_name(code_name) { }
-    Type() { }
+    Type(Specifier id, TypeBasics *basics = null) : id(size_t(id)), basics(basics) { }
+    Type(size_t    id, TypeBasics *basics = null) : id(id),         basics(basics) { }
+    Type() : basics(null) { }
     
 protected:
     const char *specifier_name(size_t id) { /// allow runtime augmentation of this when useful
@@ -129,13 +145,9 @@ protected:
 template <class T>
 struct Id:Type {
     Id() : Type(0) {
-        code_name = ::code_name<T>();
-        id        = std::hash<std::string>()(code_name);
+        basics    = &(TypeBasics &)type_basics<T>();
+        id        = std::hash<std::string>()(basics->code_name);
         T    *ptr = null;
-        if (code_name == "Member") {
-            int test = 0;
-            test++;
-        }
         Type::Specifier ts = Type::specifier(ptr);
         if (ts >= i8 && ts <= Array) { id = ts; }
     }
@@ -166,7 +178,7 @@ struct ptr {
         Type                     type   = 0;
         std::atomic<long>        refs   = 0;
         int                      ksize  = 0; // ksize = known size, when we manage it ourselves, otherwise -1 when we are importing a pointer of unknown size
-        alignas(16) void        *mstart; // imported pointers are not aligned to this spec but our own pointers are.
+        alignas(16) void        *mstart;     // imported pointers are not aligned to this spec but our own pointers are.
     } *info;
     ///
     private:

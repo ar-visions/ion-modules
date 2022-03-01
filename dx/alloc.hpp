@@ -3,177 +3,220 @@
 #define BASE_REF    1
 #define BASE_INC    1
 
-/// Shared is the basis of an Alloc
+///
+template <class T>
+struct Unsafe {
+    T     *ptr;
+    Size   count;
+    Unsafe(T *ptr, Size count = 1) : ptr(ptr), count(count) {
+        assert(count > 0);
+    }
+};
+
+///
+template <class T>
+struct Managed {
+    T     *ptr;
+    size_t count;
+    Managed(T *ptr, Size count = 1) : ptr(ptr), count(count) {
+        assert(count > 0);
+    }
+};
+
+/// Shared is the type data of sh<T>
+/// Type contains factory and deletion fn stubs
 struct Shared {
     struct Precious {
-        int                               refs;
-        void                           *memory;
-        Type                              type;
-        size_t                           count;
-        std::function<void(Precious *)> *unref;
-        const char                        *tag;
-        std::vector<FnVoid>        attachments;
-        bool                   bark_if_freeing;
-    } *p = null;
-    
-    typedef std::function<void(Precious *)> FnPrecious;
-    
-    template <typename T>
-    static FnPrecious *get_unref(T *v) { /// we dont need no maps.
-        static FnPrecious *fn = new FnPrecious([](Precious *p) {
-            if (--p->refs == 0) {
-
-                
-                /// delete vector memory or non vector memory based on count
-                     if (p->count > 1) delete[] (T *)(p->memory);
-                else if (p->count) {
-                    if (p->bark_if_freeing) {
-                        int test = 0;
-                        test++;
-                    }
-                    delete   (T *)(p->memory);
-                }
-                
+        int                        refs;
+        void                    *memory;
+        Type                       type;
+        Size                      count;
+        bool                    managed;
+        const char                 *tag;
+        std::vector<FnVoid> attachments;
+        ///
+        template <typename T> static Precious *unsafe (T *m, Size c, cchar_t *t = null) { return new Precious { BASE_REF, m, Type(Id<T>()), c, false, t }; }
+        template <typename T> static Precious *manage (T *m, Size c, cchar_t *t = null) { return new Precious { BASE_REF, m, Type(Id<T>()), c, true,  t }; }
+        ///
+        void increment() {
+            /// type-based mutex protects this operation without
+            /// having too many mutices all up in your area...
+            type.lock();
+            refs++;
+            type.unlock();
+        }
+        ///
+        void decrement() {
+            type.lock();
+            if (--refs == 0) {
                 /// release attachments (deprecate var use-cases)
-                for (auto &fn:p->attachments)
+                for (auto &fn:attachments)
                     fn();
-
-                /// delete precious
-                delete p;
-            }
-        });
-        return fn;
-    }
-    
-    template <typename T>
-    Shared(size_t c, T *m, const char *tag = null):p(m ? new Precious { BASE_REF, m, Id<T>(), c, get_unref<T>(null), tag } : null) { }
-    Shared()                              { }
-    Shared(Precious *p):p(p)              { } // check when
-    Shared(const Shared &ref):p(ref.p)    { if (p) p->refs += BASE_INC; }
-   ~Shared()                              { p_unref(); }
-    void attach(FnVoid &fn)               { assert(p && p->unref);  p->attachments.push_back(fn); }
-    inline void p_unref()                 { if (p && p->unref) (*p->unref)(p); }
-    
+                type.free(memory, count);
+                type.unlock();
+                delete this;
+            } else
+                type.unlock();
+        }
+    } *p = null;
+    ///
+    template <typename T> inline bool is_diff(T *ptr) { return !p || p->memory != ptr; }
+    template <typename T> Shared(Managed<T> m,  cchar_t *tag = null) : p(Precious::manage(m.ptr, m.count, tag)) { }
+    template <typename T> Shared(Unsafe <T> u,  cchar_t *tag = null) : p(Precious::unsafe(u.ptr, u.count, tag)) { }
+    ///
+    inline void decrement()              { if (p) p->decrement(); }
+    inline void increment()              { if (p) p->increment(); }
+    Shared()                             { }
+    Shared(Precious *p)      :p(p)       { }
+    Shared(const Shared &ref):p(ref.p)   { if (p) p->increment(); }
+   ~Shared()                             { decrement(); }
+    inline void attach(FnVoid fn)        { assert(p); p->attachments.push_back(fn); }
+    inline void *raw() const             { return p ? p->memory : null; }
     ///
     template <typename T>
-    T *memory() {
+    T *pointer() {
         Type  type = Id<T>();
-        assert(type == p->type);
-        return (T *)p->memory;
+        assert(!p || type == p->type);
+        return (T *)raw();
     }
     
+    template <typename T>
+    T &value() {
+        Type  type = Id<T>();
+        assert(!p || type == p->type);
+        return *(T *)raw();
+    }
+    
+    /// reference Shared instance
     Shared &operator=(Shared ref) {
         if (p != ref.p) {
-            p_unref();
-            p = ref.p; /// todo: locked by type?
-            p->refs += BASE_INC;
+            decrement();
+            p  = ref.p;
+            increment();
         }
         return *this;
     }
-
+    ///
+    Shared &operator=(nullptr_t n) {
+        decrement();
+        p = null;
+        return *this;
+    }
+    /// new Shared instance from abstract Unsafe
+    template <typename T>
+    Shared &operator=(Unsafe<T> u) {
+        if (is_diff(u.ptr)) {
+            decrement();
+            p = Precious::unsafe((T *)u.ptr, u.count);
+        }
+        return *this;
+    }
+    /// new Shared instance from abstract Managed
+    template <typename T>
+    Shared &operator=(Managed<T> m) {
+        if (is_diff(m.ptr)) {
+            decrement();
+            p = Precious::manage(m.ptr, m.count);
+        }
+        return *this;
+    }
+    /// implicit 1-count, Managed mode
     template <typename T>
     Shared &operator=(T *ptr) {
-        if (!p || p->memory != ptr) {
-            p_unref();
-            p = ptr ? new Precious { BASE_REF, ptr, Type(Id<T>()), 1, get_unref<T>(null) } : null;
+        if (is_diff(ptr)) {
+            decrement();
+            p = ptr ? Precious::manage(ptr, 1) : null;
         }
         return *this;
     }
-    
-    ///
-    template <typename T>
-    Shared &operator=(T &ref) {
-        /// will need to perform constexpr check, splice out the root type
-        p_unref();
-        p = new Precious { BASE_REF, new T(ref), Type(Id<T>()), 1, get_unref<T>(null) };
-        return *this;
-    }
-
     /// type-safety on the cast
     template <typename T>
-    operator T *() {
+    operator T *() const {
         static Type id = Id<T>();
-        if (p && !(p->type == id)) {
-            fprintf(stderr, "type cast mismatch on Shared %s != %s\n",
-                    id.name<std::string>().c_str(),
-                    p->type.name<std::string>().c_str());
-            //exit(1);
+        if (p && !(id == p->type)) {
+            std::string a =      id.name<std::string>();
+            std::string b = p->type.name<std::string>();
+            ///
+            if (a != "void" && b != "void") {
+                fprintf(stderr, "type cast mismatch on Shared %s != %s\n", a.c_str(), b.c_str());
+                exit(1);
+            }
         }
         return (T *)(p ? p->memory : null);
     }
     
-    operator void *()          const { return p ? p->memory : null; }
-    size_t   count()           const { return p ? p->count  : 0; }
-    Type     &type()           const { static Type t_null; return p ? p->type : t_null; }
-    operator  bool()           const { return p != null; }
-    bool operator!()           const { return p == null; }
-    bool operator==(Shared &b) const { return p == b.p;  }
-    bool operator!=(Shared &b) const { return p != b.p;  }
+    template <typename T>
+    operator             T &() const { return *(operator T *()); }
+    operator          void *() const { return p ?  p->memory : null; }
+    bool          operator! () const { return p ? !p->type.boolean(p->memory) : true; };
+    Size             count  () const { return p ?  p->count : Size(0); }
+    Precious *       ident  () const { return p; }
+    operator          bool  () const { return raw() != null; }
+    Type             &type  () const { static Type t_null; return p ? p->type : t_null; }
+    bool operator==(Shared &b) const { return p ? p->type.compare(p->memory, b.p->memory) : (b.p == null); }
+    bool operator!=(Shared &b) const { return !(operator==(b)); }
 };
-           
-/// standard allocy stuff that you shouldnt see
+
 template <typename T>
-struct Alloc:Shared {
-    Alloc() { }
-    Alloc(const Alloc<T> &a) { p = a.p; }
-    Alloc(T  &ptr)               : Shared(new Shared::Precious { BASE_REF, new T(ptr), Id<T>(), 1, get_unref<T>(null) }) { }
-    Alloc(size_t c, T *p = null) : Shared(new Shared::Precious { BASE_REF, p ? p : (c == 1 ? new T() : new T[c]),
-        Id<T>(), c, get_unref<T>(null) }) {
-        assert(p || c > 0);
-    }
-    
-    Alloc<T> &operator=(Alloc<T> &ref) {
+struct sh:Shared {
+    sh() { }
+    sh(const sh<T> &a) { p = a.p; }
+    sh(T &ref)             : Shared(Shared::Precious::manage(&ref, 1)) { }
+    sh(T *ptr, Size c = 1) : Shared(Shared::Precious::manage( ptr, c)) { assert(c > 0); }
+    ///
+    sh<T> &operator=(sh<T> &ref) {
         if (p != ref.p) {
-            p_unref();
+            decrement();
             p = ref.p;
-            p->refs += BASE_INC;
+            increment();
         }
         return *this;
     }
-    
-    /// set by new pointer
-    Alloc<T> &operator=(T *ptr) {
-        if (!p || p->memory != ptr) {
-            p_unref();
-            p = ptr ? new Precious { BASE_REF, ptr, Type(Id<T>()), 1, get_unref<T>(null) } : null;
+    /// useful pattern in breaking up nullables and non-nullables
+    sh<T> &operator=(nullptr_t n) {
+        decrement();
+        p = null;
+        return *this;
+    }
+    ///
+    sh<T> &operator=(Unsafe<T> u) {
+        if (is_diff(u.ptr)) {
+            decrement();
+            p = Shared::Precious::unsafe(u.ptr, u.count);
         }
         return *this;
     }
-    
-    /// set by reference (create copy)
-    Alloc<T> &operator=(T &ref) {
-        p_unref();
-        p = new Precious { BASE_REF, new T(ref), Type(Id<T>()), 1, get_unref<T>(null) };
+    ///
+    sh<T> &operator=(Managed<T> m) {
+        if (is_diff(m.ptr)) {
+            decrement();
+            p = Shared::Precious::manage(m.ptr, m.count);
+        }
         return *this;
     }
-    
-    bool is_set()          const { return p != null; }
-    bool operator==(Alloc<T> &b) { return p == b.p; }
-    
-    T &operator[](size_t index) const {
+    /// set by new pointer (this is implicit new shation; same as Shared)
+    sh<T> &operator=(T *ptr) {
+        if (is_diff(ptr)) {
+            decrement();
+            p = ptr ? Shared::Precious::manage(ptr, 1) : null;
+        }
+        return *this;
+    }
+    ///
+    sh<T> &operator=(T &ref) {
+        decrement();
+        p = Shared::Precious::manage(&ref, 1);
+        return *this;
+    }
+    ///
+    operator                T &() const { return *(T *)p->memory; }
+    T &               operator*() const { return *(T *)p->memory; }
+    bool                 is_set() const { return p != null; }
+    bool operator==(sh<T>     &b) const { return p == b.p;  }
+    T   &operator[](size_t index) const {
         assert(index < p->count);
         T *origin  = p->memory;
         T &indexed = origin[index];
         return indexed;
     }
-    
-    operator T &() const {
-        if (!p || !p->memory) {
-            int test = 0;
-            test++;
-        }
-        return *(T *)p->memory;
-    }
-    T &operator*() const {
-        if (!p || !p->memory) {
-            int test = 0;
-            test++;
-        }
-        return *(T *)p->memory;
-    }
-};
-
-struct Persistent:Shared {
-    template <typename T>
-    Persistent(const char *tag, T *m):Shared(0, m, tag) { }
 };
