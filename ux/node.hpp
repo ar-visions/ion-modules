@@ -458,7 +458,7 @@ struct node {
             Shared s = sh<T>(new T(v));
             Member::lambdas->type_set(*this, s);
         }
-        operator Arg() { return Arg { Member::shared_value() }; }
+        operator Arg() { return Arg { NMember<T, Member::Extern>::shared_value() }; }
     };
     
     struct Border {
@@ -660,7 +660,7 @@ struct node {
     template <typename I> IndexData   polygons(array<I>  &v_ibo)            { return IndexBuffer<I>      (device(), v_ibo); }
     template <typename U> UniformData  uniform(std::function<void(U &)> fn) { return UniformBuffer<U>    (device(), fn);    }
     template <typename V> Pipes          model(Path path, UniformData ubo, array<Path> textures, Shaders shaders = null) {
-        return Model<V>(device(), ubo, textures, path);
+        return Model<V>(device(), ubo, textures, path, shaders);
     }
     
     Texture texture(Image im) {

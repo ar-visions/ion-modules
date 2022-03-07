@@ -143,6 +143,9 @@ struct Shaders {
             map[key] = value;
         }
     }
+    string operator()(string &group) {
+        return map.count(group) ? map[group] : map["*"];
+    }
     string &operator[](string n) {
         return map[n];
     }

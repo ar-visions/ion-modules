@@ -124,7 +124,7 @@ struct Model:Pipes {
     }
     
     ///
-    Model(Device &device, UniformData &ubo, array<Path> &images, Path p) : Model(device) {
+    Model(Device &device, UniformData &ubo, array<Path> &images, Path p, Shaders &shaders) : Model(device) {
         /// cache control for images to texture here; they might need a new reference upon pipeline rebuild
         auto  tx = cache_textures(images);
         auto obj = Obj<V>(p, [](auto& g, vec3& pos, vec2& uv, vec3& norm) {
@@ -134,7 +134,7 @@ struct Model:Pipes {
         d.vbo   = VertexBuffer<V>(device, obj.vbo);
         for (auto &[name, group]: obj.groups) {
             auto     ibo = IndexBuffer<uint32_t>(device, group.ibo);
-            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, null, name);
+            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, null, shaders(name));
         }
     }
     ///

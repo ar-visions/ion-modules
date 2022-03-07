@@ -91,9 +91,6 @@ struct Composer {
             }
         });
         
-        console.log("n[hi].hover = {0}", { root->mounts["dock"]->mounts["hi"]->m.hover() });
-        
-        
         /// select all within cursor (can be a rect potentially as a ortho selection cursor), including active
         auto nodes = select_at(w.cursor(), true);
         event_dispatch(nodes, FnNode([&](Event ev, node *n) {
@@ -197,7 +194,8 @@ struct Composer {
             /// the ref is just a member ref (it could potentially be grabbed backwards but only nutters would)
             /// so the receiver child gets its member set to this ref, deref'd
             if (bind.shared) {
-                Member &child_member = (Member &)*child->externals[bind.id];
+                console.assertion(child->externals.count(bind.id) == 1, "{0} not found on {1}", { bind.id, str(child->class_name) });
+                Member &child_member = (Member &)*child->externals[bind.id]; // child_member == null
                 /// could be nice to have direct set access through generic shared interface
                 if (!(child_member.shared == bind.shared)) {
                     child_member.lambdas->type_set(child_member, bind.shared);
@@ -273,7 +271,7 @@ struct Composer {
             u[id] = false;
         } else {
             /// it can definitely be an element array from filter or map call, so we're on notice here.
-            assert(false);
+            //assert(false);
         }
         
         /// perform unmounting

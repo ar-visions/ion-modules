@@ -71,8 +71,7 @@ struct Mars:node {
          implementation would be easy though its just a specialized  state on the 2nd param
          return Object<Vertex>("object", {
              {"render"}, {"textures"}, {"model"}, {"uniform"}
-         });
-        */
+         });*/
     }
 };
 
@@ -92,9 +91,11 @@ struct Shell:node {
 
     ///
     Element render() {
-        return Group("dock", {}, {
-            Element::filter<str>({"hi", "hi2"}, [&](str &v) {
-                return Button(v, {{"text-label", m.text_label}});
+        return Mars("mars", {}, {
+            Group("dock", {}, {
+                Element::filter<str>({"hi", "hi2"}, [&](str &v) {
+                    return Button(v, {{"text-label", m.text_label}});
+                })
             })
         });
     }

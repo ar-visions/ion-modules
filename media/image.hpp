@@ -107,7 +107,7 @@ struct Image {
         auto   &sh   = pixels.sh;
         int     sh_w = int(sh[1]);
         int     sh_h = int(sh[0]);
-        assert(sh.size() == 3 && sh_h && sh_w);
+        assert(sh.dims() == 3 && sh_h && sh_w);
         int       xp = (x < 0) ? 0 : ((x >= sh_w) ? (sh_w - 1) : x);
         int       yp = (y < 0) ? 0 : ((y >= sh_h) ? (sh_h - 1) : y);
         vec2i   orig = pixels.count("crop") ? vec2i(pixels["crop"]) : vec2i { 0, 0 };

@@ -46,7 +46,7 @@ struct Obj {
                 groups[g].name  = g;
                 gcount[g]       = 0;
             } else if (w[0] == "f") {
-                assert(g.size() && w.size() == 4); /// f pos/uv/norm pos/uv/norm pos/uv/norm
+                console.assertion(g.size() && w.size() == 4, "import requires triangles"); /// f pos/uv/norm pos/uv/norm pos/uv/norm
                 gcount[g]++;
             }
         }

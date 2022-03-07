@@ -21,7 +21,7 @@ struct Object:node {
         Extern<Path>           model;
         Extern<Shaders>        shaders;
         Extern<UniformData>    ubo;
-        Extern<array<Path>>    attr;
+        Extern<array<Path>>    textures;
         Extern<Rendering>      render;
         Intern<Pipes>          pipes;
     } m;
@@ -31,7 +31,7 @@ struct Object:node {
         external("uniform",  m.ubo,        UniformData    { null     });
         external("model",    m.model,      Path           { ""       });
         external("shaders",  m.shaders,    Shaders        { "*=main" });
-        external("attr",     m.attr,       array<Path>    {          });
+        external("textures", m.textures,   array<Path>    {          });
         external("render",   m.render,     Rendering      { Rendering::Shader });
         internal("pipes",    m.pipes,      Pipes          { null     });
     }
@@ -41,7 +41,7 @@ struct Object:node {
         if (list.count("model") == 0)
             return;
         Path   &mod = m.model;
-        m.pipes     = model<Vertex>(mod, m.ubo, m.attr, m.shaders);
+        m.pipes     = model<Vertex>(mod, m.ubo, m.textures, m.shaders);
     }
     
     /// 
