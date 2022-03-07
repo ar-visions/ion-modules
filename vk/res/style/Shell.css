@@ -13,7 +13,7 @@ Group {
 
 
 Button {
-    fill-color:   #348;
+    fill-color:   #0f0;
     image:        "menu.png";
     image-region:  5l 5t 5r 5b;
     text-color:   #222;
@@ -25,11 +25,11 @@ Button {
 
 Button.hi  {
     region:       0l 80t 0r 80h;
-    fill-color:   #228;
+    fill-color:   #f00;
 }
 
 Button.hi:hover  {
-    fill-color:   #aa2;
+    fill-color:   #fff;
 }
 
 

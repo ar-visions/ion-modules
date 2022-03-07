@@ -90,30 +90,31 @@ struct StPair {
 };
 ///
 struct StBlock {
+    typedef array<sh<StBlock>> Blocks;
+    ///
     StBlock            *parent = null;
     array<StQualifier>  quals;
     array<StPair>       pairs;
-    array<ptr<StBlock>> blocks; /// use Alloc
+    Blocks              blocks; /// use Alloc
     double match(node  *n);
     size_t score(node  *n);
-    
-    
+    ///
     StBlock()                { }
     StBlock(StBlock    &ref) { }
-    
+    ///
     size_t count(str &s) {
         for (auto &p:pairs)
             if (p.member == s)
                 return 1;
         return 0;
     }
+    ///
     StPair *pair(str &s) {
         for (auto &p:pairs)
             if (p.member == s)
                 return &p;
         return null;
     }
-    
     /// these are called from the Type Basics (boolean, compare, alloc, free, possibly hash)
     operator bool()             { return quals || pairs || blocks; }
     bool operator==(StBlock &b) { return this == &b; }

@@ -173,23 +173,24 @@ int Vulkan::main(Composer *composer) {
     i.device.initialize(&w);
     w.show();
     
+    /// look to ye for working pipes.
     /// canvas polygon data (pos, norm, uv, color)
-    auto   vertices = Vertex::square();
-    auto    indices = array<uint16_t> { 0, 1, 2, 2, 3, 0 };
-    auto        vbo = VertexBuffer<Vertex>(device, vertices);
-    auto        ibo = IndexBuffer<uint16_t>(device, indices);
-    auto        uni = UniformBuffer<MVP>(device, 0, [&](MVP &mvp) {
+    auto   vertices =        Vertex::square ();
+    auto    indices =       array<uint16_t> { 0, 1, 2, 2, 3, 0 };
+    auto   textures =      array<Texture *> { &tx_canvas       }; // make sure it calls the initializer_list constructor
+    auto        vbo =  VertexBuffer<Vertex> { device, vertices };
+    auto        ibo = IndexBuffer<uint16_t> { device, indices  };
+    auto        uni =    UniformBuffer<MVP> { device, [&](MVP &mvp) {
         /// consider this UniformData, it just creates a sub lambda in its utility template
         mvp         = {
              .model = glm::mat4(1.0f),
              .view  = glm::mat4(1.0f),
              .proj  = glm::ortho(-0.5, 0.5, 0.5, -0.5, 0.5, -0.5)
         };
-    });
+    }};
     auto         pl = Pipeline<Vertex> {
-        device, uni, vbo, ibo, {
-            Position3f(), Normal3f(), Texture2f(tx_canvas), Color4f()
-        }, {0.05, 0.05, 0.2, 1.0}, std::string("main") /// canvas clear color is gray
+        device, uni, vbo, ibo, textures,
+        { 0.05, 0.05, 0.2, 1.0 }, std::string("main")
     };
     
     /// prototypes add a Window&

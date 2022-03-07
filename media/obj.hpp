@@ -6,27 +6,24 @@ typedef size_t IPos;
 typedef size_t INormal;
 typedef size_t IUV;
 
-template <typename T>
+template <typename V>
 struct Obj {
     struct Group {
-        str name;
-        array<uint32_t> ibo;
-        size_t faces;
-        Group() { }
+        str             name;
+        array<uint32_t> ibo; /// faces no
+        Group()          { }
         bool operator!() { return !name; }
-        operator bool()  { return  name; }
+        operator bool () { return  name; }
     };
     
-    array<T> vbo;
+    array<V> vbo;
     map<str, Group> groups;
     
     Obj(std::nullptr_t n = nullptr) { }
-    Obj(path_t p,
-           std::function<T(Group&, vec3&, vec2&, vec3&)> fn)
+    Obj(Path p, std::function<V(Group&, vec3&, vec2&, vec3&)> fn)
     {
         str g;
-        str contents  = str::read_file(std::filesystem::exists(p) ? p
-            : path_t(var::format("models/{0}.obj", {p})));
+        str contents  = str::read_file(p.exists() ? p : Path(var::format("models/{0}.obj", {p})));
         assert(contents.size() > 0);
         
         auto lines    = contents.split("\n");
@@ -42,14 +39,15 @@ struct Obj {
             wlines += l.split(" ");
         ///
         /// assert triangles as we count them
+        map<str, int> gcount = {};
         for (auto &w: wlines) {
             if (w[0] == "g" || w[0] == "o") {
                 g = w[1];
                 groups[g].name  = g;
-                groups[g].faces = 0;
+                gcount[g]       = 0;
             } else if (w[0] == "f") {
                 assert(g.size() && w.size() == 4); /// f pos/uv/norm pos/uv/norm pos/uv/norm
-                groups[g].faces++;
+                gcount[g]++;
             }
         }
         /// add vertex data
@@ -57,7 +55,7 @@ struct Obj {
             if (w[0] == "g" || w[0] == "o") {
                 g = w[1];
                 if (!groups[g].ibo)
-                    groups[g].ibo = array<uint32_t>(groups[g].faces * 3);
+                    groups[g].ibo = array<uint32_t>(gcount[g] * 3);
             }
             else if (w[0] == "v")  v  += vec3 { w[1].real(), w[2].real(), w[3].real() };
             else if (w[0] == "vt") vt += vec2 { w[1].real(), w[2].real() };

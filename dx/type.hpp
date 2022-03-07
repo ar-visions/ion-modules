@@ -23,7 +23,7 @@ typedef std::function<void(var &, size_t)>     FnArrayEach;
 ///
 struct Type {
     enum Specifier {
-        Undefined, /// null state and other uses
+        Undefined, /// null state and arb uses
         i8,  ui8,
         i16, ui16,
         i32, ui32,
@@ -38,9 +38,27 @@ struct Type {
         Struct
     };
     
-    /// thin-function not generally suited
+    ///
     template <typename T>
-    static Type::Specifier specifier(T *v) {
+    static constexpr Type::Specifier spec(T *v) {
+             if constexpr (std::is_same_v<T,       Fn>) return Type::Lambda;
+        else if constexpr (std::is_same_v<T,     bool>) return Type::Bool;
+        else if constexpr (std::is_same_v<T,   int8_t>) return Type::i8;
+        else if constexpr (std::is_same_v<T,  uint8_t>) return Type::ui8;
+        else if constexpr (std::is_same_v<T,  int16_t>) return Type::i16;
+        else if constexpr (std::is_same_v<T, uint16_t>) return Type::ui16;
+        else if constexpr (std::is_same_v<T,  int32_t>) return Type::i32;
+        else if constexpr (std::is_same_v<T, uint32_t>) return Type::ui32;
+        else if constexpr (std::is_same_v<T,  int64_t>) return Type::i64;
+        else if constexpr (std::is_same_v<T, uint64_t>) return Type::ui64;
+        else if constexpr (std::is_same_v<T,    float>) return Type::f32;
+        else if constexpr (std::is_same_v<T,   double>) return Type::f64;
+        else if constexpr (is_map<T>())                      return Type::Map;
+        return Type::Undefined;
+    }
+    
+    template <typename T>
+    static constexpr Type::Specifier spec() {
              if constexpr (std::is_same_v<T,       Fn>) return Type::Lambda;
         else if constexpr (std::is_same_v<T,     bool>) return Type::Bool;
         else if constexpr (std::is_same_v<T,   int8_t>) return Type::i8;
@@ -147,8 +165,7 @@ struct Id:Type {
     Id() : Type(0) {
         basics    = &(TypeBasics &)type_basics<T>();
         id        = std::hash<std::string>()(basics->code_name);
-        T    *ptr = null;
-        Type::Specifier ts = Type::specifier(ptr);
+        Type::Specifier ts = Type::spec<T>();
         if (ts >= i8 && ts <= Array) { id = ts; }
     }
 };

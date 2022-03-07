@@ -264,7 +264,7 @@ public:
     var(::array<T> aa) : t(Type::Array) {
         T     *va = aa.data();
         Size   sz = aa.size();
-        c         = Type::specifier(va);
+        c         = Type::spec(va);
         a.reserve(sz);
         ///
         if constexpr ((std::is_same_v<T,     bool>)
@@ -279,7 +279,7 @@ public:
             flags     = Flags::Compact;
             T *vdata  = (T *)d.get();
             memcopy(vdata, va, sz);
-            assert(Type::specifier(vdata) == c);
+            assert(Type::spec(vdata) == c);
             for (size_t i = 0; i < sz; i++)
                 a += var {c, (var::u *)&vdata[i]};
           } else
@@ -288,21 +288,21 @@ public:
     }
     
     template <typename T>
-    var(T *v, ::array<int> sh) : t(Type::Array), c(Type::specifier(v)), sh(sh) {
+    var(T *v, ::array<int> sh) : t(Type::Array), c(Type::spec(v)), sh(sh) {
         d = std::shared_ptr<uint8_t>((uint8_t *)new T[size_t(sh)]);
         memcopy(d.get(), (uint8_t *)v, size_t(sh) * sizeof(T)); // in bytes
         flags = Compact;
     }
     
     template <typename T>
-    var(T *v, Size sz) : t(Type::Array), c(Type::specifier(v)), sh(sz) {
+    var(T *v, Size sz) : t(Type::Array), c(Type::spec(v)), sh(sz) {
         d = std::shared_ptr<uint8_t>((uint8_t *)new T[sz]);
         memcopy(d.get(), (uint8_t *)v, size_t(sh) * sizeof(T)); // in bytes
         flags = Compact;
     }
 
          operator ::map<string, var> &() { return m; }
-    var &operator[] (const char *s)     { return var::resolve(*this).m[string(s)]; }
+    var &operator[] (const char *s)      { return var::resolve(*this).m[string(s)]; }
     var &operator[] (str s);
     var &operator[] (const size_t i)    {
         var &v = var::resolve(*this);

@@ -67,6 +67,6 @@ SkFont *Font::handle() {
 Font Font::default_font() {
     static Font def_font;
     if (!def_font)
-         def_font = Font("regular", 16, "fonts/NanumGothic-Regular.ttf");
+         def_font = Font("regular", 16, "fonts/Avenir-Roman.ttf");
     return def_font;
 }

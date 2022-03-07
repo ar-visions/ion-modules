@@ -19,15 +19,11 @@ struct Texture {
             VkImageLayout           layout = VK_IMAGE_LAYOUT_UNDEFINED;
             uint64_t                access = 0;
             VkPipelineStageFlagBits stage;
-            inline bool operator==(Data &b) {
-                return layout == b.layout;
-            }
+            inline bool operator==(Data &b) { return layout == b.layout; }
         };
         ///
         static const Data types[5];
-        const Data & data() {
-            return types[value];
-        }
+        const Data & data() { return types[value]; }
         ///
         inline bool operator==(Stage &b)      { return value == b.value; }
         inline bool operator!=(Stage &b)      { return value != b.value; }
@@ -40,9 +36,7 @@ struct Texture {
         ///
         bool operator>(Stage &b) { return value > b.value; }
         bool operator<(Stage &b) { return value < b.value; }
-        operator Type() { // todo: conv names. of Type.
-            return value;
-        }
+             operator     Type() { return value; }
     };
     
     struct Data {
@@ -61,36 +55,38 @@ struct Texture {
         VkFormat                format;
         VkImageUsageFlags       usage;
         VkImageAspectFlags      aflags;
+        Image                   lazy;
+        ///
         std::stack<Stage>       stage;
-        Stage                   prv_stage = Stage::Undefined;
+        Stage                   prv_stage       = Stage::Undefined;
         VkImageLayout           layout_override = VK_IMAGE_LAYOUT_UNDEFINED;
         ///
-        void       set_stage(Stage);
-        void       push_stage(Stage);
-        void       pop_stage();
-        static int auto_mips(uint32_t, vec2i);
+        void                    set_stage(Stage);
+        void                    push_stage(Stage);
+        void                    pop_stage();
+        static int              auto_mips(uint32_t, vec2i);
         ///
-        static VkImageView create_view(VkDevice, vec2i &, VkImage, VkFormat, VkImageAspectFlags, uint32_t);
+        static VkImageView      create_view(VkDevice, vec2i &, VkImage, VkFormat, VkImageAspectFlags, uint32_t);
         ///
-        operator    bool();
-        bool        operator!();
-        operator    VkImage &();
-        operator    VkImageView &();
-        operator    VkDeviceMemory &();
-        operator    VkAttachmentDescription();
-        operator    VkAttachmentReference();
-        operator    VkDescriptorImageInfo &();
-        void        destroy();
-        VkImageView image_view();
-        VkSampler   image_sampler();
-        void        create_sampler();
-        void        create_resources();
-        VkWriteDescriptorSet write_desc(VkDescriptorSet &ds);
+        operator                bool();
+        bool                    operator!();
+        operator                VkImage &();
+        operator                VkImageView &();
+        operator                VkDeviceMemory &();
+        operator                VkAttachmentDescription();
+        operator                VkAttachmentReference();
+        operator                VkDescriptorImageInfo &();
+        void                    destroy();
+        VkImageView             image_view();
+        VkSampler               image_sampler();
+        void                    create_sampler();
+        void                    create_resources();
+        VkWriteDescriptorSet    descriptor(VkDescriptorSet &ds, uint32_t binding);
         ///
         Data(std::nullptr_t n = null) { }
         Data(Device *, vec2i, rgba, VkImageUsageFlags,
              VkMemoryPropertyFlags, VkImageAspectFlags, bool,
-             VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1);
+             VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1, Image = null);
         Data(Device *device,        Image &im,
              VkImageUsageFlags,     VkMemoryPropertyFlags,
              VkImageAspectFlags,    bool,
@@ -108,20 +104,19 @@ struct Texture {
     Texture(Device            *device,  vec2i sz,        rgba clr,
             VkImageUsageFlags  usage,   VkMemoryPropertyFlags memory,
             VkImageAspectFlags aspect,  bool                  ms,
-            VkFormat           format = VK_FORMAT_R8G8B8A8_SRGB, int mips = -1) :
+            VkFormat           format = VK_FORMAT_R8G8B8A8_SRGB, int mips = -1, Image lazy = null) :
         data(std::shared_ptr<Data>(
             new Data { device, sz, clr, usage, memory,
-                       aspect, ms, format, mips }
+                       aspect, ms, format, mips, lazy }
         ))
     {
         rgba *px = null;
-        if (clr) {
+        if (clr) { /// this also works to be the initial color too if its a url; its designed to update async within reason
             px = (rgba *)malloc(sz.x * sz.y * sizeof(rgba));
             for (int i = 0; i < sz.x * sz.y; i++)
                 px[i] = clr;
         }
         transfer_pixels(px); /// this was made to be null.. what i wonder is how its done
-        
         free(px);
         data->image_ref = false;
     }
@@ -131,9 +126,7 @@ struct Texture {
             VkImageAspectFlags aspect, bool                  ms,
             VkFormat           format = VK_FORMAT_R8G8B8A8_SRGB,
             int                mips   = -1) :
-        data(std::shared_ptr<Data>(
-            new Data { device, im, usage, memory, aspect, ms, format, mips }
-        ))
+        data(std::shared_ptr<Data>( new Data { device, im, usage, memory, aspect, ms, format, mips } ))
     {
         rgba *px = &im.pixel<rgba>(0, 0);
         transfer_pixels(px);
@@ -145,10 +138,8 @@ struct Texture {
             VkImage            image,  VkImageView           view,
             VkImageUsageFlags  usage,  VkMemoryPropertyFlags memory,
             VkImageAspectFlags aspect, bool                  ms,
-            VkFormat format = VK_FORMAT_R8G8B8A8_SRGB, int mips = -1) :
-        data(std::shared_ptr<Data>(
-            new Data { device, sz, image, view, usage, memory, aspect, ms, format, mips }
-        )) { }
+            VkFormat           format = VK_FORMAT_R8G8B8A8_SRGB, int mips = -1) :
+        data(std::shared_ptr<Data>( new Data { device, sz, image, view, usage, memory, aspect, ms, format, mips } )) { }
     
     void set_stage(Stage s)            { return data->set_stage(s);  }
     void push_stage(Stage s)           { return data->push_stage(s); }
@@ -157,19 +148,19 @@ struct Texture {
     
 public:
     /// pass-through operators
-    operator  bool()                   { return    data &&  *data; }
-    bool operator!()                   { return   !data || !*data; }
-    bool operator==(Texture &tx)       { return    data == tx.data; }
-    operator VkImage &()               { return   *data; }
-    operator VkImageView &()           { return   *data; }
-    operator VkDeviceMemory &()        { return   *data; }
-    operator VkAttachmentReference()   { return   *data; }
+    operator  bool                  () { return    data &&  *data; }
+    bool operator!                  () { return   !data || !*data; }
+    bool operator==      (Texture &tx) { return    data == tx.data; }
+    operator VkImage               &() { return   *data; }
+    operator VkImageView           &() { return   *data; }
+    operator VkDeviceMemory        &() { return   *data; }
+    operator VkAttachmentReference  () { return   *data; }
     operator VkAttachmentDescription() { return   *data; }
     operator VkDescriptorImageInfo &() { return   *data; }
     
     /// pass-through methods
     void destroy() { if (data) data->destroy(); };
-    VkWriteDescriptorSet write_desc(VkDescriptorSet &ds) { return data->write_desc(ds); }
+    VkWriteDescriptorSet descriptor(VkDescriptorSet &ds, uint32_t binding) { return data->descriptor(ds, binding); }
 };
 
 struct ColorTexture:Texture {

@@ -49,6 +49,9 @@ struct RGBA {
     RGBA(cchar_t *pc):RGBA() {
         parse(pc);
     }
+    RGBA(str s):RGBA() {
+        parse(s);
+    }
     RGBA(var &d):RGBA() {
         if (d == Type::Str) {
             parse(d);
@@ -152,9 +155,19 @@ struct RGBA {
         const real sc = scale();
         return { r / sc, g / sc, b / sc, a / sc };
     }
-    bool operator!() { return a <= 0; }
-    operator bool()  { return a >  0; }
+    bool operator==(RGBA<T> p) { return r == p.r &&
+                                        g == p.g &&
+                                        b == p.b &&
+                                        a == p.a; }
+    bool operator!=(RGBA<T> p) { return !operator==(p); };
+    bool operator!()           { return a <= 0; }
+    operator bool()            { return a >  0; }
 };
+
+/// css-instantiation is one user of this
+template<> struct is_strable<RGBA<uint8_t>> : std::true_type  {};
+template<> struct is_strable<RGBA<float>>   : std::true_type  {};
+template<> struct is_strable<RGBA<double>>  : std::true_type  {};
 
 typedef RGBA<uint8_t> rgba;
 

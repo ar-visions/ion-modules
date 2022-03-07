@@ -1,14 +1,5 @@
 #include <vk/vk.hpp>
 
-array<VkVertexInputAttributeDescription> Vertex::attrs() {
-    auto attrs = array<VkVertexInputAttributeDescription> {
-        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex, pos) },
-        { 1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex, clr) },
-        { 2, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex, uv)  }
-    };
-    return attrs;
-}
-
 void PipelineData::Memory::destroy() {
     auto  &device = *this->device;
     vkDestroyDescriptorSetLayout(device, set_layout, null);
@@ -27,10 +18,11 @@ PipelineData::Memory::~Memory() {
 /// constructor for pipeline memory; worth saying again.
 PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
                              VertexData    &vbo,     IndexData   &ibo,
-                             array<Attrib> &attr,    size_t       vsize,
+                             array<Texture *> &tx,   size_t vsize,
                              rgba           clr,     string       shader,
                              VkStateFn      vk_state):
-        device(&device), shader(shader), ubo(ubo), vbo(vbo), ibo(ibo), attr(attr), vsize(vsize), clr(clr)
+        device(&device), shader(shader), ubo(ubo),
+           vbo(vbo), ibo(ibo), tx(tx), vsize(vsize), clr(clr)
 {
     /// obtain data via usage
     auto bindings = array<VkDescriptorSetLayoutBinding> {
@@ -54,21 +46,21 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     VkResult res = vkAllocateDescriptorSets(device, &ai, ds_data);
     assert  (res == VK_SUCCESS);
     ubo.update(&device);
-    /// needs fixing.  i dont want to pass a legit texture handle at this point if i can prevent it
     ///
-    Texture tx;
-    for (size_t i = 0; i < attr.size(); i++)
-        if (attr[i].tx)
-            tx = attr[i].tx;
+    
     /// write descriptor sets for all swap image instances
     for (size_t i = 0; i < device.frames.size(); i++) {
-        auto &desc_set = desc_sets[i];
-        auto  v_writes = array<VkWriteDescriptorSet> {
-            ubo.write_desc(i, desc_set),
-             tx.write_desc(desc_set) /// use the pipeline texture sampler bound at [1]
-        };
-        VkDevice   dev = device;
-        size_t      sz = v_writes.size();
+        auto &desc_set  = desc_sets[i];
+        auto  v_writes  = array<VkWriteDescriptorSet>(size_t(1 + tx.size()));
+        
+        /// update descriptor sets
+        v_writes       += ubo.descriptor(i, desc_set);
+        uint32_t i_tx   = 1;
+        for (auto t:tx)
+            v_writes   += t->descriptor(desc_set, i_tx++);
+        
+        VkDevice    dev = device;
+        size_t       sz = v_writes.size();
         VkWriteDescriptorSet *ptr = v_writes.data();
         vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
     }
@@ -85,7 +77,9 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     }};
     ///
     auto binding            = VkVertexInputBindingDescription { 0, uint32_t(vsize), VK_VERTEX_INPUT_RATE_VERTEX };
-    auto vk_attr            = Attrib::vk(0, attr);
+    
+    /// 
+    auto vk_attr            = vbo.fn_attribs();
     auto viewport           = VkViewport(device);
     auto sc                 = VkRect2D {
         .offset             = {0, 0},

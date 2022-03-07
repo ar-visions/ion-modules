@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <thread>
+#include <vector>
 
 typedef const char cchar_t;
 
@@ -32,6 +33,7 @@ struct TypeBasics {
     std::function<void  (void *, size_t)> fn_free;
     std::function<bool  (void *        )> fn_boolean;
     std::function<void *(        size_t)> fn_alloc;
+    std::function<void *(size_t, void *)> fn_alloc_array;
     std::function<int   (void *, void *)> fn_compare;
 };
 
@@ -80,8 +82,19 @@ const TypeBasics &type_basics() {
                  if (count > 1) delete[] (T *)(ptr);
             else if (count    ) delete   (T *)(ptr);
         };
+        //typedef std::vector<T> vt;
         ///
-        tb.fn_alloc = [](size_t count) -> void * { return (void *)new T(); };
+        tb.fn_alloc       = [](size_t c)          -> void * { return (void *)new T(); };
+        tb.fn_alloc_array = [](size_t c, void *d) -> void * {
+            //std::vector<bool> hi = { true };
+            //bool *b = hi.data();
+            //vt *v = new vt();
+            //v->reserve(c);
+            //if (d)
+            //    memcpy((void *)v->data(), d, c * sizeof(T));
+            //return v;
+            return null;
+        };
     }
     return tb;
 };

@@ -10,7 +10,8 @@ Device &Device::null_device() {
     return d_null;
 }
 
-VkWriteDescriptorSet UniformData::write_desc(size_t frame_index, VkDescriptorSet &ds) {
+/// obtain write desciptor set
+VkWriteDescriptorSet UniformData::descriptor(size_t frame_index, VkDescriptorSet &ds) {
     auto &m = *this->m;
     return {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, null, ds, 0, 0,

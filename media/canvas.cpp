@@ -221,8 +221,9 @@ struct Context2D:ICanvasBackend {
             SkScalar(0), SkScalar(0), SkSamplingOptions(c), &ps);
         sk_canvas->restore();
     }
+    /// would be reasonable to have a rich() method
     
-    /// the lines are most definitely just text() calls, it should be up to the user to perform multiline
+    /// the lines are most definitely just text() calls, it should be up to the user to perform multiline.
     void text(DrawState &ds, str &text, rectd &rect, vec2 &align, vec2 &offset, bool ellip) {
         State   *s = (State *)ds.b_state; // backend state (this)
         SkPaint ps = SkPaint(s->ps);
@@ -239,15 +240,11 @@ struct Context2D:ICanvasBackend {
             ptext  = &stext;
         } else
             tm     = measure(ds, *ptext);
-        ///
         auto    tb = SkTextBlob::MakeFromText(ptext->cstr(), ptext->size(), (const SkFont &)f, SkTextEncoding::kUTF8);
-        ///
         pos.x = (align.x == Align::End)    ? rect.x + rect.w     - tm.w :
-                (align.x == Align::Middle) ? rect.x + rect.w / 2 - tm.w / 2 :
-                                             rect.x;
+                (align.x == Align::Middle) ? rect.x + rect.w / 2 - tm.w / 2 : rect.x;
         pos.y = (align.y == Align::End)    ? rect.y + rect.h     - tm.h :
-                (align.y == Align::Middle) ? rect.y + rect.h / 2 - tm.h / 2 - ((-tm.descent + tm.ascent) / 1.66) :
-                                             rect.y;
+                (align.y == Align::Middle) ? rect.y + rect.h / 2 - tm.h / 2 - ((-tm.descent + tm.ascent) / 1.66) : rect.y;
         sk_canvas->drawTextBlob(
             tb, SkScalar(pos.x + offset.x),
                 SkScalar(pos.y + offset.y), ps);

@@ -326,10 +326,15 @@ struct node {
                                 assert(false);
                             } else if constexpr (is_strable<T>() || std::is_base_of<EnumData, T>())
                                 p->instances.set(m.type, new T(p->value));
-                            else {
-                                /// it could be configured to fault here
-                                var conv = p->value;
-                                p->instances.set(m.type, new T(conv));
+                              else {
+                                // if type is primitive-based
+                                if constexpr (Type::spec<T>() != Type::Undefined) {
+                                    /// it could be configured to fault here
+                                    var conv = p->value;
+                                    p->instances.set(m.type, new T(conv));
+                                } else {
+                                    console.error("eject porkins");
+                                }
                             }
                         }
                         /// merge instances, and var std::shared use-cases with Shared
@@ -650,31 +655,33 @@ struct node {
         return T(null);
     }
     
-    Device &device() { return Vulkan::device(); }
-    
-    template <typename U>
-    UniformData uniform(int id, std::function<void(U &)> fn) { return UniformBuffer<U>(device(), id, fn); }
-    
-    template <typename T>
-    VertexData vertices(array<T> &v_vbo) { return VertexBuffer<Vertex>(device(), v_vbo); }
-    
-    template <typename I>
-    IndexData polygons(array<I>  &v_ibo) { return IndexBuffer<I>(device(), v_ibo); }
-    
-    template <typename V>
-    Pipes model(path_t path, UniformData  ubo, VAttr attr, Shaders shaders = null) {
-        return Model<V>(device(), ubo, attr, path);
+    Device &                            device()                            { return Vulkan::device(); }
+    template <typename T> VertexData  vertices(array<T> &v_vbo)             { return VertexBuffer<Vertex>(device(), v_vbo); }
+    template <typename I> IndexData   polygons(array<I>  &v_ibo)            { return IndexBuffer<I>      (device(), v_ibo); }
+    template <typename U> UniformData  uniform(std::function<void(U &)> fn) { return UniformBuffer<U>    (device(), fn);    }
+    template <typename V> Pipes          model(Path path, UniformData ubo, array<Path> textures, Shaders shaders = null) {
+        return Model<V>(device(), ubo, textures, path);
     }
     
-    Pipeline<Vertex> texture(Texture tx, UniformData ubo) {
+    Texture texture(Image im) {
+        return Texture { &device(), im,
+            VK_IMAGE_USAGE_SAMPLED_BIT          | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT     | VK_IMAGE_USAGE_TRANSFER_DST_BIT     |
+            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
+            false, VK_FORMAT_R8G8B8A8_UNORM, -1 };
+    }
+    
+    Texture texture(Path p) { return texture(Image(p, Image::Rgba)); }
+    
+    template <typename V>
+    Pipeline<V> texture_view(Texture &tx, UniformData ubo) {
         auto v_sqr = Vertex::square();
         auto i_sqr = array<uint32_t> { 0, 1, 2, 2, 3, 0 };
         auto   vbo = vertices(v_sqr);
         auto   ibo = polygons(i_sqr);
-        return Pipeline<Vertex> {
-            device(), ubo, vbo, ibo,
-            { Position3f(), Normal3f(), Texture2f(tx), Color4f() },
-              rgba {1.0, 0.7, 0.2, 1.0}, "main" };
+        auto  a_tx = array<Texture*> { &tx };
+        return Pipeline<V> {
+            device(), ubo, vbo, ibo, a_tx, rgba {1.0, 0.7, 0.2, 1.0}, "main" };
     }
     
     inline size_t count(str n) {
@@ -686,8 +693,6 @@ struct node {
         return 0;
     }
     
-    /// context was using a 'stationary' concept, a third external effectively which "id" was part of
-    /// i dont believe its as useful as a general external link, same properties as exposed through member via element map
     template <typename T>
     T &context(str name) {
         static T t_null = null;

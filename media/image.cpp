@@ -5,7 +5,7 @@
 #include "stb_image_write.h"
 
 Image::Image(std::nullptr_t n) { }
-Image::Image(var &pixels) : pixels(pixels) {
+Image::Image(var &pixels) : pixels(pixels) { /// images/ implied, probably will do the same
     if (pixels == Type::Str) {
         bool no_ext = path_t(pixels).extension() == "";
         path_t path = var::format("images/{0}{1}", {pixels, (no_ext ? str {".png"} : str {""})});

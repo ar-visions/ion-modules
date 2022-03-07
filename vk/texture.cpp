@@ -4,10 +4,10 @@
 Texture::Data::Data(Device *device, vec2i sz, rgba clr,
                  VkImageUsageFlags  u, VkMemoryPropertyFlags m,
                  VkImageAspectFlags a, bool ms,
-                 VkFormat format, int mips) :
+                 VkFormat format, int mips, Image lazy) :
                     device(device), sz(sz),
                     mips(auto_mips(mips, sz)), mprops(m),
-                    ms(ms), format(format), usage(u), aflags(a) { }
+                    ms(ms), format(format), usage(u), aflags(a), lazy(lazy) { }
 
 /// create with image (rgba required)
 Texture::Data::Data(Device *device, Image &im,
@@ -15,14 +15,15 @@ Texture::Data::Data(Device *device, Image &im,
                     VkImageAspectFlags a, bool ms,
                     VkFormat           f, int  mips) :
                        device(device), sz(im.size()), mips(auto_mips(mips, sz)),
-                       mprops(m),      ms(ms),        format(f),     aflags(a)  { }
+                       mprops(m),  ms(ms),  format(f),  aflags(a),  lazy(im) { }
 
-Texture::Data::Data(Device *device, vec2i sz, VkImage image, VkImageView view, VkImageUsageFlags u, VkMemoryPropertyFlags m,
+Texture::Data::Data(Device *device, vec2i sz, VkImage image, VkImageView view,
+                    VkImageUsageFlags  u, VkMemoryPropertyFlags m,
                     VkImageAspectFlags a, bool ms, VkFormat format, int mips):
-                       device(device), image(image),              view(view),
-                       sz(sz),         mips(auto_mips(mips, sz)), mprops(m),
-                       ms(ms),         image_ref(true),           format(format),
-                       usage(u),       aflags(a) { }
+                       device(device),     image(image),                 view(view),
+                           sz(sz),          mips(auto_mips(mips, sz)), mprops(m),
+                           ms(ms),     image_ref(true),                format(format),
+                        usage(u),         aflags(a) { }
 
 Texture::Stage::Stage(Stage::Type value) : value(value) { }
 
@@ -284,12 +285,12 @@ void Texture::Data::destroy() {
     }
 }
 
-VkWriteDescriptorSet Texture::Data::write_desc(VkDescriptorSet &ds) {
+VkWriteDescriptorSet Texture::Data::descriptor(VkDescriptorSet &ds, uint32_t binding) {
     VkDescriptorImageInfo &info = *this;
     return {
         .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet          = ds,
-        .dstBinding      = 1,
+        .dstBinding      = binding,
         .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 1,
         .pImageInfo      = &info

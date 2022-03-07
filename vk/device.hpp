@@ -7,11 +7,16 @@
 
 struct PipelineData;
 struct Window;
+struct Texture;
 struct Device {
     enum Module {
         Vertex,
         Fragment,
         Compute
+    };
+    struct Pair {
+        Texture *texture;
+        Image   *image;
     };
     void                  create_swapchain();
     void                  create_command_buffers();
@@ -36,6 +41,7 @@ struct Device {
     array<VkImage>          swap_images;
     Texture               tx_color;
     Texture               tx_depth;
+    map<Path, Pair>       tx_cache;
     
     static Device &null_device();
     

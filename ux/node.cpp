@@ -122,7 +122,7 @@ void node::standard_bind() {
     external <rgba>        ("text-color",       m.text.color,        rgba("#fff") );
     external <real>        ("text-offset",      m.text.offset,       real(0));
     external <Region>      ("text-region",      m.text.region,       null);
-    external <rgba>        ("fill-color",       m.fill.color,        rgba(0,255,0,0));
+    external <rgba>        ("fill-color",       m.fill.color,        rgba(0,0,0,0));
     external <real>        ("fill-offset",      m.fill.offset,       real(0));
     external <VAlign>      ("image-align",      m.fill.align,        VAlign(null));
     external <Image>       ("image",            m.fill.image,        null);
