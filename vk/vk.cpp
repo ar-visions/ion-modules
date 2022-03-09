@@ -177,20 +177,19 @@ int Vulkan::main(Composer *composer) {
     /// canvas polygon data (pos, norm, uv, color)
     auto   vertices =        Vertex::square ();
     auto    indices =       array<uint16_t> { 0, 1, 2, 2, 3, 0 };
-    auto   textures =      array<Texture *> { &tx_canvas       }; // make sure it calls the initializer_list constructor
+    auto   textures =      array<Texture *> { &tx_canvas       };
     auto        vbo =  VertexBuffer<Vertex> { device, vertices };
     auto        ibo = IndexBuffer<uint16_t> { device, indices  };
     auto        uni =    UniformBuffer<MVP> { device, [&](MVP &mvp) {
-        /// consider this UniformData, it just creates a sub lambda in its utility template
-        mvp         = {
-             .model = glm::mat4(1.0f),
-             .view  = glm::mat4(1.0f),
-             .proj  = glm::ortho(-0.5, 0.5, 0.5, -0.5, 0.5, -0.5)
+        mvp         = MVP {
+             .model = m44f::identity(),
+             .view  = m44f::identity(),
+             .proj  = glm::ortho(-0.5f, 0.5f, -0.5f, 0.5f, 0.5f, -0.5f)
         };
     }};
     auto         pl = Pipeline<Vertex> {
         device, uni, vbo, ibo, textures,
-        { 0.05, 0.05, 0.2, 1.0 }, std::string("main")
+        { 0.0, 0.0, 0.0, 0.0 }, std::string("main") /// transparent canvas overlay; are we clear? crystal.
     };
     
     /// prototypes add a Window&
@@ -207,19 +206,18 @@ int Vulkan::main(Composer *composer) {
             vk_subsystem_init();
             init = true;
         }
-        
-        ///
-        canvas.clear(rgba {0.0, 0.01, 0.05, 1.0});
+
+        canvas.clear(rgba {0.0, 0.0, 0.0, 0.0});
         composer->render();
         canvas.flush();
+    
+        // this should only paint the 3D pipeline, no canvas
         
-        ///
-        i.tx_skia.push_stage(Texture::Stage::Shader);
-        device.render.push(pl);
+        //i.tx_skia.push_stage(Texture::Stage::Shader);
+        //device.render.push(pl); /// Any 3D object would have passed its pipeline prior to this call (in render)
         device.render.present();
-        i.tx_skia.pop_stage();
+        //i.tx_skia.pop_stage();
         
-        ///
         if (composer->root)
             w.set_title(composer->root->m.text.label);
 

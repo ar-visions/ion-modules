@@ -15,7 +15,7 @@ Texture::Data::Data(Device *device, Image &im,
                     VkImageAspectFlags a, bool ms,
                     VkFormat           f, int  mips) :
                        device(device), sz(im.size()), mips(auto_mips(mips, sz)),
-                       mprops(m),  ms(ms),  format(f),  aflags(a),  lazy(im) { }
+                       mprops(m),  ms(ms),  format(f),  usage(u), aflags(a),  lazy(im) { }
 
 Texture::Data::Data(Device *device, vec2i sz, VkImage image, VkImageView view,
                     VkImageUsageFlags  u, VkMemoryPropertyFlags m,
@@ -163,7 +163,7 @@ void Texture::transfer_pixels(rgba *pixels) { /// sz = 0, eh.
     Data &d = *data;
     Device &device = *d.device;
     ///
-    d.create_resources();
+    d.create_resources(); // usage not copied?
     if (pixels) {
         auto    nbytes = VkDeviceSize(d.sz.x * d.sz.y * 4); /// adjust bytes if format isnt rgba; implement grayscale
         Buffer staging = Buffer(&device, nbytes,

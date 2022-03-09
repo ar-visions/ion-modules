@@ -205,21 +205,24 @@ node *node::focused() {
 }
 
 void node::draw(Canvas &canvas) {
+    /// if there is a fill color
     if (m.fill.color()) { /// free'd prematurely during style change (not a transition)
         canvas.color(m.fill.color());
         canvas.fill(paths.fill);
     }
-    ///
-    auto &image = m.fill.image();
-    if (image)
-        canvas.image(image, image_rect, (vec2 &)m.fill.align(), vec2(0,0));
+    /// if there is fill image
+    if (m.fill.image()) {
+        rectd rect = image_rect + paths.rect.xy();
+        canvas.image(m.fill.image(), rect, (vec2 &)m.fill.align(), vec2(0,0));
+    }
     
-    ///
+    /// if there is text (its not alpha 0, and there is text)
     if (m.text) {
-        canvas.color(m.text.color);
+        canvas.color(m.text.color); /// todo: revisit this
         canvas.text(m.text.label, paths.border, (vec2 &)m.text.align(), { 0.0, 0.0 }, true);
     }
-    ///
+    
+    /// if there is an effective border to draw
     if (m.border.color() && m.border.size() > 0.0) {
         canvas.color(m.border.color());
         canvas.outline_sz(m.border.size());

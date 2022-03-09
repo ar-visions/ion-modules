@@ -3,8 +3,6 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-// important that only active pipelines be presented; makes perfect sense to have controls on hidden or inactive objects
-
 static const int MAX_FRAMES_IN_FLIGHT = 2;
 
 /// the thing that 'executes' is the present.  so this is just 'update'
@@ -13,10 +11,6 @@ void Render::update() {
     Frame  &frame  = device.frames[cframe];
     assert (cframe == frame.index);
 }
-
-/// could be in Vulkan::main
-/// could be in Render::present
-/// could be in canvas (invalid context creation?) (no flush?)
 
 void Render::present() {
     Device &device = *this->device;
@@ -70,6 +64,8 @@ void Render::present() {
         submit_info.pCommandBuffers      = &m.frame_commands[image_index];
         submit_info.signalSemaphoreCount = 1;
         assert(vkQueueSubmit(device.queues[GPU::Graphics], 1, &submit_info, fence_active[cframe]) == VK_SUCCESS);
+        int test = 0;
+        test++;
     }
     
     VkPresentInfoKHR     present = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, null, 1,

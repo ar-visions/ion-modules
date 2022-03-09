@@ -13,6 +13,7 @@ struct Image {
 
     Image(std::nullptr_t n = null);
     Image(path_t, Format);
+    Image(string path);
     Image(var &);
     Image(vec2i sz, Format f);
     Image(vec2i sz, rgba clr);
@@ -115,6 +116,10 @@ struct Image {
         return data[(orig.y + yp) * sh_w + (orig.x + xp)];
     }
     
+    inline Shape<Major> shape() {
+        return pixels.shape();
+    }
+    
     inline void filter(std::function<rgba(rgba &, int, int)> fn) {
         assert(pixels.c == Type::ui32 || pixels.c == Type::i32);
         auto    sh   = pixels.shape();
@@ -165,3 +170,5 @@ struct Image {
 };
 
 void shodgeman(array<vec2> &poly, array<vec2> &clip);
+
+template<> struct is_strable<Image> : std::true_type  {};

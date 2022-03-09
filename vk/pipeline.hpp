@@ -2,6 +2,7 @@
 #include <vk/device.hpp>
 #include <vk/vk.hpp>
 #include <dx/map.hpp>
+#include <dx/array.hpp>
 
 /// just a solid, slab of state.  fresh out of the fires of Vulkan
 /// Will be initialized by the general pipeline code, then optionally passed into lambda where it is altered
@@ -91,32 +92,40 @@ struct Pipes {
 
 /// Model is the integration of device, ubo, attrib, with interfaces around OBJ format or Lambda
 template <typename V>
-struct Model:Pipes {    
+struct Model:Pipes {
     struct Polys {
         ::map<str, array<int32_t>> groups;
         array<V> verts;
     };
+    
     ///
     struct Shape {
         typedef std::function<Polys(void)> ModelFn;
         ModelFn fn;
     };
+    
     ///
     Model(Device &device) {
         data = std::shared_ptr<Data>(new Data { &device });
     }
     
+    ///
     array<Texture*> cache_textures(array<Path> &images) {
         auto &d = *this->data;
         ::map<Path, Device::Pair> &cache = d.device->tx_cache;
         array<Texture*> tx = array<Texture*>(images.size());
         for (Path &p:images) {
             if (!cache.count(p)) {
-                cache[p].image   = new Image(p, Image::Rgba);
-                cache[p].texture = new Texture(d.device, *cache[p].image,
-                   VK_IMAGE_USAGE_SAMPLED_BIT      | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+                /// see why its not loading right
+                cache[p].image    = new Image(p, Image::Rgba);
+                auto          &shh = cache[p].image->pixels;
+                ::Shape<Major> sh1 = shh.shape();
+                cache[p].texture  = new Texture(d.device, *cache[p].image,
+                   VK_IMAGE_USAGE_SAMPLED_BIT      | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                   VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT, false, VK_FORMAT_R8G8B8A8_UNORM, -1);
+                cache[p].texture->push_stage(Texture::Stage::Shader);
             }
             tx += cache[p].texture;
         }
@@ -134,15 +143,16 @@ struct Model:Pipes {
         d.vbo   = VertexBuffer<V>(device, obj.vbo);
         for (auto &[name, group]: obj.groups) {
             auto     ibo = IndexBuffer<uint32_t>(device, group.ibo);
-            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, null, shaders(name));
+            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, rgba {0.05, 0.0, 0.06, 0.1}, shaders(name));
         }
     }
-    ///
-    Model(Device &device, UniformData &ubo, array<Path> &images, Shape s) : Model(device) {
-        auto     &d = *this->data;
-        auto  polys = s.fn();
-        auto     tx = cache_textures(images);
-        d.vbo       = VertexBuffer<V>(device, polys.verts);
+    
+    /// deprecare
+    Model(Device &device, UniformData &ubo, array<Path> &images, Shape s, Shaders &shaders) : Model(device) {
+        auto    &d = *this->data;
+        auto polys = s.fn();
+        auto    tx = cache_textures(images);
+        d.vbo      = VertexBuffer<V>(device, polys.verts);
         for (auto &[name, group]: polys.groups) {
             auto     ibo = IndexBuffer<uint32_t>(device, group.ibo);
             d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, null, name);

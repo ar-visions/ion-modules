@@ -87,6 +87,9 @@ struct Texture {
         Data(Device *, vec2i, rgba, VkImageUsageFlags,
              VkMemoryPropertyFlags, VkImageAspectFlags, bool,
              VkFormat = VK_FORMAT_R8G8B8A8_SRGB, int = -1, Image = null);
+        
+        //device, im, usage, memory, aspect, ms, format, mips
+        
         Data(Device *device,        Image &im,
              VkImageUsageFlags,     VkMemoryPropertyFlags,
              VkImageAspectFlags,    bool,

@@ -32,7 +32,7 @@ struct Obj {
         auto v        = array<vec3>(line_c);
         auto vn       = array<vec3>(line_c);
         auto vt       = array<vec2>(line_c);
-        auto indices  = map<str, uint32_t>();
+        auto indices  = std::unordered_map<str, uint32_t>(); ///
         size_t verts  = 0;
         ///
         for (auto &l:lines)
@@ -50,7 +50,7 @@ struct Obj {
                 gcount[g]++;
             }
         }
-        /// add vertex data
+        /// add vertex data (slow here; figure out causes)
         for (auto &w: wlines) {
             if (w[0] == "g" || w[0] == "o") {
                 g = w[1];

@@ -28,12 +28,14 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     auto bindings = array<VkDescriptorSetLayoutBinding> {
         { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
         { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }};
+    
     /// create descriptor set layout
     auto desc_layout_info = VkDescriptorSetLayoutCreateInfo {
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         nullptr, 0, uint32_t(bindings.size()), bindings.data() };
     assert(vkCreateDescriptorSetLayout(device, &desc_layout_info, null, &set_layout) == VK_SUCCESS);
-    ///
+    
+    /// of course, you do something else right about here...
     const size_t  n_frames = device.frames.size();
     auto           layouts = std::vector<VkDescriptorSetLayout>(n_frames, set_layout); /// add to vec.
     auto                ai = VkDescriptorSetAllocateInfo {};
@@ -46,7 +48,7 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     VkResult res = vkAllocateDescriptorSets(device, &ai, ds_data);
     assert  (res == VK_SUCCESS);
     ubo.update(&device);
-    ///
+    /// and then its finished.  the descriptor set is created from layouts.  that means something to somebody.  not me.
     
     /// write descriptor sets for all swap image instances
     for (size_t i = 0; i < device.frames.size(); i++) {
@@ -87,7 +89,8 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     };
     auto cba                = VkPipelineColorBlendAttachmentState {
         .blendEnable        = VK_FALSE,
-        .colorWriteMask     = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+        .colorWriteMask     = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
     };
     auto layout_info        = VkPipelineLayoutCreateInfo {
         .sType              = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -201,13 +204,17 @@ void PipelineData::Memory::update(size_t frame_id) {
     auto   clear_values = array<VkClearValue> {
         {        .color = clear_color(clr)}, // for image rgba  sfloat
         { .depthStencil = {1.0f, 0}}         // for image depth sfloat
-    };
+    }; /// nothing in canvas showed with depthStencil = 0.0.
+    
     auto    render_info = VkRenderPassBeginInfo {
-        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, null,
-        VkRenderPass(device), VkFramebuffer(frame), // handles
-        {{0,0}, device.extent},         // viewport
-        uint32_t(clear_values.size()),
-                 clear_values.data() };        // clear color
+        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .pNext           = null,
+        .renderPass      = VkRenderPass(device),
+        .framebuffer     = VkFramebuffer(frame),
+        .renderArea      = {{0,0}, device.extent},
+        .clearValueCount = clear_values.size(),
+        .pClearValues    = clear_values.data()
+    };
 
     /// gather some rendering ingredients
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
@@ -220,7 +227,7 @@ void PipelineData::Memory::update(size_t frame_id) {
     vkCmdBindIndexBuffer(cmd, ibo, 0, ibo.buffer.type_size == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, desc_sets.data(), 0, nullptr);
     
-    /// flip around an ibo and toss it in the oven
+    /// flip around an IBO and toss it in the oven at 410F
     uint32_t sz_draw = ibo.size();
     vkCmdDrawIndexed(cmd, sz_draw, 1, 0, 0, 0); /// ibo size = number of indices (like a vector)
     vkCmdEndRenderPass(cmd);

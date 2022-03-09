@@ -382,6 +382,9 @@ struct Rect: Vector<T> {
     ///
     Rect<T> operator + (Rect<T> r)        { return { x + r.x, y + r.y, w + r.w, h + r.h }; }
     Rect<T> operator - (Rect<T> r)        { return { x - r.x, y - r.y, w - r.w, h - r.h }; }
+    Rect<T> operator + (Vec2<T> v)        { return { x + v.x, y + v.y, w, h }; }
+    Rect<T> operator - (Vec2<T> v)        { return { x - v.x, y - v.y, w, h }; }
+    
     ///
     Rect<T> operator * (T r) { return { x * r, y * r, w * r, h * r }; }
     Rect<T> operator / (T r) { return { x / r, y / r, w / r, h / r }; }

@@ -5,14 +5,8 @@
 #include "stb_image_write.h"
 
 Image::Image(std::nullptr_t n) { }
-Image::Image(var &pixels) : pixels(pixels) { /// images/ implied, probably will do the same
-    if (pixels == Type::Str) {
-        bool no_ext = path_t(pixels).extension() == "";
-        path_t path = var::format("images/{0}{1}", {pixels, (no_ext ? str {".png"} : str {""})});
-        *this = Image(path, Format::Rgba);
-    }
-}
-
+Image::Image(var &pixels)       : pixels(pixels) { }
+Image::Image(string path)       : Image(path_t(path), Image::Rgba) { }
 Image::Image(path_t p, Image::Format f) {
     bool     g = f != Rgba;
     vec3i   sh = { 0, 0, g ? 1 : 4 };
@@ -21,17 +15,8 @@ Image::Image(path_t p, Image::Format f) {
     assert(pixels.size());
 }
 
-Image::Image(vec2i sz, Format f) {
-    auto g = f == Gray;
-    pixels     = var { g ? Type::ui8 : Type::ui32, Shape<Major>(sz.y, sz.x, g ? 1 : 4) };
-    // make sure this is not used in vector form.  all shapes! they be shapes.
-    //pixels = {g ? Type::ui8 : Type::ui32,
-    //          std::vector<int> { sz.y, sz.x, g ? 1 : 4 }};
-}
-
-Image::Image(vec2i sz, rgba clr) {
-    pixels = var { Type::ui32, Shape<Major>::rgba(sz.x, sz.y) };
-}
+Image::Image(vec2i sz, Format f) : pixels((f == Gray) ? Type::ui8 : Type::ui32, Shape<Major>(sz.y, sz.x, (f == Gray) ? 1 : 4)) { }
+Image::Image(vec2i sz, rgba clr) : pixels(Type::ui32, Shape<Major>::rgba(sz.x, sz.y)) { };
 
 Image::Format Image::format() {
     return pixels.c == Type::ui32 ? Rgba : Gray;

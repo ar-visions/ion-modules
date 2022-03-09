@@ -626,6 +626,7 @@ struct node {
     virtual rectd    region_rect(int index, Region &reg, rectd &src, node *n);
     
     /// region to rect calculation done here for nodes
+    /// 
     struct RegionOp {
         node::Extern<Region> &reg;
         node           *rel;
@@ -665,7 +666,7 @@ struct node {
     
     Texture texture(Image im) {
         return Texture { &device(), im,
-            VK_IMAGE_USAGE_SAMPLED_BIT          | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT     | VK_IMAGE_USAGE_TRANSFER_DST_BIT     |
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
             false, VK_FORMAT_R8G8B8A8_UNORM, -1 };

@@ -328,6 +328,7 @@ struct Composer {
                 { n->m.text.region,       n,   n->paths.rect, n->text_rect  }
             };
             
+            /// redo this, its writing to the one its then reading from.. come friend.
             for (node::RegionOp &reg_op:region_ops)
                 reg_op(n, index++);
             ///
@@ -356,10 +357,6 @@ struct Composer {
                 vec4 x11 = vec4(v11.x, v11.y, BR, BR);
                 vec4 x01 = vec4(v01.x, v01.y, BL, BL);
                 /// --------------------------------
-                /// binds  (can specify  a lambda  of your own, a 
-                /// member  of  your  own  or  a  direct value in
-                /// string or T form; T is copied into shared_ptr
-                /// and passed in), then elements
                 n->paths.fill   = Stroke();
                 n->paths.fill.rect_v4(x00, x10, x11, x01);
                 n->paths.border = n->paths.fill;

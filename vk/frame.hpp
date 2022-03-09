@@ -4,9 +4,18 @@
 #include <vk/buffer.hpp>
 #include <vk/uniform.hpp>
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/vec3.hpp> // glm::vec3
+#include <glm/vec4.hpp> // glm::vec4
+#include <glm/mat4x4.hpp> // glm::mat4
+#include <glm/ext/matrix_transform.hpp> // glm::translate, glm::rotate, glm::scale
+#include <glm/ext/matrix_clip_space.hpp> // glm::perspective
+#include <glm/ext/scalar_constants.hpp> // glm::pi
+
 struct MVP {
-    alignas(16) glm::mat4 model;
-    alignas(16) glm::mat4 view;
+    alignas(16) m44f model;
+    alignas(16) m44f view;
     alignas(16) glm::mat4 proj;
 };
 

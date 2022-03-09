@@ -51,12 +51,20 @@ struct Mars:node {
         external<Rendering>     ("render",  m.render, { Rendering::Shader });
         external<Path>          ("model",   m.model,  "models/uv-sphere.obj"); /// vattr not needed, vertex defines it.  the only thing we need to map is the texture parameters
         external<UniformData>   ("uniform", m.uniform, uniform<MVP>([&](MVP &mvp) {
-            mvp.model = glm::mat4(1.0);
-            mvp.view  = glm::mat4(1.0);
-            mvp.proj  = glm::perspective(
-                float(radians(real(m.fov))),
-                float(paths.fill.aspect()), 1.0f, 100.0f
-            );
+            ///
+            r32    fov = radians(real(m.fov));
+            r32 aspect = paths.fill.aspect();
+            mvp.model   = m44f::identity();
+            mvp.view    = m44f::identity(); //m44f::translation(vec3f { 0.0f, 0.0f, -1.0f });
+            //mvp.proj    = m44f::perspective(fov, aspect, vec2f { 1.0f, 100.0f });
+            ///
+            r32 sc  = 4.0f;
+            r32 sx  =   1.0f * 0.5f * sc;
+            r32 sy  = aspect * 0.5f * sc;
+            mvp.proj = glm::ortho(-sx, sx, -sy, sy, 2.5f, -2.5f);
+            
+            int test = 0;
+            test++;
         }));
         ///
         external<array<Path>>   ("textures", m.textures, {"images/8k_mars.jpg"}); /// these are lazy loaded
@@ -67,14 +75,10 @@ struct Mars:node {
             {"render", m.render}, {"textures", m.textures},
             {"model",  m.model},  {"uniform",  m.uniform}
         });
-        /** shorthand example [i had supported this before but removed in a huge change]: *** i cannot believe its not [javascript!] ***
-         implementation would be easy though its just a specialized  state on the 2nd param
-         return Object<Vertex>("object", {
-             {"render"}, {"textures"}, {"model"}, {"uniform"}
-         });*/
     }
 };
 
+/// move
 struct Shell:node {
     declare(Shell);
     
@@ -91,13 +95,15 @@ struct Shell:node {
 
     ///
     Element render() {
-        return Mars("mars", {}, {
-            Group("dock", {}, {
-                Element::filter<str>({"hi", "hi2"}, [&](str &v) {
-                    return Button(v, {{"text-label", m.text_label}});
+        return
+            Group("base", {}, {
+                 Mars("mars"),
+                Group("dock", {}, {
+                    Element::filter<str>({"hi", "hi2"}, [&](str &v) {
+                        return Button(v, {{"text-label", m.text_label}});
+                    })
                 })
-            })
-        });
+            });
     }
 };
 
