@@ -119,7 +119,7 @@ int main(int argc, const char **argv) {
                 ///
                 activity.log("cloning {2} : {1}, branch: {0}", { branch, repo, project });
                 if (branch) branch = var::format("--branch {0} ", {branch});
-                auto  git = Async { var::format("git clone --depth 1 {0}{1} {2}", { branch, repo, project })};
+                auto  git = async { var::format("git clone --depth 1 {0}{1} {2}", { branch, repo, project })};
                 code      = git.sync();
                 activity.log("exit-code: {0}", { code });
             }
@@ -179,5 +179,5 @@ int main(int argc, const char **argv) {
         return true;
     });
  
-    return Async::await();
+    return async::await();
 }

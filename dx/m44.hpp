@@ -253,16 +253,16 @@ struct Matrix44 {
         };
     }
     
-    static Matrix44<T> ortho(Rect<T> shape, Vec2<T> clip) {
-        const T near = clip[0], far = clip[1];
-        return {
-            Vec4<T> {  2 / shape.w, 0, 0, 0 },
-            Vec4<T> {  2 / shape.h, 0, 0, 0 },
-            Vec4<T> { -2 / (far - near), 0, 0, 0 },
-            Vec4<T> { -(shape.x + shape.x + shape.w) / shape.w,
-                      -(shape.y + shape.y + shape.h) / shape.h,
-                      -(far + near) / (far - near), 1.0 }
-        };
+    
+    static Matrix44<T> ortho2(T left, T right, T bottom, T top, T near, T far) {
+        auto   m      = Matrix44<T>::identity();
+               m[0].x =              T(2) / (right - left  );
+               m[1].y =              T(2) / (top   - bottom);
+               m[2].z =              T(1) / (far   - near  );
+               m[3].x = -(right + left  ) / (right - left  );
+               m[3].y = -(top   + bottom) / (top   - bottom);
+               m[3].z = -(near          ) / (far   - near  );
+        return m;
     }
     
     static Matrix44<T> perspective(T deg, T aspect, Vec2<T> clip) {

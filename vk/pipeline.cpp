@@ -18,21 +18,22 @@ PipelineData::Memory::~Memory() {
 /// constructor for pipeline memory; worth saying again.
 PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
                              VertexData    &vbo,     IndexData   &ibo,
-                             array<Texture *> &tx,   size_t vsize,
+                             array<Texture *> &tx,   size_t       vsize,
                              rgba           clr,     string       shader,
                              VkStateFn      vk_state):
         device(&device), shader(shader), ubo(ubo),
            vbo(vbo), ibo(ibo), tx(tx), vsize(vsize), clr(clr)
 {
-    /// obtain data via usage
     auto bindings = array<VkDescriptorSetLayoutBinding> {
-        { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT,   nullptr },
-        { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr }};
+        { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_ALL, nullptr },
+        { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr },
+        { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr } // adj w tx size, emit this struct
+    };
     
     /// create descriptor set layout
     auto desc_layout_info = VkDescriptorSetLayoutCreateInfo {
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        nullptr, 0, uint32_t(bindings.size()), bindings.data() };
+        nullptr, 0, uint32_t(bindings.size()), bindings.data() }; /// todo: fix general pipline. it will be different for Compute Pipeline, but this is reasonable for now if a bit lazy
     assert(vkCreateDescriptorSetLayout(device, &desc_layout_info, null, &set_layout) == VK_SUCCESS);
     
     /// of course, you do something else right about here...
@@ -48,8 +49,8 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     VkResult res = vkAllocateDescriptorSets(device, &ai, ds_data);
     assert  (res == VK_SUCCESS);
     ubo.update(&device);
+    ///
     /// and then its finished.  the descriptor set is created from layouts.  that means something to somebody.  not me.
-    
     /// write descriptor sets for all swap image instances
     for (size_t i = 0; i < device.frames.size(); i++) {
         auto &desc_set  = desc_sets[i];
@@ -66,9 +67,11 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
         VkWriteDescriptorSet *ptr = v_writes.data();
         vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
     }
-    ///
-    auto vert = device.module(var::format("shaders/{0}.vert.spv", { shader }), Device::Vertex);
-    auto frag = device.module(var::format("shaders/{0}.frag.spv", { shader }), Device::Fragment);
+    str    cwd = Path::cwd();
+    str s_vert = var::format("{0}/shaders/{1}.vert", { cwd, shader });
+    str s_frag = var::format("{0}/shaders/{1}.frag", { cwd, shader });
+    auto  vert = device.module(s_vert, Device::Vertex);
+    auto  frag = device.module(s_frag, Device::Fragment);
     ///
     array<VkPipelineShaderStageCreateInfo> stages {{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,

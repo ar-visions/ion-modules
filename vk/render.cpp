@@ -82,24 +82,19 @@ void Render::present() {
 
 Render::Render(Device *device): device(device) {
     if (device) {
-        const int ns  = device->swap_images.size();
-        const int mx  = MAX_FRAMES_IN_FLIGHT;
-        image_avail   = array<VkSemaphore>(mx, VK_NULL_HANDLE);
-        render_finish = array<VkSemaphore>(mx, VK_NULL_HANDLE);
-        fence_active  = array<VkFence>    (mx, VK_NULL_HANDLE);
-        image_active  = array<VkFence>    (ns, VK_NULL_HANDLE);
+        const Size ns  = device->swap_images.size();
+        const Size mx  = MAX_FRAMES_IN_FLIGHT;
+        image_avail    = array<VkSemaphore>(mx, VK_NULL_HANDLE);
+        render_finish  = array<VkSemaphore>(mx, VK_NULL_HANDLE);
+        fence_active   = array<VkFence>    (mx, VK_NULL_HANDLE);
+        image_active   = array<VkFence>    (ns, VK_NULL_HANDLE);
         ///
         VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
         VkFenceCreateInfo     fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, null, VK_FENCE_CREATE_SIGNALED_BIT };
-        
-        for (size_t i = 0; i < mx; i++) {
-            VkSemaphore &ia =   image_avail[i];
-            VkSemaphore &rf = render_finish[i];
-            VkFence     &fa =  fence_active[i];
-            assert (vkCreateSemaphore(*device, &si, null, &ia) == VK_SUCCESS &&
-                    vkCreateSemaphore(*device, &si, null, &rf) == VK_SUCCESS &&
-                    vkCreateFence(    *device, &fi, null, &fa) == VK_SUCCESS);
-        }
+        for (size_t i = 0; i < mx; i++)
+            assert (vkCreateSemaphore(*device, &si, null,   &image_avail[i]) == VK_SUCCESS &&
+                    vkCreateSemaphore(*device, &si, null, &render_finish[i]) == VK_SUCCESS &&
+                    vkCreateFence(    *device, &fi, null,  &fence_active[i]) == VK_SUCCESS);
     }
 }
 

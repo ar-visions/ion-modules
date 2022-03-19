@@ -1,4 +1,10 @@
 
+struct dir {
+    std::filesystem::path prev;
+     dir(std::filesystem::path p): prev(std::filesystem::current_path()) { chdir(p.string().c_str()); }
+    ~dir() { chdir(prev.string().c_str()); }
+};
+
 ///
 struct Path {
     typedef std::function<void(Path)> Fn;
@@ -20,10 +26,17 @@ struct Path {
     Path                (str s);
     str              ext();
     cchar_t *       cstr()                  const;
+    static Path      cwd() { return std::filesystem::current_path(); }
     Path            file();
+    bool            copy(Path path)         const;
+    bool    has_filename()                  const;
+    Path remove_filename();
+    bool        make_dir()                  const;
     Path            link()                  const;
     Path            link(Path alias)        const;
     Path        relative(Path p = null);
+    bool operator==(Path &b)                const { return p == b.p; } //
+    bool operator!=(Path &b)                const { return p != b.p; } //
     operator        bool()                  const;
     operator      path_t()                  const;
     operator std::string()                  const;
@@ -83,4 +96,11 @@ struct Temp {
     Path operator / (cchar_t   *s) { return path / s; }
     Path operator / (const path_t &s) { return path / s; }
     Path operator / (const str    &s) { return path / path_t(s); }
+};
+
+struct fmt {
+    str s;
+    fmt(str s, array<var> a): s(var::format(s, a)) { }
+    operator str &() { return s; }
+    operator Path () { return s; }
 };

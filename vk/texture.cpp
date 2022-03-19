@@ -262,7 +262,7 @@ VkImageView Texture::Data::image_view() {
 }
 
 VkSampler Texture::Data::image_sampler() {
-    if (!sampler)
+    if (!sampler) // random memory
          create_sampler();
     return sampler;
 }

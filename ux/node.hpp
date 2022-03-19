@@ -175,7 +175,8 @@ struct node {
         Focused      = 1,
         Captured     = 2,
         StateUpdate  = 4,
-        StyleAnimate = 8
+        StyleAnimate = 8,
+        
     };
     
     ///
@@ -657,11 +658,12 @@ struct node {
     }
     
     Device &                            device()                            { return Vulkan::device(); }
-    template <typename T> VertexData  vertices(array<T> &v_vbo)             { return VertexBuffer<Vertex>(device(), v_vbo); }
-    template <typename I> IndexData   polygons(array<I>  &v_ibo)            { return IndexBuffer<I>      (device(), v_ibo); }
-    template <typename U> UniformData  uniform(std::function<void(U &)> fn) { return UniformBuffer<U>    (device(), fn);    }
+    ///
+    template <typename V> VertexData  vertices(array<V> &v_vbo, int mc)     { return  VertexBuffer<V> (device(), v_vbo, mc); }
+    template <typename I> IndexData   polygons(array<I> &v_ibo)             { return   IndexBuffer<I> (device(), v_ibo);     }
+    template <typename U> UniformData  uniform(std::function<void(U &)> fn) { return UniformBuffer<U> (device(), fn);        }
     template <typename V> Pipes          model(Path path, UniformData ubo, array<Path> textures, Shaders shaders = null) {
-        return Model<V>(device(), ubo, textures, path, shaders);
+        return Model<V>(device().sync(), ubo, textures, path, shaders);
     }
     
     Texture texture(Image im) {
@@ -678,7 +680,7 @@ struct node {
     Pipeline<V> texture_view(Texture &tx, UniformData ubo) {
         auto v_sqr = Vertex::square();
         auto i_sqr = array<uint32_t> { 0, 1, 2, 2, 3, 0 };
-        auto   vbo = vertices(v_sqr);
+        auto   vbo = vertices(v_sqr, {  });
         auto   ibo = polygons(i_sqr);
         auto  a_tx = array<Texture*> { &tx };
         return Pipeline<V> {

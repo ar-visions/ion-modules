@@ -268,9 +268,9 @@ Socket Socket::connect(URI uri, Trust trust_level) {
 }
 
 /// listen on https using mbedtls
-Async Socket::listen(URI url, std::function<void(Socket)> fn)
+async Socket::listen(URI url, std::function<void(Socket)> fn)
 {
-    return Async(1, [&, url=url, fn=fn](auto process, int t_index) -> var {
+    return async(1, [&, url=url, fn=fn](auto process, int t_index) -> var {
         URI         uri = url.methodize(URI::Method::Get);
         auto  sc_listen = Socket(Server); /// remove the interfacing in this case
         auto         &i = *(sc_listen.intern);
@@ -336,7 +336,7 @@ Async Socket::listen(URI url, std::function<void(Socket)> fn)
             }
             
             /// spawn thread for the given callback
-            Async(1, [&, sc_client=sc_client, uri=uri, fn=fn](auto process, int t_index) -> var {
+            async(1, [&, sc_client=sc_client, uri=uri, fn=fn](auto process, int t_index) -> var {
                 fn(sc_client);
                 sc_client.close();
                 return true;

@@ -345,25 +345,25 @@ public:
         var &v = var::resolve(*this);
         if (v.t == Type::Ref)
             return int8_t(*v.n_value.vref);
-        return *((  int8_t *)v.n);
+        return v.n ? *(( int8_t *)v.n) : 0;
     }
     operator     uint8_t() {
         var &v = var::resolve(*this);
         if (v.t == Type::Ref)
             return uint8_t(*v.n_value.vref);
-        return *(( uint8_t *)v.n);
+        return v.n ? *((uint8_t *)v.n) : 0;
     }
     operator     int16_t() {
         var &v = var::resolve(*this);
         if (v.t == Type::Ref)
             return uint16_t(*v.n_value.vref);
-        return *(( int16_t *)v.n);
+        return v.n ? *(( int16_t *)v.n) : 0;
     }
     operator    uint16_t() {
         var &v = var::resolve(*this);
         if (v.t == Type::Ref)
             return uint16_t(*v.n_value.vref);
-        return *((uint16_t *)v.n);
+        return v.n ? *((uint16_t *)v.n) : 0;
     }
     operator     int32_t() {
         var &v = var::resolve(*this);
@@ -371,24 +371,25 @@ public:
             return int32_t(*v.n_value.vref);
         if (v.t == Type::Str)
             return v.s.integer();
-        return *(( int32_t *)v.n);
+        return v.n ? *(( int32_t *)v.n) : 0;
     }
     operator    uint32_t() {
         var &v = var::resolve(*this);
         if (v.t == Type::Ref)
             return uint32_t(*v.n_value.vref);
-        return *((uint32_t *)v.n);
+        return v.n ? *((uint32_t *)v.n) : 0;
     }
     operator     int64_t() {
-        if (t == Type::Ref)
-            return int64_t(*n_value.vref);
-        return *(( int64_t *)n);
+        var &v = var::resolve(*this); // todo: why was this missing prior?
+        if (v.t == Type::Ref)
+            return int64_t(*v.n_value.vref);
+        return v.n ? *(( int64_t *)v.n) : 0;
     }
     operator    uint64_t() {
         var &v = var::resolve(*this);
         if (v.t == Type::Ref)
             return uint64_t(*v.n_value.vref);
-        return *((uint64_t *)v.n);
+        return v.n ? *((uint64_t *)v.n) : 0;
     }
     operator       void*() {
         var &v = var::resolve(*this);

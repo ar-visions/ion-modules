@@ -1,3 +1,4 @@
+#include <dx/async.hpp>
 #include <vk/vk.hpp>
 #include <vk/window.hpp>
 #include <vk/device.hpp>
@@ -22,8 +23,8 @@ VkWriteDescriptorSet UniformData::descriptor(size_t frame_index, VkDescriptorSet
 /// lazy initialization of Uniforms make the component tree work a bit better
 void UniformData::update(Device *device) {
     auto &m = *this->m;
-    for (auto &b: m.buffers)
-        b.destroy();
+    //for (auto &b: m.buffers)
+    //    b.destroy();
     m.device = device;
     size_t n_frames = device->frames.size();
     m.buffers = array<Buffer>(n_frames);
@@ -76,17 +77,38 @@ uint32_t memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags
    return 0;
 };
 
-VkShaderModule Device::module(std::filesystem::path p, Module type) {
-    str key = p.string();
-    assert(type != Compute);
-    auto &m = type == Vertex ? v_modules : f_modules;
+VkShaderModule Device::module(Path path, Module type) {
+    str    key = path;
+    auto    &m = type == Vertex ? v_modules : f_modules;
+    Path   spv = fmt {"{0}.spv", { key }};
+    
+#if !defined(NDEBUG)
+        /// debug only, simple idea, we update the spv when the source is newer or the spv does not exist
+        if (!spv.exists() || path.modified_at() > spv.modified_at()) {
+            if (m.count(key))
+                m.erase(key);
+            str     command = fmt   {"/usr/local/bin/glslc {0} -o {0}.spv", { key }};
+            async { command }.sync();
+            ///
+            Path tmp = "./.tmp/"; ///
+            if (spv.exists() && spv.modified_at() >= path.modified_at()) {
+                spv.copy(tmp); // important to realize std filesystem distinguishes filename from dir by only that forward slash!.. indeed it is true dont mess yourself up
+            } else {
+                // look for tmp. if this does not exist we can not proceed.
+                
+            }
+            
+            /// if it succeeds, the spv is written and that will have a greater modified-at
+        }
+#endif
+
     if (!m.count(key)) {
         auto mc     = VkShaderModuleCreateInfo { };
-        str code    = str::read_file(p);
+        str code    = str::read_file(spv);
         mc.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         mc.codeSize = code.size();
         mc.pCode    = reinterpret_cast<const uint32_t *>(code.cstr());
-        assert (vkCreateShaderModule(device, &mc, nullptr, &m[key]) == VK_SUCCESS);
+        assert (vkCreateShaderModule(device, &mc, null, &m[key]) == VK_SUCCESS);
     }
     return m[key];
 }
@@ -102,6 +124,11 @@ uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
     assert(false);
     return 0;
 };
+
+Device &Device::sync() {
+    usleep(1000); // sync the fencing things.
+    return *this;
+}
 
 Device::Device(GPU &p_gpu, bool aa) {
     auto qcreate        = array<VkDeviceQueueCreateInfo>(2);
@@ -209,8 +236,8 @@ void Device::update() {
 void Device::initialize(Window *window) {
     auto select_surface_format = [](array<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR {
         for (const auto &f: formats)
-            if (f.format     == VK_FORMAT_B8G8R8A8_SRGB &&
-                f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            if (f.format     == VK_FORMAT_B8G8R8A8_UNORM && // VK_FORMAT_B8G8R8A8_UNORM in an attempt to fix color issues, no effect.
+                f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) // the only colorSpace available in list of formats
                 return f;
         return formats[0];
     };
@@ -272,7 +299,7 @@ void Device::initialize(Window *window) {
     /// create swap-chain
     assert(vkCreateSwapchainKHR(device, &ci, nullptr, &swap_chain) == VK_SUCCESS);
     vkGetSwapchainImagesKHR(device, swap_chain, &frame_count, nullptr); /// the dreaded frame_count (2) vs image_count (3) is real.
-    frames = array<Frame>(frame_count, this); /// its a vector. its a size. its a value.
+    frames = array<Frame>(Size(frame_count), this);
     
     /// get swap-chain images
     swap_images.resize(frame_count);
@@ -281,14 +308,13 @@ void Device::initialize(Window *window) {
     this->extent       = extent;
     viewport           = { 0.0f, 0.0f, r32(extent.width), r32(extent.height), 0.0f, 1.0f };
     
-    /// just how many pipelines do we have?   thats a difficult question to ask a bootstrap
-    /// so it seems we have an answer to the problem, by happenstance of it being in front of my face.
-    /// we call this function again and again, viewport and down...
-    /// create descriptor pool
+    /// create descriptor pool (to my mind i have no idea why this is here.  its repeated in its entirety for hte pipeline)
+    /// it seems completely 1:1 relationship with your maximum resource user, although i could be wrong
     const int guess    = 8;
     auto      ps       = std::array<VkDescriptorPoolSize, 2> {};
     ps[0]              = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         frame_count * guess };
     ps[1]              = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count * guess };
+    ps[2]              = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count * guess };
     auto dpi           = VkDescriptorPoolCreateInfo {
                             VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
                             frame_count * guess, uint32_t(ps.size()), ps.data() };

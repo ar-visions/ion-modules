@@ -62,12 +62,3 @@ void Buffer::destroy() {
     vkDestroyBuffer(*device, buffer, null);
     vkFreeMemory(*device, memory, null);
 }
-
-// has to come from a central 'Device' eh. ok.
-
-
-
-
-
-
-

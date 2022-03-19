@@ -37,15 +37,15 @@ struct Device {
     VkExtent2D            extent;
     VkViewport            viewport;
     VkRect2D              sc;
-    array<Frame>            frames;
-    array<VkImage>          swap_images;
+    array<Frame>          frames;
+    array<VkImage>        swap_images; // force re-render on watch event.
     Texture               tx_color;
     Texture               tx_depth;
     map<Path, Pair>       tx_cache;
     
     static Device &null_device();
     
-    VkShaderModule module(std::filesystem::path p, Module type);
+    VkShaderModule module(Path p, Module type);
     ///
     void            initialize(Window *);
     /// todo: initialize for compute_only
@@ -59,6 +59,7 @@ struct Device {
     operator        VkDevice();
     operator        VkCommandPool();
     operator        VkRenderPass();
+    Device &sync();
     Device(GPU &gpu, bool aa = false);
     VkQueue &operator()(GPU::Capability cap);
     ///

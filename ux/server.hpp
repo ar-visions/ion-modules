@@ -11,7 +11,7 @@
 
 template <class V>
 struct DX:Interface {
-    Async       async;
+    async server;
     struct ServerInternal* intern;
     /// ------------------------------------------------
     Message query(Message &m, Map &a, var &p) {
@@ -40,12 +40,12 @@ struct DX:Interface {
     /// ------------------------------------------------
     void run() {
         str uri = "https://0.0.0.0:443";
-        async   = Web::server(uri, [&](Message &m) -> Message {
+        server = Web::server(uri, [&](Message &m) -> Message {
             Map a;
             var p = null;
             return query(m, a, p);
         });
-        code = async.await();
+        code = server.await();
     }
     /// ------------------------------------------------
     template <typename C>

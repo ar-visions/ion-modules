@@ -20,7 +20,7 @@ struct Socket {
                   ~Socket();
     Socket     &operator=(const Socket &ref);
     static Socket connect(URI uri, Trust trust_level = RequireCert);
-    static Async   listen(URI uri, std::function<void(Socket)> fn);
+    static async   listen(URI uri, std::function<void(Socket)> fn);
     static void   logging(void *ctx, int level, cchar_t *file, int line, cchar_t *str);
     bool            write(cchar_t *v, size_t sz, int flags);
     bool            write(str s, array<var> a = {});

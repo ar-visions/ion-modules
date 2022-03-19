@@ -129,8 +129,8 @@ struct Texture {
             VkImageAspectFlags aspect, bool                  ms,
             VkFormat           format = VK_FORMAT_R8G8B8A8_SRGB,
             int                mips   = -1) :
-        data(std::shared_ptr<Data>( new Data { device, im, usage, memory, aspect, ms, format, mips } ))
-    {
+        data(std::shared_ptr<Data>( new Data { device, im, usage, memory, aspect, ms, format, mips } )) {
+        ///
         rgba *px = &im.pixel<rgba>(0, 0);
         transfer_pixels(px);
         free(px);
@@ -163,7 +163,9 @@ public:
     
     /// pass-through methods
     void destroy() { if (data) data->destroy(); };
-    VkWriteDescriptorSet descriptor(VkDescriptorSet &ds, uint32_t binding) { return data->descriptor(ds, binding); }
+    VkWriteDescriptorSet descriptor(VkDescriptorSet &ds, uint32_t binding) {
+        return data->descriptor(ds, binding);
+    }
 };
 
 struct ColorTexture:Texture {
@@ -171,7 +173,7 @@ struct ColorTexture:Texture {
         Texture(device, sz, clr,
              VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-             VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_SRGB, 1) {
+             VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_UNORM, 1) { // was VK_FORMAT_B8G8R8A8_SRGB
             data->image_ref = false; /// 'SwapImage' should have this set as its a View-only.. [/creeps away slowly, very unsure of themselves]
             data->push_stage(Stage::Color);
         }
@@ -205,7 +207,7 @@ struct SwapImage:Texture {
         Texture(device, sz, image, null,
              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-             VK_IMAGE_ASPECT_COLOR_BIT, false, VK_FORMAT_B8G8R8A8_SRGB, 1) {
+             VK_IMAGE_ASPECT_COLOR_BIT, false, VK_FORMAT_B8G8R8A8_UNORM, 1) { // VK_FORMAT_B8G8R8A8_UNORM tried here, no effect on SwapImage
             data->layout_override = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
 };

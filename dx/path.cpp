@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/// act like bash, and be functional
 Path::Path(std::filesystem::directory_entry ent): p(ent.path()) { }
 Path::Path(std::nullptr_t n)        { }
 Path::Path(cchar_t *p)       : p(p) { }
@@ -12,17 +13,37 @@ Path::Path(str      s)       : p(s) { }
 cchar_t *Path::cstr() const { return p.c_str(); }
 str  Path::ext ()                   { return p.extension().string(); }
 Path Path::file()                   { return std::filesystem::is_regular_file(p) ? Path(p) : Path(null); }
-Path Path::link(Path alias)   const {
+bool Path::copy(Path to) const {
+    /// no recursive implementation at this point
+    assert(is_file() && exists());
+    if (!to.exists())
+        (to.has_filename() ? to.remove_filename() : to).make_dir();
+    std::error_code ec;
+    std::filesystem::copy(p, to.is_dir() ? to / p.filename() : to, ec);
+    return ec.value() == 0;
+}
+
+Path Path::link(Path alias) const {
     std::error_code ec;
     std::filesystem::create_symlink(p, alias, ec);
     return alias.exists() ? alias : null;
 }
-Path Path::link()             const { return std::filesystem::is_symlink(p)      ? Path(p) : Path(null); }
+
+bool Path::make_dir() const {
+    std::error_code ec;
+    return std::filesystem::create_directories(p, ec);
+}
+
+/// no mutants allowed here.
+Path Path::remove_filename()        { return p.remove_filename(); }
+bool Path::has_filename()     const { return p.has_filename(); }
+Path Path::link()             const { return std::filesystem::is_symlink(p) ? Path(p) : Path(null); }
 Path::operator bool()         const { return p.string().length() > 0; }
 Path::operator path_t()       const { return p; }
 Path::operator std::string()  const { return p.string(); }
 Path::operator str()          const { return p.string(); }
 Path::operator var()          const { return var(path_t(p)); }
+
 ///
 Path Path::uid(Path base) {
     auto rand = [](size_t i) { return Rand::uniform('a', 'z'); };
@@ -37,20 +58,22 @@ bool Path::remove_all() const {
     return std::filesystem::remove_all(p, ec);
 }
 
+///
 bool Path::remove() const {
     std::error_code ec;
     return std::filesystem::remove(p, ec);
 }
 
+///
 bool Path::is_hidden() const {
     std::string st = p.stem().string();
-    return st.length() > 0 && st[0] == '.';
+    return st.length() > 0 && st[0] == '.'; /// obviously a pro
 }
 
 bool Path::exists()                     const { return  std::filesystem::exists(p); }
 bool Path::is_dir()                     const { return  std::filesystem::is_directory(p); }
 bool Path::is_file()                    const { return !std::filesystem::is_directory(p) && std::filesystem::is_regular_file(p); }
-Path Path::operator / (cchar_t   *s)    const { return Path(p / s); }
+Path Path::operator / (cchar_t      *s) const { return Path(p / s); }
 Path Path::operator / (const path_t &s) const { return Path(p / s); }
 //Path Path::operator / (const str    &s) { return Path(p / path_t(s)); }
 Path Path::relative(Path from) { return std::filesystem::relative(p, from.p); }

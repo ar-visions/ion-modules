@@ -9,14 +9,12 @@
 
 typedef std::filesystem::path path_t;
 
-
 template <class T>
 struct array:io {
 //protected:
     static typename std::vector<T>::iterator iterator;
     typedef std::shared_ptr<std::vector<T>> vshared;
     vshared a;
-    int seq;
     
     vshared &realloc(Size res) {
         a = vshared(new std::vector<T>());
@@ -37,16 +35,53 @@ public:
         return *this;
     }
     array(array<T> &ref) : a(ref.a) { } */
-    array() {
-        static int cur = 60;
-        seq = cur++;
-    }
-    array(std::initializer_list<T> v) { realloc(v.size());      for (auto &i: v) a->push_back(i); }
-    array(const T *d, Size sz)        { assert(d); realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(d[i]); }
-    array(Size sz, T v)               {            realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(v); }
+    array()                           { }
+    array(std::initializer_list<T> v) { realloc(v.size());       for (auto &i: v) a->push_back(i);                    }
+    array(const T *d, Size sz)        { assert(d);  realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(d[i]);  }
+    array(Size sz, T v)               {             realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(v);     }
+    array(int  sz, std::function<T(size_t)> fn) {   realloc(sz); for (size_t i = 0; i < sz; i++) a->push_back(fn(i)); }
     array(std::nullptr_t n)           { }
     array(Size sz)                    { realloc(sz); }
     array(std::filesystem::path path);
+    
+    /// quick-sort raw implementation.
+    array<T> sort(std::function<int(T &a, T &b)> cmp) {
+        auto   &self = ref();
+        array<T *> r = {size(), [&](size_t i) { return &self[i]; }};
+        std::function<void(int,   int)> qk;
+            qk =       [&](int s, int e) {
+            /// sanitize, set mutable vars i and j to the start and end
+            if (s >= e) return;
+            int i  = s, j = e, pv = s;
+            ///
+            while (i < j) {
+                /// standard search pattern
+                while (cmp(r[i], r[pv]) <= 0 && i < e)
+                    i++;
+                
+                /// and over there too ever forget your tail? we all have
+                while (cmp(r[j], r[pv]) > 0)
+                    j--;
+                
+                /// send away team of red shirts
+                if (i < j)
+                    std::swap(r[i], r[j]);
+            }
+            /// throw a water bottle
+            std::swap(r[pv], r[j]);
+            
+            /// rant and rave how this generation never does anything, pencil-in for interns
+            qk(s, j - 1);
+            qk(j + 1, e);
+        };
+        
+        /// start the magic
+        qk(0, size() - 1);
+        ///
+        /// realize the magic..
+        return { size(), [&](size_t i) { return *self[i]; }};
+    }
+    
     T                   &back()              { return ref().back();                }
     T                  &front()              { return ref().front();               }
     Size                 size()        const { return a ? a->size()     : 0;       }

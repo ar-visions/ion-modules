@@ -4,8 +4,7 @@
 #include <dx/map.hpp>
 #include <dx/array.hpp>
 
-/// just a solid, slab of state.  fresh out of the fires of Vulkan
-/// Will be initialized by the general pipeline code, then optionally passed into lambda where it is altered
+/// name better, ...this.
 struct vkState {
     VkPipelineVertexInputStateCreateInfo    vertex_info {};
     VkPipelineInputAssemblyStateCreateInfo  topology    {};
@@ -64,14 +63,13 @@ struct PipelineData {
     ///
     PipelineData(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
                  array<Texture *> &tx, size_t vsize, rgba clr, string shader, VkStateFn vk_state = null) {
-            m = std::shared_ptr<Memory>(
-                new Memory { device, ubo, vbo, ibo, tx, vsize, clr, shader, vk_state });
+            m = std::shared_ptr<Memory>(new Memory { device, ubo, vbo, ibo, tx, vsize, clr, shader, vk_state });
         }
 };
 
 /// pipeline dx
 template <typename V>
-struct Pipeline:PipelineData { /// may call it attr, resources, or textures; i like attr because it acn be n-data hopefully more compatible with compute pipeline design
+struct Pipeline:PipelineData {
     Pipeline(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo, array<Texture *> tx, rgba clr, string name):
         PipelineData(device, ubo, vbo, ibo, tx, sizeof(V), clr, name) { }
 };
@@ -116,10 +114,10 @@ struct Model:Pipes {
         array<Texture*> tx = array<Texture*>(images.size());
         for (Path &p:images) {
             if (!cache.count(p)) {
-                /// see why its not loading right
-                cache[p].image    = new Image(p, Image::Rgba);
+                cache[p].image = new Image(p, Image::Rgba);
                 auto          &shh = cache[p].image->pixels;
                 ::Shape<Major> sh1 = shh.shape();
+                /// bookmark: reload texture on pipeline refresh
                 cache[p].texture  = new Texture(d.device, *cache[p].image,
                    VK_IMAGE_USAGE_SAMPLED_BIT      | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -133,17 +131,17 @@ struct Model:Pipes {
     }
     
     ///
-    Model(Device &device, UniformData &ubo, array<Path> &images, Path p, Shaders &shaders) : Model(device) {
+    Model(Device &device, UniformData &ubo, FlagsOf<Vertex::Attr> &attr, array<Path> &images, Path p, Shaders &shaders) : Model(device) {
         /// cache control for images to texture here; they might need a new reference upon pipeline rebuild
         auto  tx = cache_textures(images);
         auto obj = Obj<V>(p, [](auto& g, vec3& pos, vec2& uv, vec3& norm) {
             return V(pos, norm, uv, vec4f {1.0f, 1.0f, 1.0f, 1.0f});
         });
         auto &d = *this->data;
-        d.vbo   = VertexBuffer<V>(device, obj.vbo);
+        d.vbo   = VertexBuffer<V>(device, obj.vbo, attr);
         for (auto &[name, group]: obj.groups) {
             auto     ibo = IndexBuffer<uint32_t>(device, group.ibo);
-            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, rgba {0.05, 0.0, 0.06, 0.1}, shaders(name));
+            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, rgba {0.0, 0.0, 0.0, 0.0}, shaders(name));
         }
     }
     

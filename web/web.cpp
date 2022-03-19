@@ -2,7 +2,7 @@
 
 /// Useful utility function here for general web requests; driven by the Future
 Future Web::request(URI url, Map args) {
-    return Async(1, [url=url, args=args](auto p, int i) -> var {
+    return async(1, [url=url, args=args](auto p, int i) -> var {
         Map     st_headers;
         var     null_content; /// consider null static on var, assertions on its write by sequence on debug
         Map             &a = *(Map *)&args;
@@ -65,7 +65,7 @@ Future Web::json(URI url, Map args, Map headers) {
 /// high level server method (on top of listen)
 /// you receive messages from clients through lambda; supports https
 /// web sockets should support the same interface with some additions
-Async Web::server(URI url, std::function<Message(Message &)> fn) {
+async Web::server(URI url, std::function<Message(Message &)> fn) {
     return Socket::listen(url, [&, url=url, fn=fn](Socket sc) {
         for (bool close = false; !close;) {
             close       = true;

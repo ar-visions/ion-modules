@@ -808,7 +808,7 @@ rectd &Stroke::bounds() {
 
 real Stroke::w()      { return bounds().w; };
 real Stroke::h()      { return bounds().h; };
-real Stroke::aspect() { return bounds().h / bounds().w; };
+real Stroke::aspect() { return bounds().w / bounds().h; };
 vec2 Stroke::xy()     {
     bounds();
     return rect.xy();

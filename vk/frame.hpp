@@ -13,23 +13,37 @@
 #include <glm/ext/matrix_clip_space.hpp> // glm::perspective
 #include <glm/ext/scalar_constants.hpp> // glm::pi
 
-struct MVP {
-    alignas(16) m44f model;
-    alignas(16) m44f view;
-    alignas(16) glm::mat4 proj;
+struct Light {
+    glm::vec4 pos_rads;
+    glm::vec4 color;
 };
-
+///
+struct Material {
+    glm::vec4 ambient;
+    glm::vec4 diffuse;
+    glm::vec4 specular;
+    glm::vec4 attr;
+};
+///
+struct MVP {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+///
 struct Frame {
     enum Attachment {
         Color,
         Depth,
         SwapView
     };
-    int             index;
-    Device         *device;
-    array<Texture>    attachments;
-    VkFramebuffer   framebuffer = VK_NULL_HANDLE;
+    ///
+    int                       index;
+    Device                   *device;
+    array<Texture>            attachments;
+    VkFramebuffer             framebuffer = VK_NULL_HANDLE;
     map<str, VkCommandBuffer> render_commands;
+    ///
     void destroy();
     void update();
     operator VkFramebuffer &();

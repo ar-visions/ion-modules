@@ -54,7 +54,7 @@ Process::Process() {
 
 Process::~Process() { }
 
-void Async::thread(Process *p, int i) {
+void async::thread(Process *p, int i) {
     p->mx_self.lock();
     size_t c = p->threads.size();
     p->mx_self.unlock();
@@ -81,7 +81,7 @@ void Async::thread(Process *p, int i) {
         usleep(1);
 }
 
-var &Async::sync() {
+var &async::sync() {
     for (;;) {
         mx.lock();
         if (process->join)
@@ -95,7 +95,7 @@ var &Async::sync() {
     return data;
 }
 
-int Async::await() {
+int async::await() {
     for (;;) {
         Process::mx_global.lock();
         if (Process::processes.size() == 0) {
@@ -109,12 +109,12 @@ int Async::await() {
     return Process::exit_code;
 }
 
-Async::Async(str exec) : Async(1, [&](Process *p, int i) -> var {
+async::async(str exec) : async(1, [&](Process *p, int i) -> var {
     return int(std::system(exec.cstr()));
 }) { }
 
-Async::Async() { }
-Async::Async(int count, FnProcess fn) {
+async::async() { }
+async::async(int count, FnProcess fn) {
     std::unique_lock<std::mutex>  lock(Process::mx_list);
     process = new Process;
     process->fn = fn;
@@ -129,13 +129,13 @@ Async::Async(int count, FnProcess fn) {
         process->threads = std::vector<std::thread>();
         process->threads.reserve(count);
         for (size_t i = 0; i < count; i++)
-            process->threads.emplace_back(std::thread(Async::thread, process, i));
+            process->threads.emplace_back(std::thread(async::thread, process, i));
         Process::processes += process;
     }
 }
-Async::Async(std::function<var(Process *p, int i)> fn) : Async(1, fn) { }
+async::async(std::function<var(Process *p, int i)> fn) : async(1, fn) { }
 
-Async::operator Future() {
+async::operator Future() {
     std::function<void(var &)> s, f;
     Completer c = { s, f };
     assert( process);
@@ -145,20 +145,20 @@ Async::operator Future() {
     return Future(c);
 }
 
-Async::Async(const Async &r) {
+async::async(const async &r) {
     assert(false);
     process = r.process;
 }
 
-Async &Async::operator=(const Async &r) {
+async &async::operator=(const async &r) {
     process = r.process;
     data    = r.data;
     return *this;
 }
 
-Async::~Async() {
+async::~async() {
     if (process && process->deletable)
-        delete process; /// data needs to stick around until this Async object is deleted
+        delete process; /// data needs to stick around until this async object is deleted
 }
 
 /// failing at the moment, not a graceful shutdown

@@ -31,7 +31,7 @@ struct PathState {
     bool        found;
 };
 
-/// a protected-struct concept with Async service
+/// a protected-struct concept with async service
 struct Watch {
     typedef std::function<void(bool, array<PathOp> &)> Fn;
 protected:
@@ -55,7 +55,7 @@ public:
         pw->watch_fn = watch_fn;
         pw->exts     = exts;
         ///
-        Async { [pw, flags] (Process *p, int index) -> var {
+        async { [pw, flags] (Process *p, int index) -> var {
             Watch &watch = *(Watch *)pw;
             while (!watch.canceling) {
                 watch.ops = array<PathOp>(32 + watch.largest * 2);

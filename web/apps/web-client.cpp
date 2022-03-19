@@ -13,5 +13,5 @@ int main(int argc, cchar_t *argv[]) {
     }).except([&](var &err) {
         console.log("request failure: {0}", {err});
     });
-    return Async::await();
+    return async::await();
 }

@@ -183,6 +183,8 @@ struct Composer {
 
     static array<str> update_binds(vec2i &sz, node *parent, node *child, Element &e, bool &node_updated) {
         /// initialize unbound check
+        /// if there is a state update, it should set all as changed.
+        bool is_update = false;//child->flags & node::StateUpdate;
         map<string, bool> unbound;
         for (auto &bind: child->binds)
             unbound[bind.id] = true;
@@ -197,13 +199,13 @@ struct Composer {
                 console.assertion(child->externals.count(bind.id) == 1, "{0} not found on {1}", { bind.id, str(child->class_name) });
                 Member &child_member = (Member &)*child->externals[bind.id]; // child_member == null
                 /// could be nice to have direct set access through generic shared interface
-                if (!(child_member.shared == bind.shared)) {
+                if (is_update || !(child_member.shared == bind.shared)) {
                     child_member.lambdas->type_set(child_member, bind.shared);
                     changed += bind.id;
                 }
-            } else {
+            } else
                 assert(false);
-            }
+            
             if (unbound.count(bind.id))
                 unbound[bind.id] = false;
         }
@@ -227,6 +229,8 @@ struct Composer {
             child->elements = e.e->elements;
             node_updated    = true;
         }
+        
+        child->flags &= ~node::StateUpdate;
         return changed;
     }
     
@@ -297,16 +301,18 @@ struct Composer {
         update(ux->sz, null, &root, e);
         
 #if !defined(NDEBUG)
-        /// style reload on modification, when debugging. this applies to style, images and vectors
+        /// composition force-update (must also signal a cache invalidation) on Watch, when debugging.
+        /// this applies to style, images, vectors, objs, frags and verts
         /// it will also apply to shaders and 3D objects
         static auto css_watch = Watch::spawn(
-              {"style","images"}, {".css",".png",".svg"}, null,
+              {"style","images","models","shaders"}, {".css",".png",".svg",".obj",".frag",".vert"}, null,
             [root=root] (bool init, array<PathOp> &paths) {
             ///
             if (!init) {
                 Style::unload();
                 root->exec([](node *n) {
-                    n->style = null;
+                    n->style  = null;
+                    n->flags |= node::StateUpdate;
                     for (auto &[k,m]:n->externals)
                         m->style_value_set(null, null);
                 });

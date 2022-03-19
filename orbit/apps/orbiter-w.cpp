@@ -143,5 +143,5 @@ int main(int argc, const char *argv[]) {
         w.stop();
     }
     ///
-    return Async::await();
+    return async::await();
 }

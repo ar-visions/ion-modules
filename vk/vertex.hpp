@@ -22,29 +22,56 @@ struct Vertex2: Struct<Vertex2> {
 /// vulkan people like to flush the entire glyph cache per type
 typedef array<VkVertexInputAttributeDescription> VAttribs;
 
-///
+/// soon: compile entirely based on glm types. soon: graph-mode shaders
+/// but i will say thats actually slower than this current approach and about 100x more complicated
+/// so thats why i say soon. terrified to start it.  sorry but these hard coded verts just cant happen unless we want a sea of anti-pattern in its wake
 struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 norm;
-    glm::vec2 uv;
-    glm::vec4 clr;
-
-    static VAttribs attribs() {
-        return VAttribs {
-            { 0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  pos) }, /// data is inline
-            { 1, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex, norm) },
-            { 2, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex,   uv) },
-            { 3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex,  clr) }
-        };
+    enum Attr {
+        Position  = (1 << 0),
+        Normal    = (1 << 1),
+        UV        = (1 << 2),
+        Color     = (1 << 3),
+        Tangent   = (1 << 4),
+        BiTangent = (1 << 5),
+    };
+    
+    glm::vec3 pos;  // position
+    glm::vec3 norm; // normal position
+    glm::vec2 uv;   // texture uv coordinate
+    glm::vec4 clr;  // color
+    glm::vec3 ta;   // tangent
+    glm::vec3 bt;   // bi-tangent
+    
+    /// tangent and bitangents for normal mapping;
+    /// i am thinking about compiling verts and shaders now because i am a curious monkey that wants to tell crazy stories afterwards
+    
+    static VAttribs attribs(FlagsOf<Attr> attr) {
+        uint32_t i = 0;
+        auto   res = VAttribs(6); // todo: size on flags? i refuse to make it 2 members, though
+        if (attr(Position))  res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  pos)  };
+        if (attr(Normal))    res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  norm) };
+        if (attr(UV))        res += { i++, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex,  uv)   };
+        if (attr(Color))     res += { i++, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex,  clr)  };
+        if (attr(Tangent))   res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  ta)   };
+        if (attr(BiTangent)) res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  bt)   };
+        return res;
     }
     
-    Vertex(vec3 pos, vec3 norm, vec2 uv, vec4 clr):
+    Vertex(vec3 pos, vec3 norm, vec2 uv, vec4 clr, vec3 ta = {}, vec3 bt = {}):
            pos  ({  pos.x,  pos.y,  pos.z        }),
            norm ({ norm.x, norm.y, norm.z        }),
            uv   ({   uv.x,   uv.y                }),
-           clr  ({  clr.x,  clr.y,  clr.z, clr.w }) { }
-    Vertex(vec3 &pos, vec3 &norm, vec2 &uv):
-           pos({pos.x,pos.y,pos.z}), norm({norm.x,norm.y,norm.z}), uv({uv.x,uv.y}) { }
+           clr  ({  clr.x,  clr.y,  clr.z, clr.w }),
+           ta   ({   ta.x,   ta.y,   ta.z        }),
+           bt   ({   bt.x,   bt.y,   bt.z        }) { }
+    
+    Vertex(vec3 &pos, vec3 &norm, vec2 &uv, vec4 &clr, vec3 &ta, vec3 &bt):
+           pos  ({  pos.x,  pos.y,  pos.z        }),
+           norm ({ norm.x, norm.y, norm.z        }),
+           uv   ({   uv.x,   uv.y                }),
+           clr  ({  clr.x,  clr.y,  clr.z, clr.w }),
+           ta   ({   ta.x,   ta.y,   ta.z        }),
+           bt   ({   bt.x,   bt.y,   bt.z        }) { }
     
     ///
     static array<Vertex> square(rgba clr = {1.0, 1.0, 1.0, 1.0}) {
@@ -93,14 +120,13 @@ struct VertexData {
 template <typename V>
 struct VertexBuffer:VertexData {
     VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
-        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds,
-                 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
+        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
     VertexBuffer(std::nullptr_t n = null) : VertexData(n) { }
-    VertexBuffer(Device &device, array<V> &v) : VertexData(device, Buffer {
+    VertexBuffer(Device &device, array<V> &v, FlagsOf<Vertex::Attr> &attr) : VertexData(device, Buffer {
             &device, v, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT },
-            []() { return V::attribs(); }) { }
+            [attr=&attr]() { return V::attribs(attr); }) { }
     size_t size() { return buffer.sz / sizeof(V); }
 };
 

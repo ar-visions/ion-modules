@@ -106,7 +106,7 @@ void Gen(
     array<std::ofstream *> odata;
     Truth                schema;
     std::mutex           mx;
-    auto async = Async(16, [&, split=split](Process *process, int index) -> var {
+    auto p = async(16, [&, split=split](Process *process, int index) -> var {
         int  annot_index = 0;
         bool  init_check = true;
         for (auto &a: annots) {
@@ -152,7 +152,7 @@ void Gen(
         }
         return null;
     });
-    async.sync();
+    p.sync();
 }
 
 Truths if_image(var &data, Image::Format format, std::function<Truths(Image &)> fn) {

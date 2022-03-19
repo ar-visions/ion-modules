@@ -67,7 +67,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug(
     return VK_FALSE;
 }
 
-/// we wont even call it window manager-related nonsense. its a subsystem, not even a system. this will be a no-op some day.
 void vk_subsystem_init() {
     static std::atomic<bool> init;
     if (!init) {
@@ -77,7 +76,7 @@ void vk_subsystem_init() {
     }
 }
 
-Internal &Internal::handle() { return _.vk ? _ : _.bootstrap(); }
+Internal &Internal::handle()    { return _.vk ? _ : _.bootstrap(); }
 Internal &Internal::bootstrap() {
     vk_subsystem_init();
     
@@ -128,11 +127,6 @@ Internal &Internal::bootstrap() {
     return *this;
 }
 
-void Vulkan::init() {
-    Internal::handle();
-}
-
-/// fix the anti-pattern implementation here
 Texture Vulkan::texture(vec2i size) {
     auto &i = Internal::handle();
     i.tx_skia.destroy();
@@ -172,18 +166,21 @@ int Vulkan::main(Composer *composer) {
     ///
     i.device.initialize(&w);
     w.show();
-    
+
     /// look to ye for working pipes.
     /// canvas polygon data (pos, norm, uv, color)
+    ///
+    
+    /*
     auto   vertices =        Vertex::square ();
     auto    indices =       array<uint16_t> { 0, 1, 2, 2, 3, 0 };
     auto   textures =      array<Texture *> { &tx_canvas       };
     auto        vbo =  VertexBuffer<Vertex> { device, vertices };
     auto        ibo = IndexBuffer<uint16_t> { device, indices  };
-    auto        uni =    UniformBuffer<MVP> { device, [&](MVP &mvp) {
-        mvp         = MVP {
-             .model = m44f::identity(),
-             .view  = m44f::identity(),
+    auto        uni =    UniformBuffer<MVPL> { device, [&](MVPL &mvp) {
+        mvp         = MVPL {
+             .model = glm::mat4(1.0), //m44f::identity(),
+             .view  = glm::mat4(1.0), //m44f::identity(),
              .proj  = glm::ortho(-0.5f, 0.5f, -0.5f, 0.5f, 0.5f, -0.5f)
         };
     }};
@@ -191,6 +188,7 @@ int Vulkan::main(Composer *composer) {
         device, uni, vbo, ibo, textures,
         { 0.0, 0.0, 0.0, 0.0 }, std::string("main") /// transparent canvas overlay; are we clear? crystal.
     };
+    */
     
     /// prototypes add a Window&
     w.fn_cursor  = [&](double x, double y)         { composer->cursor(w, x, y);    };
@@ -227,23 +225,7 @@ int Vulkan::main(Composer *composer) {
     return 0;
 }
 
-VkInstance Vulkan::instance() {
-    return Internal::handle().vk;
-}
-
-Device &Vulkan::device() {
-    return Internal::handle().device;
-}
-
-VkPhysicalDevice Vulkan::gpu() {
-    return Internal::handle().device; /// make sure theres not a cross up during initialization
-}
-
-VkQueue Vulkan::queue() {
-    return Internal::handle().device.queues[GPU::Graphics];
-}
-
-VkSurfaceKHR Vulkan::surface(vec2i &sz) {
+VkSurfaceKHR      Vulkan::surface    (vec2i &sz) {
     Internal &i = Internal::handle();
     if (!i.window) {
          i.window = new Window(sz);
@@ -252,10 +234,10 @@ VkSurfaceKHR Vulkan::surface(vec2i &sz) {
     return *i.window;
 }
 
-uint32_t Vulkan::queue_index() {
-    return Internal::handle().device.gpu.index(GPU::Graphics);
-}
-
-uint32_t Vulkan::version() {
-    return VK_MAKE_VERSION(1, 1, 0); //VK_API_VERSION_1_0;
-}
+void              Vulkan::init       () {        Internal::handle(); }
+uint32_t          Vulkan::queue_index() { return Internal::handle().device.gpu.index(GPU::Graphics); }
+uint32_t          Vulkan::version    () { return VK_MAKE_VERSION(1, 1, 0); }
+VkInstance        Vulkan::instance   () { return Internal::handle().vk; }
+Device           &Vulkan::device     () { return Internal::handle().device; }
+VkPhysicalDevice  Vulkan::gpu        () { return Internal::handle().device; }
+VkQueue           Vulkan::queue      () { return Internal::handle().device.queues[GPU::Graphics]; }

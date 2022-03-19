@@ -36,20 +36,20 @@ public:
 typedef std::function<var(Process *, int)> FnProcess;
 typedef std::function<void(var &d)> FnFuture;
 
-struct Async {
+struct async {
     Process*        process;
     var             data;
     static void     thread(Process *, int i);
     static int      await();
     var&            sync();
-    Async          ();
-    Async          (str exec);
-    Async          (int c, FnProcess f);
-    Async          (FnProcess f);
-    Async          (const Async &r);
-    Async&          operator=(const Async &r);
+    async          ();
+    async          (str exec);
+    async          (int c, FnProcess f);
+    async          (FnProcess f);
+    async          (const async &r);
+    async&          operator=(const async &r);
     Future          then(FnFuture fn);
-   ~Async();
+   ~async();
     operator Future();
     std::mutex      mx;
 };

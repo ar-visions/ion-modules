@@ -67,7 +67,7 @@ struct map:io {
     inline size_t capacity()  const { return pairs->capacity(); }
     inline bool      erase(K k) {
         size_t index = 0;
-        for (auto &i: pairs) {
+        for (auto &i: *pairs) {
             if (k == i.key) {
                 pairs->erase(pairs->begin() + index);
                 return true;

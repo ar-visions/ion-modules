@@ -213,10 +213,6 @@ Style::Style(str &code) {
                         ws(++cur);
                         /// read value
                         char *vstart = cur;
-                        /// split the value and param
-                        ///     one of the params is transition
-                        ///         time transition_curve (W3C standard set)
-                    
                         console.assertion(scan_to(cur, {';'}), "expected member:[value;]");
                         ///
                         /// this should use the regex standard api, will convert when its feasible.
@@ -244,10 +240,6 @@ Style::Style(str &code) {
             };
             ///
             root += new StBlock();
-            /// a list or node container allocator pattern is superior to this one.
-            /// you could even have dislike containers using it, they would use the same pointer protocol and data structure.
-            /// for now i want to leave this as-is but i dont particularly enjoy the encapsulation for all of the items and vectors of them.
-            /// templated typedefs would shim it a bit but with more names
             parse_block(root[root.size() - 1]);
         }
         /// store blocks by member, the interface into all style: Style::members[name]

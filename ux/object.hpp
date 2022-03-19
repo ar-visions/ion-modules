@@ -1,42 +1,44 @@
 #pragma once
 #include <ux/node.hpp>
 
+/// a type registered enum, with a default value
 enums(Rendering, Type, None, None, Shader, Wireframe);
 
 template <typename V>
 struct Object:node {
     declare(Object);
     
+    /// our external interface
     struct Members {
         Extern<Path>           model;
         Extern<Shaders>        shaders;
         Extern<UniformData>    ubo;
         Extern<array<Path>>    textures;
         Extern<Rendering>      render;
-        Intern<Pipes>          pipes;
     } m;
-
+    
+    Pipes   pipes;
+    
+    /// declare members their default values
     void bind() {
         external("uniform",  m.ubo,        UniformData    { null     });
         external("model",    m.model,      Path           { ""       });
         external("shaders",  m.shaders,    Shaders        { "*=main" });
         external("textures", m.textures,   array<Path>    {          });
         external("render",   m.render,     Rendering      { Rendering::Shader });
-        internal("pipes",    m.pipes,      Pipes          { null     });
     }
     
+    /// change management
     void changed(PropList list) {
-        if (list.count("model") == 0)
+        if (!list.count("model"))
             return;
-        m.pipes = model<Vertex>(m.model, m.ubo, m.textures, m.shaders);
+        pipes = model<Vertex>(m.model, m.ubo, m.textures, m.shaders);
     }
     
+    /// rendition of pipes
     Element render() {
-        //return node::render();
-        auto &device = Vulkan::device();
-        Pipes &pipes = m.pipes;
         if (pipes) for (auto &[name, pipe]: pipes.map())
-            device.render.push(pipe);
+            device().render.push(pipe);
         return node::render();
     }
 };
