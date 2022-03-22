@@ -18,17 +18,19 @@ PipelineData::Memory::~Memory() {
 /// constructor for pipeline memory; worth saying again.
 PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
                              VertexData    &vbo,     IndexData   &ibo,
-                             array<Texture *> &tx,   size_t       vsize,
+                             Assets     &assets,     size_t       vsize, // replace all instances of array<Texture *> with a map<str, Teture *>
                              rgba           clr,     string       shader,
                              VkStateFn      vk_state):
-        device(&device), shader(shader), ubo(ubo),
-           vbo(vbo), ibo(ibo), tx(tx), vsize(vsize), clr(clr)
-{
-    auto bindings = array<VkDescriptorSetLayoutBinding> {
-        { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_ALL, nullptr },
-        { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr },
-        { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr } // adj w tx size, emit this struct
-    };
+        device(&device), shader(shader),   ubo(ubo),
+           vbo(vbo),        ibo(ibo),   assets(assets),  vsize(vsize),   clr(clr) {
+    ///
+    auto bindings  = array<VkDescriptorSetLayoutBinding>(1 + assets.size());
+         bindings += { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr };
+    
+    /// binding ids for resources are reflected in shader
+    /// todo: write big test for this
+    for (auto &[r, tx]:assets)
+        bindings += Asset::descriptor(r); // likely needs tx in arg form in this generic
     
     /// create descriptor set layout
     auto desc_layout_info = VkDescriptorSetLayoutCreateInfo {
@@ -50,17 +52,15 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     assert  (res == VK_SUCCESS);
     ubo.update(&device);
     ///
-    /// and then its finished.  the descriptor set is created from layouts.  that means something to somebody.  not me.
     /// write descriptor sets for all swap image instances
     for (size_t i = 0; i < device.frames.size(); i++) {
         auto &desc_set  = desc_sets[i];
-        auto  v_writes  = array<VkWriteDescriptorSet>(size_t(1 + tx.size()));
+        auto  v_writes  = array<VkWriteDescriptorSet>(size_t(1 + assets.size()));
         
         /// update descriptor sets
         v_writes       += ubo.descriptor(i, desc_set);
-        uint32_t i_tx   = 1;
-        for (auto t:tx)
-            v_writes   += t->descriptor(desc_set, i_tx++);
+        for (auto &[r, tx]:assets)
+            v_writes   += tx->descriptor(desc_set, uint32_t(r));
         
         VkDevice    dev = device;
         size_t       sz = v_writes.size();
@@ -70,8 +70,8 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     str    cwd = Path::cwd();
     str s_vert = var::format("{0}/shaders/{1}.vert", { cwd, shader });
     str s_frag = var::format("{0}/shaders/{1}.frag", { cwd, shader });
-    auto  vert = device.module(s_vert, Device::Vertex);
-    auto  frag = device.module(s_frag, Device::Fragment);
+    auto  vert = device.module(s_vert, assets, Device::Vertex);
+    auto  frag = device.module(s_frag, assets, Device::Fragment);
     ///
     array<VkPipelineShaderStageCreateInfo> stages {{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
@@ -185,8 +185,7 @@ void PipelineData::Memory::update(size_t frame_id) {
     auto         &device = *this->device;
     Frame         &frame = device.frames[frame_id];
     VkCommandBuffer &cmd = frame_commands[frame_id];
-    
-    auto clear_color = [&](rgba c) {
+    auto     clear_color = [&](rgba c) {
         return VkClearColorValue {{ float(c.r) / 255.0f, float(c.g) / 255.0f,
                                     float(c.b) / 255.0f, float(c.a) / 255.0f }};
     };
@@ -207,8 +206,9 @@ void PipelineData::Memory::update(size_t frame_id) {
     auto   clear_values = array<VkClearValue> {
         {        .color = clear_color(clr)}, // for image rgba  sfloat
         { .depthStencil = {1.0f, 0}}         // for image depth sfloat
-    }; /// nothing in canvas showed with depthStencil = 0.0.
+    };
     
+    /// nothing in canvas showed with depthStencil = 0.0.
     auto    render_info = VkRenderPassBeginInfo {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .pNext           = null,

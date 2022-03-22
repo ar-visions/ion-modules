@@ -28,7 +28,7 @@ struct StTrans {
         if (sp.size() == 2) {
             Unit u0   = sp[0];
             Unit u1   = sp[1];
-            if (!u0.flags(Unit::Time) && u1.flags(Unit::Time))
+            if (!u0.flags[Unit::Time] && u1.flags[Unit::Time])
                 std::swap(u0, u1);
             duration  = u0;
             str  s1   = u1;

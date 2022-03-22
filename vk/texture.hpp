@@ -1,10 +1,39 @@
 #pragma once
 #include <vk/vk.hpp>
 
-struct Texture {
-    ///
+/// its just enums for different resources, texture is a basic resource
+struct Asset {
+    enum Type { // i think turn this into the sane thing, but, only after it works.  not getting lost for an additional day because of a flag ordinal cross-up party
+        Undefined = 0,
+        Color     = 1 << 0,
+        Normal    = 1 << 1,
+        Specular  = 1 << 2,
+        Displace  = 1 << 3, // displace offset from the normal map if combined, its just a relative magnitude vert at the normal dir
+        Max       = Displace
+    };
+    
+    typedef FlagsOf<Type> Types; // useful pattern to repeat Resource::Flags a type of
+    
+    static uint32_t binding(Type t) { /// can drop this after flags conversion
+        switch (t) {
+            case Undefined: return 0;
+            case Color:     return 1;
+            case Normal:    return 2;
+            case Specular:  return 3;
+            case Displace:  return 4;
+            default:        break;
+        }
+        return 0;
+    }
+    
+    static VkDescriptorSetLayoutBinding descriptor(Type t) {
+        return { binding(t), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr };
+    }
+};
+
+///
+struct Texture:Asset {
     struct Stage {
-        ///
         enum Type {
             Undefined,
             Transfer,
@@ -12,10 +41,10 @@ struct Texture {
             Color,
             Depth
         };
-        Type value;
         ///
+        Type value;
         struct Data {
-            enum Type               value  = Undefined; /// redundant is good. go redundant. somewhat.
+            enum Type               value  = Undefined;
             VkImageLayout           layout = VK_IMAGE_LAYOUT_UNDEFINED;
             uint64_t                access = 0;
             VkPipelineStageFlagBits stage;
@@ -167,6 +196,8 @@ public:
         return data->descriptor(ds, binding);
     }
 };
+
+typedef map<Asset::Type, Texture *> Assets;
 
 struct ColorTexture:Texture {
     ColorTexture(Device *device, vec2i sz, rgba clr):

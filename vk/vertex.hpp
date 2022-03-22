@@ -1,30 +1,9 @@
 #pragma once
 
-/// use of the meta struct is better, and doesnt need to register each time if that can be figured out that is
-/// it can be done better.. with factory creation of its data output. thats compound/recursive
-/// i want to essentially pack the data in as tight as possible, or aligned a certain amount
-struct Vertex2: Struct<Vertex2> {
-    M<vec3f> pos;
-    M<vec3f> norm;
-    M<vec2f> uv;
-    M<vec4f> clr;
-    ///
-    void bind() {
-        member <vec3f> ("pos",  pos );
-        member <vec3f> ("norm", norm);
-        member <vec2f> ("uv",   uv  );
-        member <vec4f> ("clr",  clr );
-    }
-    ///
-    struct_shim(Vertex2);
-};
-
 /// vulkan people like to flush the entire glyph cache per type
 typedef array<VkVertexInputAttributeDescription> VAttribs;
 
-/// soon: compile entirely based on glm types. soon: graph-mode shaders
-/// but i will say thats actually slower than this current approach and about 100x more complicated
-/// so thats why i say soon. terrified to start it.  sorry but these hard coded verts just cant happen unless we want a sea of anti-pattern in its wake
+/// soon: graph-mode shaders? not exactly worth the trouble at the moment especially with live updates not being as quick as glsl recompile
 struct Vertex {
     enum Attr {
         Position  = (1 << 0),
@@ -35,28 +14,30 @@ struct Vertex {
         BiTangent = (1 << 5),
     };
     
+    ///
+    typedef FlagsOf<Attr> Attribs;
+    
+    ///
     glm::vec3 pos;  // position
     glm::vec3 norm; // normal position
     glm::vec2 uv;   // texture uv coordinate
     glm::vec4 clr;  // color
     glm::vec3 ta;   // tangent
-    glm::vec3 bt;   // bi-tangent
+    glm::vec3 bt;   // bi-tangent, we need an arb in here, or two. or ten.
     
-    /// tangent and bitangents for normal mapping;
-    /// i am thinking about compiling verts and shaders now because i am a curious monkey that wants to tell crazy stories afterwards
-    
+    ///
     static VAttribs attribs(FlagsOf<Attr> attr) {
-        uint32_t i = 0;
-        auto   res = VAttribs(6); // todo: size on flags? i refuse to make it 2 members, though
-        if (attr(Position))  res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  pos)  };
-        if (attr(Normal))    res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  norm) };
-        if (attr(UV))        res += { i++, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex,  uv)   };
-        if (attr(Color))     res += { i++, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex,  clr)  };
-        if (attr(Tangent))   res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  ta)   };
-        if (attr(BiTangent)) res += { i++, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  bt)   };
+        auto   res = VAttribs(6);
+        if (attr[Position])  res += { 0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  pos)  };
+        if (attr[Normal])    res += { 1, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  norm) };
+        if (attr[UV])        res += { 2, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex,  uv)   };
+        if (attr[Color])     res += { 3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex,  clr)  };
+        if (attr[Tangent])   res += { 4, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  ta)   };
+        if (attr[BiTangent]) res += { 5, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  bt)   };
         return res;
     }
     
+    ///
     Vertex(vec3 pos, vec3 norm, vec2 uv, vec4 clr, vec3 ta = {}, vec3 bt = {}):
            pos  ({  pos.x,  pos.y,  pos.z        }),
            norm ({ norm.x, norm.y, norm.z        }),
@@ -65,6 +46,7 @@ struct Vertex {
            ta   ({   ta.x,   ta.y,   ta.z        }),
            bt   ({   bt.x,   bt.y,   bt.z        }) { }
     
+    ///
     Vertex(vec3 &pos, vec3 &norm, vec2 &uv, vec4 &clr, vec3 &ta, vec3 &bt):
            pos  ({  pos.x,  pos.y,  pos.z        }),
            norm ({ norm.x, norm.y, norm.z        }),
@@ -102,18 +84,14 @@ struct VertexData {
     Buffer          buffer;
     std::function<VAttribs()> fn_attribs;
     ///
-    operator VkBuffer() { return buffer;    }
-    size_t       size() { return buffer.sz; }
     VertexData(std::nullptr_t n = null) { }
-    
-    /// these things blow, so make everything based on initializer list with variable entry via [key]: value, also you can just order params in, if you dont specify key:
-    /// C++ sucks with initializer list in that it didnt take over the language.  it should have.
-    /// it could have removed much complexity and nonsense with this move.
+    VertexData(Device &device, Buffer buffer, std::function<VAttribs()> fn_attribs) :
+                device(&device), buffer(buffer), fn_attribs(fn_attribs)  { }
     ///
-    VertexData(Device &device, Buffer buffer, std::function<VAttribs()> fn_attribs) : device(&device), buffer(buffer), fn_attribs(fn_attribs)  { }
-    
-    operator bool () { return device != null; }
-    bool operator!() { return device == null; }
+    operator VkBuffer() { return buffer;         }
+    size_t       size() { return buffer.sz;      }
+       operator bool () { return device != null; }
+       bool operator!() { return device == null; }
 };
 
 ///
@@ -123,10 +101,10 @@ struct VertexBuffer:VertexData {
         return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     }
     VertexBuffer(std::nullptr_t n = null) : VertexData(n) { }
-    VertexBuffer(Device &device, array<V> &v, FlagsOf<Vertex::Attr> &attr) : VertexData(device, Buffer {
+    VertexBuffer(Device &device, array<V> &v, Vertex::Attribs &attr) : VertexData(device, Buffer {
             &device, v, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT },
-            [attr=&attr]() { return V::attribs(attr); }) { }
+            [attr=attr]() { return V::attribs(attr); }) { }
     size_t size() { return buffer.sz / sizeof(V); }
 };
 

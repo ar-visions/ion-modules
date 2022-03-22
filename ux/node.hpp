@@ -662,8 +662,9 @@ struct node {
     template <typename V> VertexData  vertices(array<V> &v_vbo, int mc)     { return  VertexBuffer<V> (device(), v_vbo, mc); }
     template <typename I> IndexData   polygons(array<I> &v_ibo)             { return   IndexBuffer<I> (device(), v_ibo);     }
     template <typename U> UniformData  uniform(std::function<void(U &)> fn) { return UniformBuffer<U> (device(), fn);        }
-    template <typename V> Pipes          model(Path path, UniformData ubo, array<Path> textures, Shaders shaders = null) {
-        return Model<V>(device().sync(), ubo, textures, path, shaders);
+    template <typename V> Pipes          model(
+                str name, str skin, UniformData ubo, Vertex::Attribs &attr, Asset::Types &atypes, Shaders shaders = null) {
+        return Model<V>(name, skin, device().sync(), ubo, attr, atypes, shaders);
     }
     
     Texture texture(Image im) {
@@ -678,13 +679,14 @@ struct node {
     
     template <typename V>
     Pipeline<V> texture_view(Texture &tx, UniformData ubo) {
-        auto v_sqr = Vertex::square();
-        auto i_sqr = array<uint32_t> { 0, 1, 2, 2, 3, 0 };
-        auto   vbo = vertices(v_sqr, {  });
-        auto   ibo = polygons(i_sqr);
-        auto  a_tx = array<Texture*> { &tx };
+        auto  v_sqr = Vertex::square();
+        auto  i_sqr = array<uint32_t> { 0, 1, 2, 2, 3, 0 };
+        auto    vbo = vertices(v_sqr, {  });
+        auto    ibo = polygons(i_sqr);
+        auto assets = Assets {{ Asset::Color, &tx }};
         return Pipeline<V> {
-            device(), ubo, vbo, ibo, a_tx, rgba {1.0, 0.7, 0.2, 1.0}, "main" };
+            device(), ubo, vbo, ibo, assets, rgba {1.0, 0.7, 0.2, 1.0}, "main"
+        };
     }
     
     inline size_t count(str n) {

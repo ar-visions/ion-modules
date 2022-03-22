@@ -45,7 +45,7 @@ struct Device {
     
     static Device &null_device();
     
-    VkShaderModule module(Path p, Module type);
+    VkShaderModule module(Path p, Assets &rsc, Module type);
     ///
     void            initialize(Window *);
     /// todo: initialize for compute_only
@@ -66,7 +66,7 @@ struct Device {
     Device(std::nullptr_t n = null) { }
     operator VkViewport &() { return viewport; }
     operator VkPipelineViewportStateCreateInfo() {
-        sc.offset = {0, 0};
+        sc.offset = { 0, 0 };
         sc.extent = extent;
         return { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, null, 0, 1, &viewport, 1, &sc };
     }

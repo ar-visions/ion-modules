@@ -77,25 +77,46 @@ uint32_t memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags
    return 0;
 };
 
-VkShaderModule Device::module(Path path, Module type) {
+/// no question we would have to pass in teh arguments used for this shader as well
+/// that is the texture resource combo used
+VkShaderModule Device::module(Path path, Assets &assets, Module type) {
     str    key = path;
     auto    &m = type == Vertex ? v_modules : f_modules;
     Path   spv = fmt {"{0}.spv", { key }};
     
 #if !defined(NDEBUG)
+        /// the issue now is we're sort of changing whats going on at path now
         /// debug only, simple idea, we update the spv when the source is newer or the spv does not exist
         if (!spv.exists() || path.modified_at() > spv.modified_at()) {
             if (m.count(key))
                 m.erase(key);
-            str     command = fmt   {"/usr/local/bin/glslc {0} -o {0}.spv", { key }};
+            /// should it state what bindings it has, or do we read them and infer things?  what is it that we need to do here damnit lol.
+            /// Define different textures turned on and off (no definition)
+            /// i honestly dont see another way to do this man. it blows for glsl syntax land, but its basically clear cut.
+            ///
+            /// iterate through images, we will
+            str   defs = "";
+            auto remap = map<Asset::Type, str> {
+                { Asset::Color,    " -DCOLOR"    },
+                { Asset::Specular, " -DSPECULAR" },
+                { Asset::Displace, " -DDISPLACE" },
+                { Asset::Normal,   " -DNORMAL"   }
+            };
+            
+            for (auto &[type, tx]: assets) /// always use type when you can, over id (id is genuinely instanced things)
+                defs += remap[type];
+            
+            ///
+            str     command = fmt   {"/usr/local/bin/glslc {1} {0} -o {0}.spv", { key, defs }};
             async { command }.sync();
+            
             ///
             Path tmp = "./.tmp/"; ///
             if (spv.exists() && spv.modified_at() >= path.modified_at()) {
-                spv.copy(tmp); // important to realize std filesystem distinguishes filename from dir by only that forward slash!.. indeed it is true dont mess yourself up
+                spv.copy(tmp);
             } else {
                 // look for tmp. if this does not exist we can not proceed.
-                
+                // compilation failure, so look for temp which worked before.
             }
             
             /// if it succeeds, the spv is written and that will have a greater modified-at

@@ -24,6 +24,7 @@ struct Path {
     Path                (path_t p);
     Path                (var v);
     Path                (str s);
+    str             stem() const { return p.stem().string(); }
     str              ext();
     cchar_t *       cstr()                  const;
     static Path      cwd() { return std::filesystem::current_path(); }

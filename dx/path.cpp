@@ -132,10 +132,10 @@ bool Path::append(array<uint8_t> bytes) {
 bool Path::same_as(Path b) const { std::error_code ec; return std::filesystem::equivalent(p, b, ec); }
 
 void Path::resources(array<str> exts, FlagsOf<Flags> flags, Path::Fn fn) {
-    bool use_gitignore = flags(UseGitIgnores);
-    bool recursive = flags(Recursion);
-    bool no_hidden = flags(NoHidden);
-    auto ignore    = flags(UseGitIgnores) ? str::read_file(p / ".gitignore").split("\n") : array<str>();
+    bool use_gitignore = flags[UseGitIgnores];
+    bool recursive = flags[Recursion];
+    bool no_hidden = flags[NoHidden];
+    auto ignore    = flags[UseGitIgnores] ? str::read_file(p / ".gitignore").split("\n") : array<str>();
     std::function<void(Path)> res;
     std::unordered_map<Path, bool> fetched_dir;
     path_t parent = p; /// parent relative to the git-ignore index; there may be multiple of these things.

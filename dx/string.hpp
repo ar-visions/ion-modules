@@ -44,6 +44,8 @@ public:
     Size        size()                           const { return ref().length();                 }
     
     /// operators
+    string      operator+  (const string    &s)  const { return ref() + s.ref();                }
+    string      operator+  (const char      *s)  const { return ref() + s;                      }
     string      operator() (size_t s, size_t l)  const { return substr(s, l);                   }
     string      operator() (size_t           s)  const { return substr(s);                      }
     bool        operator<  (const string&  rhs)  const { return ref() < rhs.ref();              }
@@ -332,8 +334,6 @@ public:
         return s != "" && (s[0] == '-' || isdigit(s[0]));
     }
     
-    string operator+(const string &s) { return ref() + s.ref(); }
-
     /// wildcard match
     bool matches(string pattern) const {
         auto &s = ref();

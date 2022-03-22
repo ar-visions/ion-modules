@@ -108,10 +108,11 @@ size_t fn_id(std::function<T(U...)> &fn) {
 };
 
 /// sine function
-real sin(real x) {
+template <typename T>
+T sin(T x) {
     const int max_iter = 70;
-    real c = x, a = 1, f = 1, p = x;
-    const real eps = 1e-8;
+    T c = x, a = 1, f = 1, p = x;
+    const T eps = 1e-8;
     ///
     for (int i = 1; (a < 0 ? -a : a) > eps and i <= max_iter; i++) {
         f *= (2 * i) * (2 * i + 1);
@@ -123,10 +124,12 @@ real sin(real x) {
 }
 
 /// cosine function (sin - pi / 2)
-real cos(real x) { return sin(x - M_PI / 2.0); }
+template <typename T>
+T cos(T x) { return sin(x - M_PI / 2.0); }
 
 /// tan, otherwise known as sin(x) / cos(y), the source
-real tan(real x) { return sin(x) / cos(x); }
+template <typename T>
+T tan(T x) { return sin(x) / cos(x); }
 
 struct io { };
 

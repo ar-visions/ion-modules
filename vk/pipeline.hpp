@@ -31,7 +31,7 @@ struct PipelineData {
         VertexData                 vbo;             ///
         IndexData                  ibo;
         // array<VkVertexInputAttributeDescription> attr; -- vector is given via VertexData::fn_attribs(). i dont believe those need to be pushed up the call chain
-        array<Texture *>           tx;
+        Assets                     assets;
         VkDescriptorSetLayout      set_layout;
         bool                       enabled = true;
         map<Path, Texture *>       tx_cache;
@@ -47,7 +47,7 @@ struct PipelineData {
         void update(size_t frame_id);
         Memory(std::nullptr_t    n = null);
         Memory(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-               array<Texture *> &tx, size_t vsize, rgba clr, string name, VkStateFn vk_state);
+               Assets &assets, size_t vsize, rgba clr, string name, VkStateFn vk_state);
         void destroy();
         void initialize();
         ~Memory();
@@ -62,16 +62,17 @@ struct PipelineData {
     void   update  (size_t frame_id);
     ///
     PipelineData(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-                 array<Texture *> &tx, size_t vsize, rgba clr, string shader, VkStateFn vk_state = null) {
-            m = std::shared_ptr<Memory>(new Memory { device, ubo, vbo, ibo, tx, vsize, clr, shader, vk_state });
+                 Assets &assets, size_t vsize, rgba clr, string shader, VkStateFn vk_state = null) {
+            m = std::shared_ptr<Memory>(new Memory { device, ubo, vbo, ibo, assets, vsize, clr, shader, vk_state });
         }
 };
 
 /// pipeline dx
 template <typename V>
 struct Pipeline:PipelineData {
-    Pipeline(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo, array<Texture *> tx, rgba clr, string name):
-        PipelineData(device, ubo, vbo, ibo, tx, sizeof(V), clr, name) { }
+    Pipeline(Device &device, UniformData &ubo,  VertexData &vbo,
+             IndexData &ibo,   Assets &assets,  rgba clr, string name):
+        PipelineData(device, ubo, vbo, ibo, assets, sizeof(V), clr, name) { }
 };
 
 /// these are calling for Daniel
@@ -107,14 +108,20 @@ struct Model:Pipes {
         data = std::shared_ptr<Data>(new Data { &device });
     }
     
-    ///
-    array<Texture*> cache_textures(array<Path> &images) {
-        auto &d = *this->data;
-        ::map<Path, Device::Pair> &cache = d.device->tx_cache;
-        array<Texture*> tx = array<Texture*>(images.size());
-        for (Path &p:images) {
+    static str form_path(str model, str skin, str ext) {
+        str sk = skin ? str(skin + ".") : str("");
+        return fmt {"textures/{0}{1}.{2}", {model, sk, ext}};
+    }
+    
+    /// skin will just override where overriden in the file-system
+    Assets cache_assets(str model, str skin, Asset::Types &atypes) {
+        auto   &d     = *this->data;
+        auto   &cache = d.device->tx_cache; /// ::map<Path, Device::Pair>
+        Assets assets = Assets(Asset::Max);
+        ///
+        auto load_tx = [&](Path p) -> Texture * {
             if (!cache.count(p)) {
-                cache[p].image = new Image(p, Image::Rgba);
+                cache[p].image     = new Image(p, Image::Rgba);
                 auto          &shh = cache[p].image->pixels;
                 ::Shape<Major> sh1 = shh.shape();
                 /// bookmark: reload texture on pipeline refresh
@@ -124,36 +131,46 @@ struct Model:Pipes {
                    VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT, false, VK_FORMAT_R8G8B8A8_UNORM, -1);
                 cache[p].texture->push_stage(Texture::Stage::Shader);
-            }
-            tx += cache[p].texture;
+            };
+            return cache[p].texture;
+        };
+        
+        ///
+        static auto names = ::map<Asset::Type, str> {
+            { Asset::Color,    "color"    },
+            { Asset::Specular, "specular" },
+            { Asset::Displace, "displace" },
+            { Asset::Normal,   "normal"   }
+        };
+        
+        ///
+        for (auto &[type, n]:names) {
+            if (!atypes[type])
+                continue;
+            /// prefer png over jpg, if either one exists
+            Path png = form_path(model, skin, ".png");
+            Path jpg = form_path(model, skin, ".jpg");
+            if (!png.exists() && !jpg.exists())
+                continue;
+            assets[type] = load_tx(png.exists() ? png : jpg);
         }
-        return tx;
+        return assets;
     }
     
-    ///
-    Model(Device &device, UniformData &ubo, FlagsOf<Vertex::Attr> &attr, array<Path> &images, Path p, Shaders &shaders) : Model(device) {
+    Model(str name, str skin, Device &device, UniformData &ubo, Vertex::Attribs &attr,
+          Asset::Types &atypes, Shaders &shaders) : Model(device) {
         /// cache control for images to texture here; they might need a new reference upon pipeline rebuild
-        auto  tx = cache_textures(images);
-        auto obj = Obj<V>(p, [](auto& g, vec3& pos, vec2& uv, vec3& norm) {
+        auto assets = cache_assets(name, skin, atypes);
+        auto  mpath = form_path(name, skin, ".obj");
+        auto    obj = Obj<V>(mpath, [](auto& g, vec3& pos, vec2& uv, vec3& norm) {
             return V(pos, norm, uv, vec4f {1.0f, 1.0f, 1.0f, 1.0f});
         });
         auto &d = *this->data;
+        // VertexBuffer(Device &device, array<V> &v, Vertex::Attribs &attr)
         d.vbo   = VertexBuffer<V>(device, obj.vbo, attr);
         for (auto &[name, group]: obj.groups) {
             auto     ibo = IndexBuffer<uint32_t>(device, group.ibo);
-            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, rgba {0.0, 0.0, 0.0, 0.0}, shaders(name));
-        }
-    }
-    
-    /// deprecare
-    Model(Device &device, UniformData &ubo, array<Path> &images, Shape s, Shaders &shaders) : Model(device) {
-        auto    &d = *this->data;
-        auto polys = s.fn();
-        auto    tx = cache_textures(images);
-        d.vbo      = VertexBuffer<V>(device, polys.verts);
-        for (auto &[name, group]: polys.groups) {
-            auto     ibo = IndexBuffer<uint32_t>(device, group.ibo);
-            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, tx, null, name);
+            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, assets, rgba {0.0, 0.0, 0.0, 0.0}, shaders(name));
         }
     }
 };

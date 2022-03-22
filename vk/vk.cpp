@@ -157,7 +157,7 @@ int Vulkan::main(Composer *composer) {
     Window      &w = *i.window;
     Device &device =  i.device;
     Canvas  canvas = Canvas(sz, Canvas::Context2D);
-    Texture &tx_canvas = i.tx_skia;
+    //Texture &tx_canvas = i.tx_skia;
     
     ///
     composer->sz = &w.size;
@@ -174,10 +174,10 @@ int Vulkan::main(Composer *composer) {
     /*
     auto   vertices =        Vertex::square ();
     auto    indices =       array<uint16_t> { 0, 1, 2, 2, 3, 0 };
-    auto   textures =      array<Texture *> { &tx_canvas       };
+    auto   textures =      Resources {{ Resource::Color, &tx_canvas }};
     auto        vbo =  VertexBuffer<Vertex> { device, vertices };
     auto        ibo = IndexBuffer<uint16_t> { device, indices  };
-    auto        uni =    UniformBuffer<MVPL> { device, [&](MVPL &mvp) {
+    auto        uni =   UniformBuffer<MVPL> { device, [&](MVPL &mvp) {
         mvp         = MVPL {
              .model = glm::mat4(1.0), //m44f::identity(),
              .view  = glm::mat4(1.0), //m44f::identity(),

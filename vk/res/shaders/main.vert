@@ -24,41 +24,48 @@ struct MVP {
 layout(binding = 0) uniform UniformBufferObject {
     MVP      mvp;
     Material mat;
+    vec4     displace;
     Light    lights[2];
 } ubo;
 
-///
+/// no-op; the vector of texture just cant do for this, it must be a map
+# pragma opt COLOR
 layout(binding  = 1) uniform  sampler2D  tx_color;
-layout(binding  = 2) uniform  sampler2D  tx_elevation;
+
+/// this makes this a build-var (these are multi-compiled for the optimizers to do their thing)
+# pragma opt DISPLACE
+layout(binding  = 2) uniform  sampler2D  tx_displace;
+
+///
+# pragma opt NORMAL
 layout(binding  = 3) uniform  sampler2D  tx_normal;
 
 ///
-layout(location = 0) in       vec3       a_pos;
-layout(location = 1) in       vec3       a_norm;
+layout(location = 0) in       vec3       a_position;
+layout(location = 1) in       vec3       a_normal;
 layout(location = 2) in       vec2       a_uv;
-layout(location = 3) in       vec3       a_tangent;
-layout(location = 4) in       vec3       a_bitangent;
-layout(location = 5) in       vec4       a_color;
+layout(location = 3) in       vec4       a_color;
+layout(location = 4) in       vec3       a_tangent;
+layout(location = 5) in       vec3       a_bitangent;
 
 ///
 layout(location = 0) out      vec4       v_color;
 layout(location = 1) out      vec3       v_normal;
 layout(location = 2) out      vec2       v_uv;
 
-///
 void main() {
-    ///
-    vec4 o       = texture(tx_elevation, in_uv);
-    mat4 vm      = ubo.mvp.view * ubo.mvp.model;
+    mat4       vm = ubo.mvp.view * ubo.mvp.model;
     
-    ///
-    v_color      = ubo.lights[1].color; /// * in_color
-    v_normal     = (vm * vec4(at_norm, 0.0)).xyz;
-    v_uv         = in_uv;
+    #if DISPLACE
+        vec4   dv = texture(tx_displace, a_uv);
+        vec4 wpos = vm * vec4(a_position + a_normal * (dv.xyz - 0.5) * ubo.displace.x, 1.0);
+    #else
+        vec4 wpos = vm * vec4(a_position, 1.0);
+    #endif
     
-    ///
-    vec3 pos     = vm * vec4(a_pos + a_norm * (o.xyz - 0.5) * 0.02, 1.0);
+    v_color      = vec4(1.0); //ubo.mat.ambient + a_color;
+    v_normal     = (vm * vec4(a_normal, 0.0)).xyz;
+    v_uv         = a_uv;
     
-    ///
-    gl_Position  = ubo.mvp.proj * pos;
+    gl_Position  = ubo.mvp.proj * wpos;
 }

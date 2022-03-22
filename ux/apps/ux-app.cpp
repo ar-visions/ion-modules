@@ -23,7 +23,7 @@ struct Mars:node {
     void bind() {
         external<real>          ("fov",     m.fov,     60.0);
         external<Rendering>     ("render",  m.render, { Rendering::Shader });
-        external<Path>          ("model",   m.model,  "models/mars-8k.obj");
+        external<Path>          ("model",   m.model,  "models/mars-8k.obj"); // where are we?
         external<UniformData>   ("uniform", m.uniform, uniform<Uniform>([&](Uniform &u) {
             r32    aspect = 1.0 / paths.fill.aspect();
             r32        sx = 1.0f   * 0.5f * 2.0f;
@@ -43,14 +43,38 @@ struct Mars:node {
                 .pos_rads = { 0.0f, 0.0f, -1000.0f, 10000.0f },
                 .color    = { 1.0f, 1.0f,  1.0f, 0.0f }};
         }));
-        external<array<Path>>("textures", m.textures, {"images/mars-surface.jpg","images/mars-elevation.png"});
     }
     ///
     Element render() {
-        return Object<Vertex>("object", {
-            {"render", m.render}, {"textures", m.textures},
-            {"model",  m.model},  {"uniform",  m.uniform}
-        });
+        return Object<Vertex> {"object", {
+            {"render", m.render}, {"model",  m.model}, {"uniform", m.uniform}
+        }};
+    }
+};
+
+struct Pane:node {
+    declare(Pane);
+};
+
+struct Avatar:node {
+    declare(Avatar);
+};
+
+/// sorry but i havent been working enough.  here is Orbiter
+struct Orbiter:node {
+    declare(Orbiter);
+    
+    void bind() {
+        //external <real> ("fov", m.fov, 60.0);
+    }
+
+    Element render() {
+        return Pane {
+            "orbiter", {}, {
+                Mars   { "mars" },
+                Avatar { "avatar" }
+            }
+        };
     }
 };
 
@@ -62,5 +86,5 @@ Map defaults = {
 
 ///
 int main(int c, const char *v[]) {
-    return UX<Mars>(c, v, defaults);
+    return UX<Orbiter>(c, v, defaults);
 }

@@ -10,29 +10,33 @@ struct Object:node {
     
     /// our external interface
     struct Members {
-        Extern<Path>           model;
-        Extern<Shaders>        shaders;
-        Extern<UniformData>    ubo;
-        Extern<array<Path>>    textures;
-        Extern<Rendering>      render;
+        Extern<str>             model;
+        Extern<str>             skin;
+        Extern<Asset::Types>    assets;
+        Extern<Shaders>         shaders;
+        Extern<UniformData>     ubo;
+        Extern<Vertex::Attribs> attr;
+        Extern<Rendering>       render;
     } m;
     
     Pipes   pipes;
     
     /// declare members their default values
     void bind() {
-        external("uniform",  m.ubo,        UniformData    { null     });
-        external("model",    m.model,      Path           { ""       });
-        external("shaders",  m.shaders,    Shaders        { "*=main" });
-        external("textures", m.textures,   array<Path>    {          });
-        external("render",   m.render,     Rendering      { Rendering::Shader });
+        external("uniform",   m.ubo,        UniformData     { null });
+        external("model",     m.model,      str             { ""   });
+        external("skin",      m.skin,       str             { ""   });
+        external("shaders",   m.shaders,    Shaders         { "*=main" });
+        external("assets",    m.assets,     Asset::Types    {  Asset::Color,     Asset::Displace, Asset::Normal });
+        external("attr",      m.attr,       Vertex::Attribs { Vertex::Position, Vertex::UV,      Vertex::Normal });
+        external("render",    m.render,     Rendering       { Rendering::Shader });
     }
     
     /// change management
     void changed(PropList list) {
         if (!list.count("model"))
             return;
-        pipes = model<Vertex>(m.model, m.ubo, m.textures, m.shaders);
+        pipes = model<Vertex>(m.model, m.skin, m.ubo, m.attr, m.assets, m.shaders);
     }
     
     /// rendition of pipes
