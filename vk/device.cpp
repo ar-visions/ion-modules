@@ -79,59 +79,66 @@ uint32_t memory_type(VkPhysicalDevice gpu, uint32_t types, VkMemoryPropertyFlags
 
 /// no question we would have to pass in teh arguments used for this shader as well
 /// that is the texture resource combo used
-VkShaderModule Device::module(Path path, Assets &assets, Module type) {
-    str    key = path;
-    auto    &m = type == Vertex ? v_modules : f_modules;
-    Path   spv = fmt {"{0}.spv", { key }};
+VkShaderModule Device::module(Path path, VAttribs &vattr, Assets &assets, Module type) {
+    str      src_path = path;
+    auto           &m = type == Vertex ? v_modules : f_modules;
+    str          defs = "";
+    uint32_t    flags = 0;
+    static auto uname = map<Asset::Type, str> {
+        { Asset::Color,    "COLOR"    },
+        { Asset::Shine,    "SHINE"    },
+        { Asset::Rough,    "ROUGH"    },
+        { Asset::Displace, "DISPLACE" },
+        { Asset::Normal,   "NORMAL"   }
+    };
+    
+    /// define used attribute location
+    for (auto &a: vattr)
+        defs += fmt {" -DLOCATION_{0}={0}", {a.location}}; //can use it within layout() per attrib in glsl, so if its not defined the shader breaks, thats an important feedback there.
+    
+    for (auto &[type, tx]: assets) { /// always use type when you can, over id (id is genuinely instanced things)
+        defs  += fmt { " -D{0}={1}", { uname[type], uint32_t(type) }};
+        flags |= uint32_t(1 << type);
+    }
+    Path   spv = fmt {"{0}.{1}.spv", { src_path, str(int(flags)) }};
     
 #if !defined(NDEBUG)
-        /// the issue now is we're sort of changing whats going on at path now
-        /// debug only, simple idea, we update the spv when the source is newer or the spv does not exist
         if (!spv.exists() || path.modified_at() > spv.modified_at()) {
-            if (m.count(key))
-                m.erase(key);
-            /// should it state what bindings it has, or do we read them and infer things?  what is it that we need to do here damnit lol.
-            /// Define different textures turned on and off (no definition)
-            /// i honestly dont see another way to do this man. it blows for glsl syntax land, but its basically clear cut.
-            ///
-            /// iterate through images, we will
-            str   defs = "";
-            auto remap = map<Asset::Type, str> {
-                { Asset::Color,    " -DCOLOR"    },
-                { Asset::Specular, " -DSPECULAR" },
-                { Asset::Displace, " -DDISPLACE" },
-                { Asset::Normal,   " -DNORMAL"   }
-            };
+            if (m.count(src_path))
+                m.erase(src_path);
             
-            for (auto &[type, tx]: assets) /// always use type when you can, over id (id is genuinely instanced things)
-                defs += remap[type];
-            
-            ///
-            str     command = fmt   {"/usr/local/bin/glslc {1} {0} -o {0}.spv", { key, defs }};
+            /// call glslc compiler with definitions, input file is the .vert or .frag passed in, and output is our keyed use-case shader
+            Path        tmp = "./.tmp/"; ///
+            str     command = fmt {"/usr/local/bin/glslc{0} {1} -o {2}", { defs, src_path, spv }};
             async { command }.sync();
-            
-            ///
-            Path tmp = "./.tmp/"; ///
-            if (spv.exists() && spv.modified_at() >= path.modified_at()) {
-                spv.copy(tmp);
-            } else {
-                // look for tmp. if this does not exist we can not proceed.
-                // compilation failure, so look for temp which worked before.
-            }
+            bool     exists = spv.exists();
             
             /// if it succeeds, the spv is written and that will have a greater modified-at
+            if (exists && spv.modified_at() >= path.modified_at())
+                spv.copy(tmp);
+            else if (!exists) {
+                const bool use_previous = true;
+                if (use_previous) {
+                    /// try the old temp (previously succeeded build, if avail)
+                    Path prev_spv = tmp / (spv.stem() + ".spv");
+                    if (!prev_spv.exists())
+                        console.fault("failure to find backup of shader: {0}", { path.stem() });
+                    spv = prev_spv;
+                } else
+                    console.fault("shader compilation failed: {0}", { path.stem() });
+            }
         }
 #endif
 
-    if (!m.count(key)) {
+    if (!m.count(src_path)) {
         auto mc     = VkShaderModuleCreateInfo { };
         str code    = str::read_file(spv);
         mc.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         mc.codeSize = code.size();
         mc.pCode    = reinterpret_cast<const uint32_t *>(code.cstr());
-        assert (vkCreateShaderModule(device, &mc, null, &m[key]) == VK_SUCCESS);
+        assert (vkCreateShaderModule(device, &mc, null, &m[src_path]) == VK_SUCCESS);
     }
-    return m[key];
+    return m[src_path];
 }
 
 uint32_t Device::memory_type(uint32_t types, VkMemoryPropertyFlags props) {
@@ -332,10 +339,12 @@ void Device::initialize(Window *window) {
     /// create descriptor pool (to my mind i have no idea why this is here.  its repeated in its entirety for hte pipeline)
     /// it seems completely 1:1 relationship with your maximum resource user, although i could be wrong
     const int guess    = 8;
-    auto      ps       = std::array<VkDescriptorPoolSize, 2> {};
+    auto      ps       = std::array<VkDescriptorPoolSize, 7> {};
     ps[0]              = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         frame_count * guess };
-    ps[1]              = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count * guess };
-    ps[2]              = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count * guess };
+    
+    for (int i = 1; i < 7; i++)
+        ps[i]          = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, frame_count * guess };
+    
     auto dpi           = VkDescriptorPoolCreateInfo {
                             VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, null, 0,
                             frame_count * guess, uint32_t(ps.size()), ps.data() };

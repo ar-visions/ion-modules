@@ -195,12 +195,21 @@ struct Composer {
         for (Bind &bind: e.e->binds) {
             /// the ref is just a member ref (it could potentially be grabbed backwards but only nutters would)
             /// so the receiver child gets its member set to this ref, deref'd
-            if (bind.shared) {
+            Shared sh = bind.shared ? bind.shared : parent->shared(bind.id);
+            if (sh) {
                 console.assertion(child->externals.count(bind.id) == 1, "{0} not found on {1}", { bind.id, str(child->class_name) });
                 Member &child_member = (Member &)*child->externals[bind.id]; // child_member == null
                 /// could be nice to have direct set access through generic shared interface
-                if (is_update || !(child_member.shared == bind.shared)) {
-                    child_member.lambdas->type_set(child_member, bind.shared);
+                if (is_update || !(child_member.shared == sh)) {
+                    /// strict type mode here, and i think conversion should be allowed on basis
+                    Type &bind_type  = sh.type();
+                    Type &child_type = child_member.type;
+                    node          *n = (node *)child_member.arg;
+                    if (child_type  != bind_type) {
+                        console.fault("type-mismatch assigning {0}:{1}:{2} (type given: {3})",
+                            { str(n->class_name), child_member.name, child_type.name<str>(), bind_type.name<str>() });
+                    }
+                    child_member.lambdas->type_set(child_member, sh);
                     changed += bind.id;
                 }
             } else

@@ -14,10 +14,15 @@ struct map:io {
     std::shared_ptr<vpairs>          pairs;
     static typename vpairs::iterator iterator;
     ///
-    vpairs &realloc(size_t sz)              { return *(pairs = std::shared_ptr<vpairs>(new vpairs(sz))); }
+    vpairs &realloc(size_t sz)              {
+        pairs = std::shared_ptr<vpairs>(new vpairs());
+        if (sz)
+            pairs->reserve(sz);
+        return *pairs;
+    }
     
     map(std::nullptr_t n = null)            { realloc(0); }
-    map(size_t         reserve)             { realloc(reserve); }
+    map(size_t         sz)                  { realloc(sz); }
     void reserve(size_t sz)                 { pairs->reserve(sz); }
     void clear(size_t sz = 0)               { pairs->clear(); if (sz) pairs->reserve(sz); }
     map(std::initializer_list<pair<K,V>> p) {

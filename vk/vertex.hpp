@@ -1,29 +1,26 @@
 #pragma once
 
-/// vulkan people like to flush the entire glyph cache per type
-typedef array<VkVertexInputAttributeDescription> VAttribs;
-
 /// soon: graph-mode shaders? not exactly worth the trouble at the moment especially with live updates not being as quick as glsl recompile
 struct Vertex {
     enum Attr {
-        Position  = (1 << 0),
-        Normal    = (1 << 1),
-        UV        = (1 << 2),
-        Color     = (1 << 3),
-        Tangent   = (1 << 4),
-        BiTangent = (1 << 5),
+        Position  = 0, /// same 'location' as glsl (with hope, that is)
+        Normal    = 1,
+        UV        = 2,
+        Color     = 3,
+        Tangent   = 4,
+        BiTangent = 5,
     };
     
     ///
     typedef FlagsOf<Attr> Attribs;
     
     ///
-    glm::vec3 pos;  // position
-    glm::vec3 norm; // normal position
-    glm::vec2 uv;   // texture uv coordinate
-    glm::vec4 clr;  // color
-    glm::vec3 ta;   // tangent
-    glm::vec3 bt;   // bi-tangent, we need an arb in here, or two. or ten.
+    vec3 pos;  // position
+    vec3 norm; // normal position
+    vec2 uv;   // texture uv coordinate
+    vec4 clr;  // color
+    vec3 ta;   // tangent
+    vec3 bt;   // bi-tangent, we need an arb in here, or two. or ten.
     
     ///
     static VAttribs attribs(FlagsOf<Attr> attr) {
@@ -88,10 +85,10 @@ struct VertexData {
     VertexData(Device &device, Buffer buffer, std::function<VAttribs()> fn_attribs) :
                 device(&device), buffer(buffer), fn_attribs(fn_attribs)  { }
     ///
-    operator VkBuffer() { return buffer;         }
-    size_t       size() { return buffer.sz;      }
-       operator bool () { return device != null; }
-       bool operator!() { return device == null; }
+    operator  VkBuffer &() { return buffer;         }
+    size_t         size () { return buffer.sz;      }
+       operator    bool () { return device != null; }
+       bool    operator!() { return device == null; }
 };
 
 ///
@@ -125,18 +122,9 @@ struct IndexBuffer:IndexData {
 struct Shaders {
     map<string, string> map;
     /// default construction
-    Shaders(std::nullptr_t n = null) {
-        map["*"] = "main";
-    }
+    Shaders(std::nullptr_t n = null) { map["*"] = "main"; }
     
-    bool operator==(Shaders &ref) {
-        return map == ref.map;
-    }
-    
-    operator bool()  { return  map.size(); }
-    bool operator!() { return !map.size(); }
-    
-    /// group=shader
+    /// *=shader3,group=shader,group2=shader2
     Shaders(string v) { /// str is the only interface in it.  everything else is just too messy for how simple the map is
         auto sp = v.split(",");
         for (auto v: sp) {
@@ -147,13 +135,11 @@ struct Shaders {
             map[key] = value;
         }
     }
-    string operator()(string &group) {
-        return map.count(group) ? map[group] : map["*"];
-    }
-    string &operator[](string n) {
-        return map[n];
-    }
-    size_t count(string n) {
-        return map.count(n);
-    }
+    Shaders(const char * v) : Shaders(str(v)) { }
+    bool     operator== (Shaders &ref) { return map == ref.map;   }
+    operator      bool()               { return  map.size();   }
+    bool     operator!()               { return !map.size();   }
+    str      operator ()(str &group)   { return  map.count(group) ? map[group] : map["*"]; }
+    str &    operator[] (str n)        { return  map[n];       }
+    size_t      count   (str n)        { return  map.count(n); }
 };

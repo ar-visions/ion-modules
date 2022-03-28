@@ -1,71 +1,80 @@
 #version 450
 
 ///
+/// use of the pre-processor here, for permutable shaders based on use of optional attribs and assets
+///
+
 struct Light {
-    vec4  pos_rads;
+    vec4     pos_rads;
+    vec4     intensity;
 };
 
-///
 struct Material {
-    vec4  ambient;
-    vec4  diffuse;
-    vec4  specular;
-    vec4  shininess;
+    vec4     ambient;
+    vec4     diffuse;
+    vec4     specular;
+    vec4     shininess;
 };
 
-///
 struct MVP {
-    mat4  model;
-    mat4  view;
-    mat4  proj;
+    mat4     model;
+    mat4     view;
+    mat4     proj;
 };
 
-///
-layout(binding = 0) uniform UniformBufferObject {
+layout(binding      = 0) uniform UniformBufferObject {
     MVP      mvp;
     Material mat;
     vec4     displace;
     Light    lights[2];
 } ubo;
 
-/// no-op; the vector of texture just cant do for this, it must be a map
-# pragma opt COLOR
-layout(binding  = 1) uniform  sampler2D  tx_color;
+layout(binding      =      COLOR) uniform  sampler2D  tx_color;
 
-/// this makes this a build-var (these are multi-compiled for the optimizers to do their thing)
-# pragma opt DISPLACE
-layout(binding  = 2) uniform  sampler2D  tx_displace;
+#ifdef NORMAL
+    layout(binding  =       MASK) uniform  sampler2D  tx_mask;
+    layout(binding  =     NORMAL) uniform  sampler2D  tx_normal;
+#endif
 
-///
-# pragma opt NORMAL
-layout(binding  = 3) uniform  sampler2D  tx_normal;
+#ifdef SHINE
+    layout(binding  =      SHINE) uniform  sampler2D  tx_shine;
+    layout(binding  =      ROUGH) uniform  sampler2D  tx_rough;
+#endif
 
-///
-layout(location = 0) in       vec3       a_position;
-layout(location = 1) in       vec3       a_normal;
-layout(location = 2) in       vec2       a_uv;
-layout(location = 3) in       vec4       a_color;
-layout(location = 4) in       vec3       a_tangent;
-layout(location = 5) in       vec3       a_bitangent;
+#ifdef DISPLACE
+    layout(binding  =   DISPLACE) uniform  sampler2D  tx_displace;
+#endif
 
-///
-layout(location = 0) out      vec4       v_color;
-layout(location = 1) out      vec3       v_normal;
-layout(location = 2) out      vec2       v_uv;
+#ifdef LOCATION_0
+    layout(location = LOCATION_0) in       vec3       a_position;
+    layout(location = LOCATION_1) in       vec3       a_normal;
+    layout(location = LOCATION_2) in       vec2       a_uv;
+#endif
+
+#ifdef NORMAL
+    layout(location = LOCATION_3) in       vec4       a_color;
+    layout(location = LOCATION_4) in       vec3       a_right;
+    layout(location = LOCATION_5) in       vec3       a_up;
+#endif
+
+layout(location     =          0) out      vec4       v_color;
+layout(location     =          1) out      vec3       v_normal;
+layout(location     =          2) out      vec2       v_uv;
 
 void main() {
-    mat4       vm = ubo.mvp.view * ubo.mvp.model;
+    mat4 vm = ubo.mvp.view * ubo.mvp.model;
     
-    #if DISPLACE
+    #ifdef DISPLACE
+        /// move position along normal of sampled value from displacement map
         vec4   dv = texture(tx_displace, a_uv);
         vec4 wpos = vm * vec4(a_position + a_normal * (dv.xyz - 0.5) * ubo.displace.x, 1.0);
     #else
         vec4 wpos = vm * vec4(a_position, 1.0);
     #endif
     
-    v_color      = vec4(1.0); //ubo.mat.ambient + a_color;
-    v_normal     = (vm * vec4(a_normal, 0.0)).xyz;
-    v_uv         = a_uv;
+    v_color       = vec4(1.0); //ubo.mat.ambient + a_color;
+    v_normal      = (vm * vec4(a_normal, 0.0)).xyz;
+    v_uv          = a_uv;
     
-    gl_Position  = ubo.mvp.proj * wpos;
+    gl_Position   = ubo.mvp.proj * wpos;
 }

@@ -1,22 +1,24 @@
 #pragma once
 
-/// this could perform the shifty stuff for storage, but i am currently using it in simpleton fashion, ill experiment with that, after, though.
 template <typename T>
 struct FlagsOf:io {
     uint32_t flags = 0;
+    ///
     FlagsOf(std::nullptr_t = null) { }
     FlagsOf(std::initializer_list<T> l) {
-        for (auto i:l)
-            flags |= i;
+        for (auto v:l)
+            flags |= flag_for(v);
     }
-    FlagsOf(T f) : flags(uint32_t(f))   { }
-    bool operator[]  (T c) { return (flags & c) == c; }
-    void operator += (T f) { flags |=  f; }
-    void operator -= (T f) { flags &= ~f; }
-    operator var() { return flags; }
-    FlagsOf(var &v) {
-    }
-    operator bool() {
-        return flags;
+    FlagsOf (T f) : flags(uint32_t(f))  { }
+    FlagsOf (var &v)                    { flags = uint32_t(v);   }
+    operator   var()                    { return flags;          }
+    operator  bool()                    { return flags != 0;     }
+    uint32_t flag_for(T v)              { return 1 << v;         }
+    bool operator!()                    { return flags == 0;     }
+    void operator += (T v)              { flags |=  flag_for(v); }
+    void operator -= (T v)              { flags &= ~flag_for(v); }
+    bool operator[]  (T v)              {
+        uint32_t f = flag_for(v);
+        return (flags & f) == f;
     }
 };

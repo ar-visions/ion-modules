@@ -3,7 +3,7 @@
 #include <vk/vk.hpp>
 #include <vk/buffer.hpp>
 #include <vk/uniform.hpp>
-
+/*
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp> // glm::vec3
@@ -12,23 +12,24 @@
 #include <glm/ext/matrix_transform.hpp> // glm::translate, glm::rotate, glm::scale
 #include <glm/ext/matrix_clip_space.hpp> // glm::perspective
 #include <glm/ext/scalar_constants.hpp> // glm::pi
+*/
 
 struct Light {
-    glm::vec4 pos_rads;
-    glm::vec4 color;
+    vec4f pos_rads;
+    vec4f color;
 };
 ///
 struct Material {
-    glm::vec4 ambient;
-    glm::vec4 diffuse;
-    glm::vec4 specular;
-    glm::vec4 attr;
+    vec4f ambient;
+    vec4f diffuse;
+    vec4f specular;
+    vec4f attr;
 };
 ///
 struct MVP {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
+    m44f model;
+    m44f view;
+    m44f proj;
 };
 ///
 struct Frame {

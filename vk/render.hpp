@@ -9,6 +9,8 @@ struct Render {
     array<VkSemaphore> render_finish;      /// if we're lucky, that could adapt to compute model integration as well.
     array<VkFence>     fence_active;
     array<VkFence>     image_active;
+    VkCommandBuffer    render_cmd;
+    rgba               color  = {0,0,0,1};
     int                cframe = 0;
     int                sync = 0;
     

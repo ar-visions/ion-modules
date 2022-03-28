@@ -118,15 +118,19 @@ struct Type {
     size_t      id        = 0;
     TypeBasics *basics    = null;
     
-    bool operator==(const Type &b)     const { return id == b.id;      }
-    bool operator==(Type &b)           const { return id == b.id;      }
+    bool operator==(const     Type &b) const { return id == b.id;      }
+    bool operator==(Type           &b) const { return id == b.id;      }
     bool operator==(Type::Specifier b) const { return id == size_t(b); }
+    ///
+    bool operator!=(const Type     &b) const { return id != b.id;      }
+    bool operator!=(Type           &b) const { return id != b.id;      }
+    bool operator!=(Type::Specifier b) const { return id != size_t(b); }
+    ///
     bool operator>=(Type::Specifier b) const { return id >= size_t(b); }
     bool operator<=(Type::Specifier b) const { return id <= size_t(b); }
     bool operator> (Type::Specifier b) const { return id >  size_t(b); }
     bool operator< (Type::Specifier b) const { return id <  size_t(b); }
-    bool operator!=(Type::Specifier b) const { return id != size_t(b); }
-    
+    ///
     inline operator size_t()           const { return id;              }
     inline operator int()              const { return int(id);         }
     inline operator bool()             const { return id > 0;          }
@@ -199,14 +203,14 @@ struct ptr {
     } *info;
     ///
     private:
-    void alloc(T *&p) {
+    void alloc(T *&ptr) {
         size_t   asz       = sizeof(Alloc) + sizeof(T);
         info               = (Alloc *)calloc(asz, 1);
         info->type         = Id<T>();
         info->refs         =  2; /// and i thought i saw a two...
         info->ksize        = sizeof(T);
         info->mstart       = null;
-        p                  = &info->mstart;
+        ptr                = &info->mstart;
     }
     public:
     ///
@@ -252,8 +256,8 @@ struct ptr {
     /// for our own they are extensions on the Alloc struct and for imported ones we set the member
     T *effective() const  {
         return (T *)(info ? (info->ksize > 0) ? &info->mstart : info->mstart : null);
-        
     }
+    
     ///
     T *operator &()       { return  effective(); }
     T *operator->()       { return  effective(); }
@@ -279,6 +283,7 @@ struct ptr {
     C(E t = D):ex<C>(t) { }\
     C(string s):ex<C>(D) { kind = resolve(s); }
 
+/// ex-bound enums shorthand for most things
 #define enums(C,E,D,ARGS...) \
     struct C:ex<C> {\
         static Symbols symbols;\
@@ -391,7 +396,7 @@ public:
     /// assertion test with log out upon error
     inline void assertion(bool a0, str t, array<var> a = {}) {
         if (!a0) {
-            intern(t, a, true);
+            intern(t, a, false); /// todo: ion:dx environment
             assert(a0);
         }
     }

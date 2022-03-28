@@ -10,10 +10,10 @@ struct Path {
     typedef std::function<void(Path)> Fn;
     
     enum Flags {
-        Recursion     = 1,
-        NoSymLinks    = 2,
-        NoHidden      = 4,
-        UseGitIgnores = 8
+        Recursion,
+        NoSymLinks,
+        NoHidden,
+        UseGitIgnores
     };
     
     path_t p;

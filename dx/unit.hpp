@@ -1,20 +1,20 @@
 #pragma once
 
 struct Unit:io {
-    enum UFlag {
-        Standard = 1,
-        Metric   = 2,
-        Percent  = 4,
-        Time     = 8,
-        Distance = 16
+    enum Attrib {
+        Standard,
+        Metric,
+        Percent,
+        Time,
+        Distance
     };
     
     ///
     static std::unordered_map<str, int> u_flags;
-    str            type   = null;
-    real           value  = dx::nan<real>();
-    int64_t        millis = 0;
-    FlagsOf<UFlag> flags  = null;
+    str             type   = null;
+    real            value  = dx::nan<real>();
+    int64_t         millis = 0;
+    FlagsOf<Attrib> flags  = null; /// FlagsOf makes flags out of most of the things
     
     ///
     void init() {
@@ -25,7 +25,7 @@ struct Unit:io {
             }
         }
         if (type && u_flags.count(type))
-            flags += UFlag(u_flags[type]);
+            flags += Attrib(u_flags[type]);
     }
     
     ///

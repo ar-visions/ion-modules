@@ -133,6 +133,7 @@ struct Shared {
     template <typename T>
     operator T *() const {
         static Type id = Id<T>();
+        if (false)
         if (p && !(id == p->type)) {
             std::string a =      id.name<std::string>();
             std::string b = p->type.name<std::string>();

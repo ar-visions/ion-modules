@@ -10,7 +10,7 @@
 
 template <typename T>
 struct Vector {
-    operator bool() const {
+    explicit operator bool() const {
         if constexpr (std::is_same_v<T, double> || std::is_same_v<T, float>)
             return !std::isnan(*(T *)this);
         return true;
@@ -291,17 +291,17 @@ struct Vec4: Vector<T> {
     inline void operator *= (T r)          { x *= r;   y *= r;   z *= r;   w *= r; }
     inline void operator /= (T r)          { x /= r;   y /= r;   z /= r;   w /= r; }
     
-    inline Vec4<T> operator + (Vec4<T>  r) { return { x + r.x, y + r.y, z + r.z, w + r.z }; }
-    inline Vec4<T> operator - (Vec4<T>  r) { return { x - r.x, y - r.y, z - r.z, z - r.z }; }
-    inline Vec4<T> operator * (Vec4<T>  r) { return { x * r.x, y * r.y, z * r.z, z * r.z }; }
-    inline Vec4<T> operator / (Vec4<T>  r) { return { x / r.x, y / r.y, z / r.z, z / r.z }; }
+    inline Vec4<T> operator + (Vec4<T>  r) { return { x + r.x, y + r.y, z + r.z, w + r.w }; }
+    inline Vec4<T> operator - (Vec4<T>  r) { return { x - r.x, y - r.y, z - r.z, w - r.w }; }
+    inline Vec4<T> operator * (Vec4<T>  r) { return { x * r.x, y * r.y, z * r.z, w * r.w }; }
+    inline Vec4<T> operator / (Vec4<T>  r) { return { x / r.x, y / r.y, z / r.z, w / r.w }; }
     
     inline Vec4<T> operator * (T v)        { return { x * v, y * v, z * v, w * v }; }
-    inline Vec4<T> operator / (T v)        { return { x / v, y / v, z / v, z / v }; }
+    inline Vec4<T> operator / (T v)        { return { x / v, y / v, z / v, w / v }; }
     
     inline Vec3<T> xyz()                   { return Vec3<T> { x, y, z }; }
     
-    inline operator Vec4<float>()          { return Vec4<float>  { float(x),  float(y),  float(z),  float(w)  }; }
+    inline operator Vec4<float>()          { return Vec4<float>  {  float(x),  float(y),  float(z),  float(w) }; }
     inline operator Vec4<double>()         { return Vec4<double> { double(x), double(y), double(z), double(w) }; }
     
     inline Vec2<T> xy()                    { return Vec2<T> { x, y }; }
@@ -447,6 +447,7 @@ struct Rect: Vector<T> {
     }
 };
 
+/// never change:
 typedef Vec2<float>  vec2f;
 typedef Vec2<real>   vec2;
 typedef Vec2<double> vec2d;

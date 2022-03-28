@@ -23,13 +23,13 @@ struct Object:node {
     
     /// declare members their default values
     void bind() {
-        external("uniform",   m.ubo,        UniformData     { null });
-        external("model",     m.model,      str             { ""   });
-        external("skin",      m.skin,       str             { ""   });
-        external("shaders",   m.shaders,    Shaders         { "*=main" });
-        external("assets",    m.assets,     Asset::Types    {  Asset::Color,     Asset::Displace, Asset::Normal });
-        external("attr",      m.attr,       Vertex::Attribs { Vertex::Position, Vertex::UV,      Vertex::Normal });
-        external("render",    m.render,     Rendering       { Rendering::Shader });
+        external <UniformData>     ("uniform",  m.ubo,     { null });
+        external <str>             ("model",    m.model,   "");
+        external <str>             ("skin",     m.skin,    "");
+        external <Shaders>         ("shaders",  m.shaders, { "*=main" });
+        external <Asset::Types>    ("assets",   m.assets,  { Asset::Color });
+        external <Vertex::Attribs> ("attr",     m.attr,    { Vertex::Position, Vertex::UV, Vertex::Normal });
+        external <Rendering>       ("render",   m.render,  { Rendering::Shader });
     }
     
     /// change management
@@ -41,8 +41,9 @@ struct Object:node {
     
     /// rendition of pipes
     Element render() {
-        if (pipes) for (auto &[name, pipe]: pipes.map())
+        if (pipes) for (auto &[name, pipe]: pipes.map()) {
             device().render.push(pipe);
+        }
         return node::render();
     }
 };

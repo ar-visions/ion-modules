@@ -16,13 +16,12 @@ PipelineData::Memory::~Memory() {
 }
 
 /// constructor for pipeline memory; worth saying again.
-PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
+PipelineData::Memory::Memory(Device     &device,     UniformData &ubo,
                              VertexData    &vbo,     IndexData   &ibo,
                              Assets     &assets,     size_t       vsize, // replace all instances of array<Texture *> with a map<str, Teture *>
-                             rgba           clr,     string       shader,
-                             VkStateFn      vk_state):
+                             string       shader,    VkStateFn    vk_state):
         device(&device), shader(shader),   ubo(ubo),
-           vbo(vbo),        ibo(ibo),   assets(assets),  vsize(vsize),   clr(clr) {
+           vbo(vbo),        ibo(ibo),   assets(assets),  vsize(vsize) {
     ///
     auto bindings  = array<VkDescriptorSetLayoutBinding>(1 + assets.size());
          bindings += { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr };
@@ -67,11 +66,12 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
         VkWriteDescriptorSet *ptr = v_writes.data();
         vkUpdateDescriptorSets(dev, uint32_t(sz), ptr, 0, nullptr);
     }
-    str    cwd = Path::cwd();
-    str s_vert = var::format("{0}/shaders/{1}.vert", { cwd, shader });
-    str s_frag = var::format("{0}/shaders/{1}.frag", { cwd, shader });
-    auto  vert = device.module(s_vert, assets, Device::Vertex);
-    auto  frag = device.module(s_frag, assets, Device::Fragment);
+    str        cwd = Path::cwd();
+    str     s_vert = var::format("{0}/shaders/{1}.vert", { cwd, shader });
+    str     s_frag = var::format("{0}/shaders/{1}.frag", { cwd, shader });
+    VAttribs vattr = vbo.fn_attribs();
+    auto      vert = device.module(s_vert, vattr, assets, Device::Vertex);
+    auto      frag = device.module(s_frag, vattr, assets, Device::Fragment);
     ///
     array<VkPipelineShaderStageCreateInfo> stages {{
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, null, 0,
@@ -180,59 +180,5 @@ PipelineData::Memory::Memory(Device        &device,  UniformData &ubo,
     assert (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &pipeline) == VK_SUCCESS);
 }
 
-/// create graphic pipeline
 void PipelineData::Memory::update(size_t frame_id) {
-    auto         &device = *this->device;
-    Frame         &frame = device.frames[frame_id];
-    VkCommandBuffer &cmd = frame_commands[frame_id];
-    auto     clear_color = [&](rgba c) {
-        return VkClearColorValue {{ float(c.r) / 255.0f, float(c.g) / 255.0f,
-                                    float(c.b) / 255.0f, float(c.a) / 255.0f }};
-    };
-    
-    /// reallocate command
-    vkFreeCommandBuffers(device, device.command, 1, &cmd);
-    auto alloc_info = VkCommandBufferAllocateInfo {
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        null, device.command, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
-    assert(vkAllocateCommandBuffers(device, &alloc_info, &cmd) == VK_SUCCESS);
-    
-    /// begin command
-    auto begin_info = VkCommandBufferBeginInfo {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-    assert(vkBeginCommandBuffer(cmd, &begin_info) == VK_SUCCESS);
-    
-    ///
-    auto   clear_values = array<VkClearValue> {
-        {        .color = clear_color(clr)}, // for image rgba  sfloat
-        { .depthStencil = {1.0f, 0}}         // for image depth sfloat
-    };
-    
-    /// nothing in canvas showed with depthStencil = 0.0.
-    auto    render_info = VkRenderPassBeginInfo {
-        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .pNext           = null,
-        .renderPass      = VkRenderPass(device),
-        .framebuffer     = VkFramebuffer(frame),
-        .renderArea      = {{0,0}, device.extent},
-        .clearValueCount = clear_values.size(),
-        .pClearValues    = clear_values.data()
-    };
-
-    /// gather some rendering ingredients
-    vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    
-    /// toss together a VBO array
-    array<VkBuffer>    a_vbo   = { vbo };
-    VkDeviceSize   offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd, 0, 1, a_vbo.data(), offsets);
-    vkCmdBindIndexBuffer(cmd, ibo, 0, ibo.buffer.type_size == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, desc_sets.data(), 0, nullptr);
-    
-    /// flip around an IBO and toss it in the oven at 410F
-    uint32_t sz_draw = ibo.size();
-    vkCmdDrawIndexed(cmd, sz_draw, 1, 0, 0, 0); /// ibo size = number of indices (like a vector)
-    vkCmdEndRenderPass(cmd);
-    assert(vkEndCommandBuffer(cmd) == VK_SUCCESS);
 }

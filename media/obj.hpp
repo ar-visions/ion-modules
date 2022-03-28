@@ -6,13 +6,11 @@ typedef size_t IPos;
 typedef size_t INormal;
 typedef size_t IUV;
 
-/// best thing to do: support normal map as parameter level
-/// this is done with a constexpr check on V
 template <typename V>
 struct Obj {
     struct Group {
         str             name;
-        array<uint32_t> ibo; /// faces no
+        array<uint32_t> ibo;
         Group()          { }
         bool operator!() { return !name; }
         operator bool () { return  name; }
@@ -68,18 +66,19 @@ struct Obj {
                     auto key = w[i];
                     if (indices.count(key) == 0) {
                         indices[key] = uint32_t(verts++);
-                        auto  sp =  w[i].split("/");
-                        int  iv  = sp[0].integer();
-                        int  ivt = sp[1].integer();
-                        int  ivn = sp[2].integer();
-                        vbo += fn(groups[g], iv ?  v[ iv-1] : vec3::null(),
-                                            ivt ? vt[ivt-1] : vec2::null(),
-                                            ivn ? vn[ivn-1] : vec3::null());
+                        auto      sp =  w[i].split("/");
+                        int      iv  = sp[0].integer();
+                        int      ivt = sp[1].integer();
+                        int      ivn = sp[2].integer();
+                        vbo         += fn(groups[g], iv ?  v[ iv-1] : vec3::null(),
+                                                    ivt ? vt[ivt-1] : vec2::null(),
+                                                    ivn ? vn[ivn-1] : vec3::null());
                     }
                     groups[g].ibo += indices[key];
                 }
             }
         }
-        // dont think its a hack because this is just avoiding a sort of graph-mode shader, which infact i like
+        int test = 0; /// todo: hash table in map
+        test++;
     }
 };

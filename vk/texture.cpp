@@ -10,11 +10,11 @@ Texture::Data::Data(Device *device, vec2i sz, rgba clr,
                     ms(ms), format(format), usage(u), aflags(a), lazy(lazy) { }
 
 /// create with image (rgba required)
-Texture::Data::Data(Device *device, Image &im,
+Texture::Data::Data(Device *device, Image &im, Asset::Type t,
                     VkImageUsageFlags  u, VkMemoryPropertyFlags m,
                     VkImageAspectFlags a, bool ms,
                     VkFormat           f, int  mips) :
-                       device(device), sz(im.size()), mips(auto_mips(mips, sz)),
+                       device(device), sz(im.size()), asset_type(t), mips(auto_mips(mips, sz)),
                        mprops(m),  ms(ms),  format(f),  usage(u), aflags(a),  lazy(im) { }
 
 Texture::Data::Data(Device *device, vec2i sz, VkImage image, VkImageView view,

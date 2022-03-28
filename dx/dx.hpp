@@ -1,4 +1,9 @@
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wambiguous-reversed-operator"
+#pragma GCC diagnostic ignored "-Wdefaulted-function-deleted"
+
+///
 #include <dx/type.hpp>
 #include <dx/bool.hpp>
 #include <dx/alloc.hpp>

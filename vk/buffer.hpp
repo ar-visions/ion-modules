@@ -11,7 +11,7 @@ struct Buffer {
     size_t         sz;
     size_t         type_size;
     void           destroy();
-    operator       VkBuffer();
+    operator       VkBuffer &();
     operator       VkDeviceMemory();
     ///
     Buffer(std::nullptr_t n = null) : device(null) { }

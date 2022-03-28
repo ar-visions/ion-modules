@@ -170,10 +170,6 @@ public:
         return (nv0 == -1 || nv1 == -1) ? ' ' : ((nv0 * 16) + nv1);
     }
 
-    ///
-    /// the view is oriented around emotion. you can sort of have everything but you can also just have a narrow cone.
-    /// think of it as a sphere of emotion and you can have many parts in aggregate.
-    ///
     string replace(string sfrom, string sto, bool all = true) const {
         size_t start_pos = 0;
         std::string  str = *sh;
@@ -188,21 +184,18 @@ public:
         return str;
     }
 
-    ///
     string substr(int start, size_t len) const {
         std::string &s = ref();
         return start >= 0 ? s.substr(size_t(start), len) :
                s.substr(size_t(std::max(0, int(s.length()) + start)), len);
     }
 
-    ///
     string substr(int start) const {
         std::string &s = ref();
         return start >= 0 ? s.substr(size_t(start)) :
                s.substr(size_t(std::max(0, int(s.length()) + start)));
     }
 
-    ///
     array<string> split(string delim) const {
         array<string> result;
         size_t        start = 0, end, delim_len = delim.size();
@@ -222,12 +215,10 @@ public:
         return result;
     }
 
-    ///
     array<string> split(const char *delim) const {
         return split(string(delim));
     }
     
-    ///
     array<string> split() const {
         array<string> result;
         string chars = "";
@@ -246,7 +237,6 @@ public:
         return result;
     }
 
-    ///
     int index_of(const char *f) const {
         std::string::size_type loc = ref().find(f, 0);
         return (loc != std::string::npos) ? int(loc) : -1;
@@ -354,7 +344,6 @@ public:
         return false;
     }
 
-    /// trim white space
     string trim() const {
         auto       &s = ref();
         auto   start  = s.begin();
@@ -365,6 +354,8 @@ public:
         return std::string(start, end + 1);
     }
 };
+
+static inline string operator+(const char *cstr, string rhs) { return string(cstr) + rhs; }
 
 typedef string str;
 

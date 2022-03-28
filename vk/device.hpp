@@ -5,6 +5,9 @@
 #include <vk/frame.hpp>
 #include <vk/texture.hpp>
 
+/// vulkan people like to flush the entire glyph cache per type
+typedef array<VkVertexInputAttributeDescription> VAttribs;
+
 struct PipelineData;
 struct Window;
 struct Texture;
@@ -45,7 +48,7 @@ struct Device {
     
     static Device &null_device();
     
-    VkShaderModule module(Path p, Assets &rsc, Module type);
+    VkShaderModule module(Path p, VAttribs &vattr, Assets &rsc, Module type);
     ///
     void            initialize(Window *);
     /// todo: initialize for compute_only

@@ -130,13 +130,13 @@ Internal &Internal::bootstrap() {
 Texture Vulkan::texture(vec2i size) {
     auto &i = Internal::handle();
     i.tx_skia.destroy();
-    i.tx_skia = Texture { &i.device, size, rgba { 1.0, 0.0, 1.0, 1.0 },
+    i.tx_skia = Texture { &i.device, size, rgba { 1.0, 1.0, 1.0, 1.0 },
         VK_IMAGE_USAGE_SAMPLED_BIT          | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT     | VK_IMAGE_USAGE_TRANSFER_DST_BIT     |
         VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
         false, VK_FORMAT_R8G8B8A8_UNORM, -1 };
     i.tx_skia.push_stage(Texture::Stage::Color);
-    return i.tx_skia;
+    return i.tx_skia; /// created for skia, likely SRGB change causing incompatibility internally; we never tested that after the fix to the color issue seen
 }
 
 static recti s_rect;
@@ -157,7 +157,7 @@ int Vulkan::main(Composer *composer) {
     Window      &w = *i.window;
     Device &device =  i.device;
     Canvas  canvas = Canvas(sz, Canvas::Context2D);
-    //Texture &tx_canvas = i.tx_skia;
+    Texture &tx_canvas = i.tx_skia;
     
     ///
     composer->sz = &w.size;
@@ -169,26 +169,24 @@ int Vulkan::main(Composer *composer) {
 
     /// look to ye for working pipes.
     /// canvas polygon data (pos, norm, uv, color)
-    ///
+    /// its been very hard, but staying the course is the way forward.  we just keep doign this every day for about a month, ok?  one Month, to finish Orbiter.  lets be realistic now.
+    /// the real thing is, there are some components to design, so that will take a slight bit of time.  i dont want to do major transitions all over the place and dialogs
+    /// but maybe thats a good idea.
     
-    /*
-    auto   vertices =        Vertex::square ();
+    auto   vertices =       Vertex::square ();
     auto    indices =       array<uint16_t> { 0, 1, 2, 2, 3, 0 };
-    auto   textures =      Resources {{ Resource::Color, &tx_canvas }};
-    auto        vbo =  VertexBuffer<Vertex> { device, vertices };
+    auto   textures =               Assets {{ Asset::Color, &tx_canvas }};
+    auto      vattr =      Vertex::Attribs  { Vertex::Position, Vertex::UV, Vertex::Normal };
+    auto        vbo =  VertexBuffer<Vertex> { device, vertices, vattr };
     auto        ibo = IndexBuffer<uint16_t> { device, indices  };
-    auto        uni =   UniformBuffer<MVPL> { device, [&](MVPL &mvp) {
-        mvp         = MVPL {
-             .model = glm::mat4(1.0), //m44f::identity(),
-             .view  = glm::mat4(1.0), //m44f::identity(),
-             .proj  = glm::ortho(-0.5f, 0.5f, -0.5f, 0.5f, 0.5f, -0.5f)
+    auto        uni =    UniformBuffer<MVP> { device, [&](MVP &mvp) {
+        mvp         = MVP {
+             .model = m44f::identity(),
+             .view  = m44f::identity(),
+             .proj  = m44f::ortho(-0.5f, 0.5f, -0.5f, 0.5f, {0.5f, -0.5f})
         };
     }};
-    auto         pl = Pipeline<Vertex> {
-        device, uni, vbo, ibo, textures,
-        { 0.0, 0.0, 0.0, 0.0 }, std::string("main") /// transparent canvas overlay; are we clear? crystal.
-    };
-    */
+    auto         pl = Pipeline<Vertex> { device, uni, vbo, ibo, textures, std::string("main") };
     
     /// prototypes add a Window&
     w.fn_cursor  = [&](double x, double y)         { composer->cursor(w, x, y);    };
@@ -205,16 +203,19 @@ int Vulkan::main(Composer *composer) {
             init = true;
         }
 
-        canvas.clear(rgba {0.0, 0.0, 0.0, 0.0});
+        canvas.clear(rgba {0.0, 1.0, 0.0, 1.0});
+        canvas.color(rgba {1.0, 1.0, 1.0, 1.0});
+        rectd r = rectd { 0, 0, 320, 240 };
+        canvas.text("hello world", r, {0.5, 0.5}, {0.0, 0.0}, false);
         composer->render();
         canvas.flush();
     
         // this should only paint the 3D pipeline, no canvas
         
-        //i.tx_skia.push_stage(Texture::Stage::Shader);
-        //device.render.push(pl); /// Any 3D object would have passed its pipeline prior to this call (in render)
+        i.tx_skia.push_stage(Texture::Stage::Shader);
+        device.render.push(pl); /// Any 3D object would have passed its pipeline prior to this call (in render)
         device.render.present();
-        //i.tx_skia.pop_stage();
+        i.tx_skia.pop_stage();
         
         if (composer->root)
             w.set_title(composer->root->m.text.label);

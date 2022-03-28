@@ -1,5 +1,6 @@
 #pragma once
 #include <dx/async.hpp>
+#include <web/uri.hpp>
 
 struct SocketInternal;
 struct Socket {

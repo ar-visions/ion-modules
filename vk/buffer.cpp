@@ -54,7 +54,7 @@ Buffer::operator VkDeviceMemory() {
     return memory;
 }
 
-Buffer::operator VkBuffer() {
+Buffer::operator VkBuffer &() {
     return buffer;
 }
 

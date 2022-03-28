@@ -3,6 +3,7 @@
 #include <dx/vec.hpp>
 #include <cmath>
 
+/*
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp> // glm::vec3
@@ -11,6 +12,7 @@
 #include <glm/ext/matrix_transform.hpp> // glm::translate, glm::rotate, glm::scale
 #include <glm/ext/matrix_clip_space.hpp> // glm::perspective
 #include <glm/ext/scalar_constants.hpp> // glm::pi
+*/
 
 // implemented with reference guide linmath; always used linmath prior in orion & hyper race projects. great people.
 
@@ -33,15 +35,14 @@ struct Matrix44 {
         0.0, 0.0, 0.0, 1.0
     };
     ///
-    T &operator()(size_t i)           const { return m[i]; }
-    T &operator()(size_t i, size_t j) const { return m[i * 4 + j]; }
+    T &  operator()(size_t i)           { return m[i]; }
+    T &  operator()(size_t i, size_t j) { return m[i * 4 + j]; }
+    bool operator==(Matrix44<T> &b)     { return memcmp(m, b.m, sizeof(T) * 16); }
+    bool operator!=(Matrix44<T> &b)     { return !operator==(b); }
     
-    ///
-    Matrix44()    { }
-    Matrix44(T v) { for (int i = 0; i < 16; i++) m[i] = v; }
-    Matrix44(std::nullptr_t n) { m[0] = dx::nan<T>();      }
-    
-    ///
+    /// no boolean operator here
+    Matrix44()                 { }
+    Matrix44(std::nullptr_t n) { }
     Matrix44(Vec4<T> v0, Vec4<T> v1, Vec4<T> v2, Vec4<T> v3) {
         auto &a = *this;
         a[0] = v0;
@@ -54,7 +55,7 @@ struct Matrix44 {
               Matrix44(const Matrix44<T> &ref) { copy((Matrix44<T> &)ref);     }
               Matrix44(const T          *data) { memcpy(m, data,  sizeof(m));  }
     void          copy(Matrix44<T>       &ref) { memcpy(m, ref.m, sizeof(m));  }
-         T       *data()                 const { return m;                     }
+         T       *data()                 const { &m[0];                        }
     Vec4<T>  &operator[] (size_t i)      const { return *(Vec4<T> *)&m[i * 4]; } /// it'll work.. it'll work. OW. chewy!
     
     static Matrix44<T> translation(Vec3<T> v) {
@@ -115,7 +116,7 @@ struct Matrix44 {
         Matrix44<T> r;
         for (int j = 0; j < 4; j++)
             for (int i = 0; i < 4; i++)
-                r[i * 4 + j] = m[j * 4 + i];
+                r.m[i * 4 + j] = m[j * 4 + i];
         return r;
     }
     
@@ -131,23 +132,26 @@ struct Matrix44 {
                  a[2] - b[2], a[3] - b[3] };
     }
     
-    
-    
     Matrix44<T> scale(Vec4<T> sc) {
         Matrix44<T> r;
         for     (int j = 0; j < 4; j++)
             for (int i = 0; i < 4; i++)
-                r[i * 4 + j] = m[i * 4 + j] * sc[j];
+                r.m[i * 4 + j] = m[i * 4 + j] * sc[j];
         return r;
     }
-    
 
     inline Matrix44<T> operator*(Matrix44<T> b) {
-        Matrix44<T> r = Matrix44<T> { T(0.0) };
-        for         (int c = 0; c < 4; c++)
-            for     (int q = 0; q < 4; q++)
-                for (int k = 0; k < 4; k++)
-                    r[c][q] += m[k * 4 + q] * b[c * 4 + k];
+        Matrix44<T> &a  = *this;
+        Vec4<T>      a0 = a[0]; Vec4<T>      b0 = b[0];
+        Vec4<T>      a1 = a[1]; Vec4<T>      b1 = b[1];
+        Vec4<T>      a2 = a[2]; Vec4<T>      b2 = b[2];
+        Vec4<T>      a3 = a[3]; Vec4<T>      b3 = b[3];
+        ///
+        Matrix44<T> r;
+        r[0] = a0 * b0.x + a1 * b0.y + a2 * b0.z + a3 * b0.w;
+        r[1] = a0 * b1.x + a1 * b1.y + a2 * b1.z + a3 * b1.w;
+        r[2] = a0 * b2.x + a1 * b2.y + a2 * b2.z + a3 * b2.w;
+        r[3] = a0 * b3.x + a1 * b3.y + a2 * b3.z + a3 * b3.w;
         return r;
     }
     
@@ -155,16 +159,23 @@ struct Matrix44 {
         Vec4<T> r = Vec4<T> { 0.0, 0.0, 0.0, 0.0 };
         for     (int j = 0; j < 4; j++)
             for (int i = 0; i < 4; i++)
-                r[j] += m[i * 4 + j] * b[i];
+                r[j] += b[i] * m[i * 4 + j];
         return r;
     }
     
-    static Matrix44<T> identity()              { return Matrix44<T>(); }
+    static Matrix44<T> identity()     { return Matrix44<T>(); }
     ///
-    Matrix44<T>     scale(Vec2<T> sc)          { return scale(Vec4<T> {sc.x, sc.y, 1.0, 1.0}); }
-    Matrix44<T> translate(Vec2<T> v)           { return *this * translation(v); }
-    Matrix44<T> translate(Vec3<T> v)           { return *this * translation(v); }
-    Matrix44<T> translate(T x, T y, T z = 0.0) { return *this * translation(Vec3<T> {x,y,z}); }
+    Matrix44<T>     scale(Vec2<T> sc) { return scale(Vec4<T> {sc.x, sc.y, T(1.0), T(1.0)}); }
+    Matrix44<T> translate(T x, T y, T z = T(0.0)) {
+        Matrix44<T> r = *this;
+        Vec4<T>     v = r[0] * x + r[1] * y + r[2] * z;
+        r[3].x += v.x;
+        r[3].y += v.y;
+        r[3].z += v.z;
+        return r;
+    }
+    Matrix44<T> translate(Vec2<T> v) { return translate(v.x, v.y, T(0.0)); }
+    Matrix44<T> translate(Vec3<T> v) { return translate(v.x, v.y, v.z);    }
     
     Matrix44<T> rotate_arb(Vec3<T> v, double degs) {
         const float angle = radians(degs);
@@ -254,26 +265,34 @@ struct Matrix44 {
     }
     
     
-    static Matrix44<T> ortho2(T left, T right, T bottom, T top, T near, T far) {
+    static Matrix44<T> ortho(T left, T right, T bottom, T top, Vec2<T> clip) {
+        const T near  = clip[0];
+        const T far   = clip[1];
         auto   m      = Matrix44<T>::identity();
                m[0].x =              T(2) / (right - left  );
                m[1].y =              T(2) / (top   - bottom);
-               m[2].z =              T(1) / (far   - near  );
+               m[2].z =             T(-2) / (far   - near  );
                m[3].x = -(right + left  ) / (right - left  );
                m[3].y = -(top   + bottom) / (top   - bottom);
-               m[3].z = -(near          ) / (far   - near  );
+               m[3].z = -(far   + near  ) / (far   - near  );
         return m;
     }
     
     static Matrix44<T> perspective(T deg, T aspect, Vec2<T> clip) {
-        const T near  = clip[0];
-        const T far   = clip[1];
-        const T a = 1.0 / T(std::tan(T(radians(deg)) / 2));
-        return {
-            { a / aspect, 0, 0, 0 },
-            { 0, a, 0, 0 },
-            { 0, 0, -((far + near) / (far - near)), -1 },
-            { 0, 0, -((2 * far * near) / (far - near)), 0 }
+        const T fovy = radians(deg);
+        const T near = clip[0];
+        const T far  = clip[1];
+        const T phi  = tan(fovy / T(2.0));
+        const T v00  =    T(1.0) / (aspect * phi);
+        const T v11  =    T(1.0) / (phi);
+        const T v22  = - (far + near) / (far - near);
+        const T v23  = -  T(1.0);
+        const T v32  = - (T(2.0) * far * near) / (far - near);
+        return Matrix44<T> {
+            { v00, 0.0, 0.0, 0.0 },
+            { 0.0, v11, 0.0, 0.0 },
+            { 0.0, 0.0, v22, v23 },
+            { 0.0, 0.0, v32, 0.0 }
         };
     }
     

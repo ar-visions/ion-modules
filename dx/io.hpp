@@ -43,6 +43,10 @@ struct is_func                   : std::false_type {};
 template<typename T>
 struct is_func<std::function<T>> : std::true_type  {};
 
+template <class U, class T>
+struct can_convert {
+  enum { value = std::is_constructible<T, U>::value && !std::is_convertible<U, T>::value };
+};
 
 template <typename _ZZionm>
 const TypeBasics &type_basics() {
@@ -53,21 +57,19 @@ const TypeBasics &type_basics() {
         const size_t blen = sizeof(s);
               size_t b;
               size_t l;
-        tb.code_name = __PRETTY_FUNCTION__;
-        b = tb.code_name.find(s) + blen;
-        l = tb.code_name.find("]", b) - b;
-        tb.code_name = tb.code_name.substr(b, l);
- 
-        //
-        // silver: able to cast into lambdas, especially when its just a pointer
-        // otherwise its lexical hijack of the token vars into converted ones
-        //
+        tb.code_name  = __PRETTY_FUNCTION__;
+        b             = tb.code_name.find(s) + blen;
+        l             = tb.code_name.find("]", b) - b;
+        tb.code_name  = tb.code_name.substr(b, l);
         tb.fn_boolean = [](void *va) -> bool {
-            static T s_null;
-            T &a = *(va ? (T *)va : (T *)&s_null);
-            return bool(a);
+            if constexpr (can_convert<T, bool>::value) {
+                static T s_null;
+                T &a = *(va ? (T *)va : (T *)&s_null);
+                return bool(a);
+            }
+            return true;
         };
-        
+        ///
         tb.fn_compare = [](void *va, void *vb) -> int {
             static T s_null;
             T &a = *(va ? (T *)va : (T *)&s_null);

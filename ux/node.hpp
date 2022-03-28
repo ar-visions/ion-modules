@@ -33,14 +33,15 @@ struct Arg {
     /// constructor selection needs disambiguation and clarity in C++, i think silver could do a better job with less syntax and more usability
     template <typename T>
     Arg(T v) {
-        if constexpr (std::is_base_of<Shared, T>()) {
+        if constexpr (std::is_base_of<Shared, T>())
             shared = v;
-        } else if constexpr (std::is_same_v<const char *, T> || std::is_same_v<char *, T>) {
+        else if constexpr (std::is_same_v<const char *, T> || std::is_same_v<char *, T>)
             shared = Managed<str> { new str((const char *)v) };
-        } else {
+        else
             shared = Managed<T>   { new T(v) };
-        }
     }
+    
+    Arg(nullptr_t n = null) { }
 };
 
 ///
@@ -48,7 +49,10 @@ struct Bind {
     str       id;
     Shared    shared;
     
-    Bind(str id, Arg a) : id(id), shared(a.shared) { }
+    Bind(str id, Arg a = null) : id(id), shared(a.shared) {
+        int test = 0;
+        test++;
+    }
     Bind(Arg a)         :         shared(a.shared) { }
     
     bool operator==(Bind &b) { return id == b.id; }
@@ -276,8 +280,9 @@ struct node {
             T v = *(T *)shared;
             if constexpr (std::is_same_v<T, std::filesystem::path>)
                 return std::filesystem::exists(v);
-            else
+            else if constexpr (can_convert<T, bool>::value)
                 return bool(v);
+            return false;
         }
         virtual T    &current() { return  style.auto_update(); }
         void             *ptr() { return &current();           }
@@ -441,17 +446,6 @@ struct node {
     };
     
     ///
-    template <typename T, typename C>
-    struct Lambda:Intern<T> {
-        typedef T value_type;
-        std::function<T(C &)> lambda;
-        ///
-        Shared &shared_value() { return (Shared &)(Member::shared = new T(lambda(*(C *)Intern<T>::arg))); }
-        T &current()           { return (T &)shared_value(); }
-        operator Arg()         { return Arg { shared_value() }; }
-    };
-    
-    ///
     template <typename T>
     struct Extern:NMember<T, Member::Extern> {
         typedef T value_type;
@@ -460,6 +454,17 @@ struct node {
             Member::lambdas->type_set(*this, s);
         }
         operator Arg() { return Arg { NMember<T, Member::Extern>::shared_value() }; }
+    };
+    
+    ///
+    template <typename T, typename C>
+    struct Lambda:Extern<T> {
+        typedef T value_type;
+        std::function<T(C &)> lambda;
+        ///
+        Shared &shared_value() { return (Shared &)(Member::shared = new T(lambda(*(C *)Extern<T>::arg))); }
+        T &current()           { return (T &)shared_value(); }
+        operator Arg()         { return Arg { shared_value() }; }
     };
     
     struct Border {
@@ -506,11 +511,11 @@ struct node {
     template <typename R, typename T>
     void lambda(str name, Lambda<R,T> &nmem, std::function<R(T &)> fn) {
         nmem.type          = Id<R>();
-        nmem.member        = Member::Intern;
+        nmem.member        = Member::Extern;
         nmem.name          = name;
         nmem.lambda        = std::function<R(T &)>(fn);
         nmem.arg           = Unsafe <node> { this };
-        internals[name]    = &nmem;
+        externals[name]    = &nmem;
         nmem.integrate();
     }
     
@@ -667,15 +672,13 @@ struct node {
         return Model<V>(name, skin, device().sync(), ubo, attr, atypes, shaders);
     }
     
-    Texture texture(Image im) {
-        return Texture { &device(), im,
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT     | VK_IMAGE_USAGE_TRANSFER_DST_BIT     |
-            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
-            false, VK_FORMAT_R8G8B8A8_UNORM, -1 };
+    Texture texture(Image im, Asset::Type asset) {
+        return Texture { &device(), im, asset };
     }
     
-    Texture texture(Path p) { return texture(Image(p, Image::Rgba)); }
+    Texture texture(Path path, Asset::Type asset) {
+        return texture(Image(path, Image::Rgba), asset);
+    }
     
     template <typename V>
     Pipeline<V> texture_view(Texture &tx, UniformData ubo) {
@@ -684,9 +687,7 @@ struct node {
         auto    vbo = vertices(v_sqr, {  });
         auto    ibo = polygons(i_sqr);
         auto assets = Assets {{ Asset::Color, &tx }};
-        return Pipeline<V> {
-            device(), ubo, vbo, ibo, assets, rgba {1.0, 0.7, 0.2, 1.0}, "main"
-        };
+        return Pipeline<V> { device(), ubo, vbo, ibo, assets, "main" };
     }
     
     inline size_t count(str n) {
@@ -698,20 +699,26 @@ struct node {
         return 0;
     }
     
-    template <typename T>
-    T &context(str name) {
-        static T t_null = null;
+    Shared &shared(str name) {
+        static Shared s_null;
         node  *n = this;
         while (n)
             if (n->externals.count(name))
-                return ((Extern<T> *)n->externals[name])->value;
+                return n->externals[name]->shared_value();
+            else if (n->internals.count(name)) /// you can access your own internals from context, and probably only internals flagged as contextual which may just be called, contextual
+                return n->internals[name]->shared_value();
             else
                 n = n->parent;
-        return t_null;
+        return s_null;
+    }
+    
+    template <typename T>
+    T &context(str name) {
+        static T t_null;
+        Shared sh = shared(name); /// boolean needs to be based on if memory is there, not if its null.
+        return sh ? (T &)sh : t_null;
     }
 };
-
-// trying to not use the binds on node* memory, but rather the element.  i dont think its anything other than a copy (?)
 
 #define declare(T)\
     T(str id = null, Binds binds = {}, Elements elements = {}):\
