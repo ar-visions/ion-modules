@@ -1,0 +1,10 @@
+{
+    "name":   "ion",
+    "version":"3.0.0",
+    "repos": {
+        "skia":       {"version":"m95",    "repo":"https://github.com/ar-visions/skia.git"},
+        "glfw":	      {"version":"master", "repo":"https://github.com/ar-visions/glfw.git"},
+        "mbedtls":    {"version":"3.0.0",  "repo":"https://github.com/ar-visions/mbedtls.git"},
+        "tensorflow": {"version":"dev",    "repo":"https://github.com/ar-visions/tensorflow.git"}
+    }
+}

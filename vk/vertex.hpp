@@ -23,18 +23,10 @@ struct Vertex {
     vec3 bt;   // bi-tangent, we need an arb in here, or two. or ten.
     
     ///
-    static VAttribs attribs(FlagsOf<Attr> attr) {
-        auto   res = VAttribs(6);
-        if (attr[Position])  res += { 0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  pos)  };
-        if (attr[Normal])    res += { 1, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  norm) };
-        if (attr[UV])        res += { 2, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex,  uv)   };
-        if (attr[Color])     res += { 3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex,  clr)  };
-        if (attr[Tangent])   res += { 4, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  ta)   };
-        if (attr[BiTangent]) res += { 5, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex,  bt)   };
-        return res;
-    }
+    static VAttribs attribs(FlagsOf<Attr> attr);
     
     ///
+    Vertex(nullptr_t n = null) { }
     Vertex(vec3 pos, vec3 norm, vec2 uv, vec4 clr, vec3 ta = {}, vec3 bt = {}):
            pos  ({  pos.x,  pos.y,  pos.z        }),
            norm ({ norm.x, norm.y, norm.z        }),
@@ -65,56 +57,54 @@ struct Vertex {
 
 ///
 struct IndexData {
-    Device         *device = null;
+    Device         *dev = null;
     Buffer          buffer;
+    ///
     operator VkBuffer() { return buffer; }
-    size_t       size() { return buffer.sz / buffer.type_size; }
+    size_t       size() { return buffer.size(); }
+    operator    bool () { return dev != null; }
+    bool    operator!() { return dev == null; }
+    ///
     IndexData(std::nullptr_t n = null) { }
-    IndexData(Device &device, Buffer buffer) : device(&device), buffer(buffer)  { }
-    operator bool () { return device != null; }
-    bool operator!() { return device == null; }
+    IndexData(Device &dev, Buffer buffer) : dev(&dev), buffer(buffer)  { }
 };
 
-///
 struct VertexData {
-    Device         *device = null;
-    Buffer          buffer;
+    Device                   *dev = null;
+    Buffer                    buffer;
     std::function<VAttribs()> fn_attribs;
+    sh<VkWriteDescriptorSet>  wds;
     ///
-    VertexData(std::nullptr_t n = null) { }
-    VertexData(Device &device, Buffer buffer, std::function<VAttribs()> fn_attribs) :
-                device(&device), buffer(buffer), fn_attribs(fn_attribs)  { }
+    VkWriteDescriptorSet &operator()(VkDescriptorSet &ds);
     ///
-    operator  VkBuffer &() { return buffer;         }
-    size_t         size () { return buffer.sz;      }
-       operator    bool () { return device != null; }
-       bool    operator!() { return device == null; }
+    VertexData(std::nullptr_t n = null);
+    VertexData(Device &dev, Buffer buffer, std::function<VAttribs()> fn_attribs);
+    ///
+    operator  VkBuffer &();
+    size_t         size ();
+       operator    bool ();
+       bool    operator!();
+    ///
+    VertexData &operator=(const VertexData &vref);
 };
 
-///
+/// deprecate in favor of composed vertex approach.
 template <typename V>
 struct VertexBuffer:VertexData {
-    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
-        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
-    }
     VertexBuffer(std::nullptr_t n = null) : VertexData(n) { }
-    VertexBuffer(Device &device, array<V> &v, Vertex::Attribs &attr) : VertexData(device, Buffer {
-            &device, v, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    VertexBuffer(Device &dev, array<V> &v, Vertex::Attribs &attr) : VertexData(dev, Buffer {
+            &dev, v.data(), Id<V>(), v.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT },
             [attr=attr]() { return V::attribs(attr); }) { }
-    size_t size() { return buffer.sz / sizeof(V); }
+    size_t size() { return buffer.size; }
 };
 
 ///
 template <typename I>
 struct IndexBuffer:IndexData {
-    VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
-        return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0,
-                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
-    }
     IndexBuffer(std::nullptr_t n = null) : IndexData(n) { }
-    IndexBuffer(Device &device, array<I> &i) : IndexData(device, Buffer {
-            &device, i, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+    IndexBuffer(Device &dev, array<I> &i) : IndexData(dev, Buffer {
+            &dev, i.data(), Id<I>(), i.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) { }
 };
 

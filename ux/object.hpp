@@ -41,9 +41,8 @@ struct Object:node {
     
     /// rendition of pipes
     Element render() {
-        if (pipes) for (auto &[name, pipe]: pipes.map()) {
-            device().render.push(pipe);
-        }
+        if (pipes) for (auto &[name, pipe]: pipes.map())
+            device().push(pipe);
         return node::render();
     }
 };

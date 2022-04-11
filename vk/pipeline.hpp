@@ -1,83 +1,41 @@
 #pragma once
 #include <vk/device.hpp>
 #include <vk/vk.hpp>
+#include <vk/opaque.hpp>
 #include <dx/map.hpp>
 #include <dx/array.hpp>
 
-/// name better, ...this.
-struct vkState {
-    VkPipelineVertexInputStateCreateInfo    vertex_info {};
-    VkPipelineInputAssemblyStateCreateInfo  topology    {};
-    VkPipelineViewportStateCreateInfo       vs          {};
-    VkPipelineRasterizationStateCreateInfo  rs          {};
-    VkPipelineMultisampleStateCreateInfo    ms          {};
-    VkPipelineDepthStencilStateCreateInfo   ds          {};
-    VkPipelineColorBlendAttachmentState     cba         {};
-    VkPipelineColorBlendStateCreateInfo     blending    {};
-};
-
+struct vkState;
 typedef std::function<void(vkState &)> VkStateFn;
 
 /// explicit use of the implicit constructor with this comment
-struct PipelineData {
-    struct Memory {
-        Device                    *device;
-        std::string                shader;          /// name of the shader.  worth saying.
-        array<VkCommandBuffer>       frame_commands;  /// pipeline are many and even across swap frame idents, and we need a ubo and cmd set for each
-        array<VkDescriptorSet>       desc_sets;       /// needs to be in frame, i think.
-        VkPipelineLayout           pipeline_layout; /// and what a layout
-        VkPipeline                 pipeline;        /// pipeline handle
-        UniformData                ubo;             /// we must broadcast this buffer across to all of the swap uniforms
-        VertexData                 vbo;             ///
-        IndexData                  ibo;
-        // array<VkVertexInputAttributeDescription> attr; -- vector is given via VertexData::fn_attribs(). i dont believe those need to be pushed up the call chain
-        Assets                     assets;
-        VkDescriptorSetLayout      set_layout;
-        bool                       enabled = true;
-        map<Path, Texture *>       tx_cache;
-        size_t                     vsize;
-        ///
-        /// state vars
-        int                        sync = -1;
-        ///
-        operator bool ();
-        bool operator!();
-        void enable (bool en);
-        void update(size_t frame_id);
-        Memory(std::nullptr_t    n = null);
-        Memory(Device &device, UniformData &ubo, VertexData &vbo, IndexData &ibo,
-               Assets &assets, size_t vsize, string name, VkStateFn vk_state);
-        void destroy();
-        void initialize();
-        ~Memory();
-    };
-    std::shared_ptr<Memory> m;
-    ///
-    operator bool  ()                { return  m->enabled; }
-    bool operator! ()                { return !m->enabled; }
-    void   enable  (bool en)         { m->enabled = en; }
-    bool operator==(PipelineData &b) { return m == b.m; }
-    PipelineData   (std::nullptr_t n = null) { }
+struct iPipelineData;
+struct  PipelineData {
+    operator bool  ();
+    bool operator! ();
+    void   enable  (bool en);
+    bool operator==(PipelineData &b);
     void   update  (size_t frame_id);
     ///
+    PipelineData(nullptr_t = null);
     PipelineData(Device &device, UniformData &ubo,   VertexData &vbo,    IndexData &ibo,
-                 Assets &assets, size_t       vsize, string      shader, VkStateFn  vk_state = null) {
-            m = std::shared_ptr<Memory>(new Memory { device, ubo, vbo, ibo, assets, vsize, shader, vk_state });
-        }
+                 Assets &assets, size_t       vsize, string      shader, VkStateFn  vk_state = null);
+    ///
+    sh<iPipelineData> intern;
 };
 
 /// pipeline dx
 template <typename V>
 struct Pipeline:PipelineData {
-    Pipeline(Device    &device, UniformData &ubo,     VertexData &vbo,
-             IndexData &ibo,    Assets      &assets,  string      name):
-        PipelineData(device, ubo, vbo, ibo, assets, sizeof(V), name) { }
+    Pipeline(Device    &dev, UniformData &ubo,     VertexData &vbo,
+             IndexData &ibo,    Assets   &assets,  string      name):
+        PipelineData(dev, ubo, vbo, ibo, assets, sizeof(V), name) { }
 };
 
-/// these are calling for Daniel
+/// These are calling for Daniel!
 struct Pipes {
     struct Data {
-        Device       *device  = null;
+        Device       *dev     = null;
         VertexData    vbo     = null;
         uint32_t      binding = 0;
       //array<Attrib> attr    = {};
@@ -103,8 +61,8 @@ struct Model:Pipes {
     };
     
     ///
-    Model(Device &device) {
-        data = std::shared_ptr<Data>(new Data { &device });
+    Model(Device &dev) {
+        data = std::shared_ptr<Data>(new Data { &dev });
     }
     
     static str form_path(str base, str model, str skin, str asset, str ext) {
@@ -115,9 +73,9 @@ struct Model:Pipes {
     
     /// optional skin arg
     Assets cache_assets(str model, str skin, Asset::Types &atypes) {
-        auto   &d     = *this->data;
-        auto   &cache = d.device->tx_cache; /// ::map<Path, Device::Pair>
-        Assets assets = Assets(Asset::Max);
+        auto              &d = *this->data;
+        ResourceCache &cache = data->dev->get_cache(); /// load all cash and ass hats
+        Assets        assets = Assets(Asset::Max);
         ///
         auto load_tx = [&](Asset::Type t, Path p) -> Texture * {
             if (!cache.count(p)) {
@@ -125,7 +83,7 @@ struct Model:Pipes {
                 auto          &shh = cache[p].image->pixels;
                 ::Shape<Major> sh1 = shh.shape();
                 /// bookmark: reload texture on pipeline refresh
-                cache[p].texture  = new Texture(d.device, *cache[p].image, t);
+                cache[p].texture  = new Texture(d.dev, *cache[p].image, t);
                 cache[p].texture->push_stage(Texture::Stage::Shader);
             };
             return cache[p].texture;
@@ -159,8 +117,8 @@ struct Model:Pipes {
         return assets;
     }
     
-    Model(str name, str skin, Device &device, UniformData &ubo, Vertex::Attribs &attr,
-          Asset::Types &atypes, Shaders &shaders) : Model(device)
+    Model(str name, str skin, Device &dev, UniformData &ubo, Vertex::Attribs &attr,
+          Asset::Types &atypes, Shaders &shaders) : Model(dev)
     {
         /// cache control for images to texture here; they might need a new reference upon pipeline rebuild
         auto assets = cache_assets(name, skin, atypes);
@@ -172,12 +130,14 @@ struct Model:Pipes {
         });
         
         auto &d = *this->data;
-        d.vbo   = VertexBuffer<V>(device, obj.vbo, attr);
+        VertexData vd = VertexBuffer<V>(dev, obj.vbo, attr);
+        d.vbo   = vd;
         for (auto &[name, group]: obj.groups) {
             if (!group.ibo)
                 continue;
-            auto     ibo = IndexBuffer<uint32_t>(device, group.ibo);
-            d.part[name] = Pipeline<V>(device, ubo, d.vbo, ibo, assets, shaders(name));
+            auto     ibo = IndexBuffer<uint32_t>(dev, group.ibo);
+            PipelineData pd = Pipeline<V>(dev, ubo, d.vbo, ibo, assets, shaders(name));
+            d.part[name] = pd;
         }
     }
 };

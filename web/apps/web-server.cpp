@@ -15,8 +15,8 @@ struct Animals:node {
 struct ExampleServer:node {
     declare(ExampleServer);
     void mount() {
-        data = var(Type::Map);
-        array<str> s = {"chicken", "frog", "bird"};
+        data            = var(Type::Map);
+        array<str>    s = {"chicken", "frog", "bird"};
         data["animals"] = s;
     }
     Element render() {

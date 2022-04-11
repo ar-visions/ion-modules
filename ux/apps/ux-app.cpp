@@ -1,5 +1,7 @@
-#include <ux/app.hpp>
-#include <ux/object.hpp>
+//#include <ux/app.hpp>
+//#include <ux/object.hpp>
+
+module ux.app;
 
 /// we need the canvas working too.. sigh.
 struct Mars:node {
@@ -133,21 +135,19 @@ struct Orbiter:node {
     } m;
     
     void bind() {
-        ///
         lambda <m44f, Orbiter> ("view", m.view, [](Orbiter &n) {
             return m44f::identity()
                     .translate(0.0f, 0.0f, 4.0f)
                     .rotate_x (degrees(0.6f))
                     .translate(0.0f, -1.0f, 0.0f);
         });
-        
     }
 
     Element render() {
         return Pane {
             "orbiter", {}, {
                 Mars   { "mars"   },
-                //Avatar { "avatar" },
+              //Avatar { "avatar" },
             }
         };
     }

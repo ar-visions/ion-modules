@@ -48,12 +48,32 @@ struct can_convert {
   enum { value = std::is_constructible<T, U>::value && !std::is_convertible<U, T>::value };
 };
 
-template <typename _ZZionm>
+
+#include <type_traits>
+#include <utility>
+
+/// has_operator_equal<T>::value == bool
+template<class T, class EqualTo>
+struct has_operator_equal_impl
+{
+    template<class U, class V>
+    static auto test(U*) -> decltype(std::declval<U>() == std::declval<V>());
+    template<typename, typename>
+    static auto test(...) -> std::false_type;
+
+    using type = typename std::is_same<bool, decltype(test<T, EqualTo>(0))>::type;
+};
+
+template<class T, class EqualTo = T>
+struct has_operator_equal : has_operator_equal_impl<T, EqualTo>::type {};
+
+
+template <typename _ZZion>
 const TypeBasics &type_basics() {
-    typedef _ZZionm T;
+    typedef _ZZion T;
     static TypeBasics tb;
     if (tb.code_name.empty()) {
-        const char    s[] = "_ZZionm =";
+        const char    s[] = "_ZZion =";
         const size_t blen = sizeof(s);
               size_t b;
               size_t l;
@@ -71,14 +91,19 @@ const TypeBasics &type_basics() {
         };
         ///
         tb.fn_compare = [](void *va, void *vb) -> int {
-            static T s_null;
-            T &a = *(va ? (T *)va : (T *)&s_null);
-            T &b = *(vb ? (T *)vb : (T *)&s_null);
-            if constexpr (is_func<T>())
-                return int(fn_id((T &)a) == fn_id((T &)b));
-            else
-                return int(a == b);
+            if constexpr (is_func<T>() || has_operator_equal<T>::value) {
+                static T s_null;
+                T &a = *(va ? (T *)va : (T *)&s_null);
+                T &b = *(vb ? (T *)vb : (T *)&s_null);
+                if constexpr (is_func<T>())
+                    return int(fn_id((T &)a) == fn_id((T &)b));
+                else
+                    return int(a == b);
+            }
+            return va == vb;
         };
+        ///
+        /// express Orbiter..
         ///
         tb.fn_free = [](void *ptr, size_t count) -> void {
                  if (count > 1) delete[] (T *)(ptr);

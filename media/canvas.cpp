@@ -29,6 +29,7 @@
 #include <dx/dx.hpp>
 #include <dx/vec.hpp>
 #include <vk/vk.hpp>
+#include <vk/opaque.hpp>
 
 inline SkColor sk_color(rgba c) {
     auto sk = SkColor(uint32_t(c.b)        | (uint32_t(c.g) << 8) |
@@ -49,6 +50,8 @@ struct Skia {
         Vulkan::init();
         
         #if defined(SK_VULKAN)
+            // how to deal with this?
+            // it just fills out the various handles, no big deal. queue index is a u32 i believe
             GrVkBackendContext grc {
                 Vulkan::instance(),
                 Vulkan::gpu(),

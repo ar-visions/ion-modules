@@ -4,7 +4,7 @@ typedef std::function<void(void *)> UniformFn;
 
 struct UniformData {
     struct Memory {
-        Device       *device = null;
+        Device       *dev = null;
         int           struct_sz;
         array<Buffer> buffers;
         UniformFn     fn;
@@ -14,9 +14,9 @@ struct UniformData {
     UniformData(std::nullptr_t n = null) { }
     VkWriteDescriptorSet descriptor(size_t frame_index, VkDescriptorSet &ds);
     void   destroy();
-    void   update(Device *device);
+    void   update(Device *dev);
     void   transfer(size_t frame_id);
-    inline operator  bool() { return  m && m->device != null; }
+    inline operator  bool() { return  m && m->dev != null; }
     inline bool operator!() { return !operator bool(); }
     
     /// shouldnt need the serialization
@@ -41,9 +41,9 @@ struct UniformData {
 template <typename U>
 struct UniformBuffer:UniformData { /// will be best to call it 'Uniform', 'Verts', 'Polys'; make sensible.
     UniformBuffer(std::nullptr_t n = null) { }
-    UniformBuffer(Device &device, std::function<void(U &)> fn) {
+    UniformBuffer(Device &dev, std::function<void(U &)> fn) {
         m = std::shared_ptr<Memory>(new Memory {
-            .device    = &device,
+            .dev       = &dev,
             .struct_sz = sizeof(U),
             .fn        = UniformFn([fn](void *u) { fn(*(U *)u); })
         });

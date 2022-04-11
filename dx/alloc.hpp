@@ -146,6 +146,7 @@ struct Shared {
         return (T *)(p ? p->memory : null);
     }
     
+    /// casting op
     template <typename T>
     operator             T &() const { return *(operator T *()); }
     operator          void *() const { return p ?  p->memory : null; }
@@ -210,8 +211,10 @@ struct sh:Shared {
         return *this;
     }
     ///
-    operator                T &() const { return *(T *)p->memory; }
-    T &               operator*() const { return *(T *)p->memory; }
+    operator                T *() const { return  (T *)p->memory; } ///    T* operator
+    operator                T &() const { return *(T *)p->memory; } ///    T& operator
+    T &              operator *() const { return *(T *)p->memory; } /// deref operator
+    T *              operator->() const { return  (T *)p->memory; } /// reference memory operator
     bool                 is_set() const { return p != null; }
     bool operator==(sh<T>     &b) const { return p == b.p;  }
     T   &operator[](size_t index) const {

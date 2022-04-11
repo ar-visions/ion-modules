@@ -5,7 +5,7 @@
 		"label": "build",
 		"type": "shell",
 		"options": {"cwd": "${workspaceFolder}/build"},
-		"command": "make ux-app -j16",
+		"command": "make ux-app -j16 CFLAGS='-Werror'",
 		"presentation": {
 		  "reveal": "silent",
 		  "panel": "shared"

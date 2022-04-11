@@ -44,6 +44,13 @@ macro(var_prepare)
     set(module_path     "${r_path}/${mod}")
     set(module_file     "${module_path}/mod")
     set(arch            "")
+    
+    # setting a cflag to a specific target is important. 
+    # its a useless feature otherwise, its a matter of 'where does it apply'
+    # and when you want to pass for just a single target in a larger build
+    # system, you just dont. that sort of workflow is for command-line.
+    # plugging in build attribs in the Orbiter project (for each project loaded into orbiter it would have these:)
+
     set(cflags          "")
     set(roles           "")
     set(dep             "")
@@ -200,7 +207,8 @@ function(load_modules r_path external_repo)
             add_executable(${t_app} ${app_path} ${${t_app}_src})
 
             # add pre-compiled headers
-            target_precompile_headers(${t_app} PUBLIC ${_headers})
+            message(STATUS "LoLz ${t_app} ${_headers}")
+            #target_precompile_headers(${t_app} PUBLIC ${_headers})
             
             # add include dir of apps
             target_include_directories(${t_app} PUBLIC ${p}/apps)

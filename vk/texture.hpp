@@ -1,5 +1,6 @@
 #pragma once
 #include <vk/vk.hpp>
+#include <vk/opaque.hpp>
 
 /// its just enums for different resources, texture is a basic resource
 struct Asset {
@@ -15,12 +16,12 @@ struct Asset {
         Max       = Displace
     };
     
+    /// this one we cannot have, i mean only if it was given a pointer to it.
     typedef FlagsOf<Type> Types;
-    static VkDescriptorSetLayoutBinding descriptor(Type t) {
-        return { t, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_ALL, nullptr };
-    }
+    static void descriptor(Type t, VkDescriptorSetLayoutBinding &desc);
 };
 
+struct iTexture;
 ///
 struct Texture:Asset {
     struct Stage {
@@ -58,156 +59,52 @@ struct Texture:Asset {
              operator     Type() { return value; }
     };
     
-    struct Data {
-        Device                 *device     = null;
-        VkImage                 image      = VK_NULL_HANDLE;
-        VkImageView             view       = VK_NULL_HANDLE;
-        VkDeviceMemory          memory     = VK_NULL_HANDLE;
-        VkDescriptorImageInfo   info       = {};
-        VkSampler               sampler    = VK_NULL_HANDLE;
-        vec2i                   sz         = { 0, 0 };
-        Asset::Type             asset_type = Asset::Undefined;
-        int                     mips       = 0;
-        VkMemoryPropertyFlags   mprops     = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        VkImageTiling           tiling     = VK_IMAGE_TILING_OPTIMAL;
-        bool                    ms         = false;
-        bool                    image_ref  = false;
-        VkFormat                format;
-        VkImageUsageFlags       usage;
-        VkImageAspectFlags      aflags;
-        Image                   lazy;
-        ///
-        std::stack<Stage>       stage;
-        Stage                   prv_stage       = Stage::Undefined;
-        VkImageLayout           layout_override = VK_IMAGE_LAYOUT_UNDEFINED;
-        ///
-        void                    set_stage(Stage);
-        void                    push_stage(Stage);
-        void                    pop_stage();
-        static int              auto_mips(uint32_t, vec2i);
-        ///
-        static VkImageView      create_view(VkDevice, vec2i &, VkImage, VkFormat, VkImageAspectFlags, uint32_t);
-        ///
-        operator                bool();
-        bool                    operator!();
-        operator                VkImage &();
-        operator                VkImageView &();
-        operator                VkDeviceMemory &();
-        operator                VkAttachmentDescription();
-        operator                VkAttachmentReference();
-        operator                VkDescriptorImageInfo &();
-        void                    destroy();
-        VkImageView             image_view();
-        VkSampler               image_sampler();
-        void                    create_sampler();
-        void                    create_resources();
-        VkWriteDescriptorSet    descriptor(VkDescriptorSet &ds, uint32_t binding);
-        ///
-        Data(std::nullptr_t n = null) { }
-        Data(Device *, vec2i, rgba, VkImageUsageFlags,
-             VkMemoryPropertyFlags, VkImageAspectFlags, bool,
-             VkFormat = VK_FORMAT_R8G8B8A8_UNORM, int = -1, Image = null);
-
-        Data(Device *device, Image &im, Asset::Type t,
-            VkImageUsageFlags,     VkMemoryPropertyFlags,
-            VkImageAspectFlags,    bool,
-            VkFormat = VK_FORMAT_R8G8B8A8_UNORM, int = -1);
-        
-        Data(Device *, vec2i, VkImage, VkImageView, VkImageUsageFlags,
-             VkMemoryPropertyFlags,    VkImageAspectFlags, bool,
-             VkFormat = VK_FORMAT_R8G8B8A8_UNORM, int = -1);
-    };
     ///
-    std::shared_ptr<Data> data;
+    sh<iTexture> intern;
     
-    Data *get_data() { return data.get(); }
+    void transfer(VkCommandBuffer &, VkBuffer &);
     
-    Texture(std::nullptr_t n = null) { }
-    Texture(Device            *device,  vec2i sz,        rgba clr,
+    iTexture *get_data();
+    
+    Texture(std::nullptr_t n = null);
+    Texture(Device            *dev,     vec2i sz,             rgba clr,
             VkImageUsageFlags  usage,   VkMemoryPropertyFlags memory,
             VkImageAspectFlags aspect,  bool                  ms,
-            VkFormat           format = VK_FORMAT_R8G8B8A8_UNORM, int mips = -1, Image lazy = null) :
-        data(std::shared_ptr<Data>(
-            new Data { device, sz, clr, usage, memory,
-                       aspect, ms, format, mips, lazy }
-        ))
-    {
-        rgba *px = null;
-        if (clr) { /// this also works to be the initial color too if its a url; its designed to update async within reason
-            px = (rgba *)malloc(sz.x * sz.y * sizeof(rgba));
-            for (int i = 0; i < sz.x * sz.y; i++)
-                px[i] = clr;
-        }
-        transfer_pixels(px); /// this was made to be null.. what i wonder is how its done
-        free(px);
-        data->image_ref = false;
-    }
-
-    Texture(Device *device, Image &im, Asset::Type t) {
-        /// sorry to ruin your structured constructor party
-        /// this needs to be a place where we change the format around based on the types read in from Image and types provided by Asset::Type
-        /// still pondering this, but i believe an auto-strategy works great for the most part, with added combining of maps (shine,rough,light)
-        ///
-        VkMemoryPropertyFlags memory = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        VkImageAspectFlags    aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-        VkFormat              format = VK_FORMAT_R8G8B8A8_UNORM;
-        VkImageUsageFlags      usage = VK_IMAGE_USAGE_SAMPLED_BIT      | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT     |
-                                       VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-        data     = std::shared_ptr<Data>(new Data {
-            device, im, t, usage, memory, aspect, false, format, -1
-        });
-        rgba *px = &im.pixel<rgba>(0, 0);
-        transfer_pixels(px);
-        free(px);
-        data->image_ref = false;
-    }
-
-    Texture(Device            *device, vec2i                 sz,
+            VkFormat           format = VK_FORMAT_R8G8B8A8_UNORM, int mips = -1, Image lazy = null);
+    Texture(Device            *dev,  Image &im, Asset::Type t);
+    Texture(Device            *dev,  vec2i                 sz,
             VkImage            image,  VkImageView           view,
             VkImageUsageFlags  usage,  VkMemoryPropertyFlags memory,
             VkImageAspectFlags aspect, bool                  ms,
-            VkFormat           format = VK_FORMAT_R8G8B8A8_UNORM, int mips = -1) :
-        data(std::shared_ptr<Data>(new Data {
-            device, sz, image, view, usage, memory, aspect, ms, format, mips
-        })) { }
+            VkFormat           format = VK_FORMAT_R8G8B8A8_UNORM, int mips = -1);
     
-    void set_stage(Stage s)            { return data->set_stage(s);  }
-    void push_stage(Stage s)           { return data->push_stage(s); }
-    void pop_stage()                   { return data->pop_stage();   }
+    Texture &operator=(const Texture &ref);
+    void set_stage(Stage s);
+    void push_stage(Stage s);
+    void pop_stage();
     void transfer_pixels(rgba *pixels);
     
 public:
     /// pass-through operators
-    operator  bool                  () { return    data &&  *data; }
-    bool operator!                  () { return   !data || !*data; }
-    bool operator==      (Texture &tx) { return    data && data == tx.data; }
-    operator VkImage               &() { return   *data; }
-    operator VkImageView           &() { return   *data; }
-    operator VkDeviceMemory        &() { return   *data; }
-    operator VkAttachmentReference  () { return   *data; }
-    operator VkAttachmentDescription() { return   *data; }
-    operator VkDescriptorImageInfo &() { return   *data; }
+    operator  bool                    ();
+    bool operator!                    ();
+    bool operator==        (Texture &tx);
+    operator VkImage                 &();
+    operator VkImageView             &();
+    operator VkDeviceMemory          &();
+    operator VkAttachmentReference   &();
+    operator VkAttachmentDescription &();
+    operator VkDescriptorImageInfo   &();
     
-    /// pass-through methods
-    void destroy() { if (data) data->destroy(); };
-    VkWriteDescriptorSet descriptor(VkDescriptorSet &ds, uint32_t binding) {
-        return data->descriptor(ds, binding);
-    }
+    void destroy();
+    VkWriteDescriptorSet descriptor(VkDescriptorSet &ds, uint32_t binding);
 };
 
 typedef map<Asset::Type, Texture *> Assets;
 
-struct ColorTexture:Texture {
-    ColorTexture(Device *device, vec2i sz, rgba clr):
-        Texture(device, sz, clr,
-             VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-             VK_IMAGE_ASPECT_COLOR_BIT, true, VK_FORMAT_B8G8R8A8_UNORM, 1) { // was VK_FORMAT_B8G8R8A8_SRGB
-            data->image_ref = false; /// 'SwapImage' should have this set as its a View-only.. [/creeps away slowly, very unsure of themselves]
-            data->push_stage(Stage::Color);
-        }
-};
+struct ColorTexture:Texture { ColorTexture(Device *dev, vec2i sz, rgba clr);   };
+struct DepthTexture:Texture { DepthTexture(Device *dev, vec2i sz, rgba clr);   };
+struct SwapImage:Texture    { SwapImage(Device *dev, vec2i sz, VkImage image); };
 
 /*
 return findSupportedFormat(
@@ -221,23 +118,4 @@ bool hasStencilComponent(VkFormat format) {
 }
 */
 
-struct DepthTexture:Texture {
-    DepthTexture(Device *device, vec2i sz, rgba clr):
-        Texture(device, sz, clr,
-             VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-             VK_IMAGE_ASPECT_DEPTH_BIT, true, VK_FORMAT_D32_SFLOAT, 1) {
-            data->image_ref = false; /// we are explicit here.. just plain explicit.
-            data->push_stage(Stage::Depth);
-        }
-};
 
-struct SwapImage:Texture {
-    SwapImage(Device *device, vec2i sz, VkImage image):
-        Texture(device, sz, image, null,
-             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-             VK_IMAGE_ASPECT_COLOR_BIT, false, VK_FORMAT_B8G8R8A8_UNORM, 1) { // VK_FORMAT_B8G8R8A8_UNORM tried here, no effect on SwapImage
-            data->layout_override = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        }
-};

@@ -6,6 +6,7 @@
 #include <termios.h>
 #include <thread>
 #include <vk/vk.hpp>
+#include <vk/opaque.hpp>
 #include <dx/dx.hpp>
 #include <ux/ux.hpp>
 #include <ux/interface.hpp>

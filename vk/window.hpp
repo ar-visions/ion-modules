@@ -1,20 +1,21 @@
 #pragma once
 #include <functional>
 #include <dx/dx.hpp>
-#include <vulkan/vulkan.hpp>
+//#include <vulkan/vulkan.hpp>, speeding up compilation a bit.. just a bit
+#include <vk/opaque.hpp>
 
 struct GLFWwindow;
 struct Window {
 protected:
-    GLFWwindow  *handle    = null;
-    VkSurfaceKHR surface   = VK_NULL_HANDLE;
+    GLFWwindow    *handle    = null;
+    VkSurfaceKHR   surface   = VK_NULL_HANDLE;
 public:
-    var          mouse     = Map {};
-    str          title     = "";
-    vec2         dpi_scale = { 1, 1 };
-    vec2i        size      = { 0, 0 };
-    bool         repaint   = false;
-    KeyStates    k_states  = { };
+    var            mouse     = Map {};
+    str            title     = "";
+    vec2           dpi_scale = { 1, 1 };
+    vec2i          size      = { 0, 0 };
+    bool           repaint   = false;
+    KeyStates      k_states  = { };
     
     std::function<void()>                   fn_resize;
     std::function<void(uint32_t)>           fn_char;
@@ -39,5 +40,5 @@ public:
    ~Window();
     Window(std::nullptr_t = null);
     operator GLFWwindow *();
-    operator VkSurfaceKHR();
+    operator VkSurfaceKHR &();
 };

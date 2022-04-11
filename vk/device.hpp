@@ -1,9 +1,11 @@
 #pragma once
 #include <vk/vk.hpp>
+#include <vk/opaque.hpp>
 #include <vk/render.hpp>
 #include <vk/descriptor.hpp>
 #include <vk/frame.hpp>
 #include <vk/texture.hpp>
+#include <vk/command.hpp>
 
 /// vulkan people like to flush the entire glyph cache per type
 typedef array<VkVertexInputAttributeDescription> VAttribs;
@@ -11,72 +13,49 @@ typedef array<VkVertexInputAttributeDescription> VAttribs;
 struct PipelineData;
 struct Window;
 struct Texture;
+struct iDevice;
+struct iTexture;
+
+struct ResourceData {
+    Texture *texture;
+    Image   *image;
+};
+
+typedef map<Path, ResourceData> ResourceCache;
+struct PipelineData;
+
 struct Device {
     enum Module {
         Vertex,
         Fragment,
         Compute
     };
-    struct Pair {
-        Texture *texture;
-        Image   *image;
-    };
-    void                  create_swapchain();
-    void                  create_command_buffers();
-    void                  create_render_pass();
-    uint32_t              attachment_index(Texture::Data *tx);
-    map<str, VkShaderModule> f_modules;
-    map<str, VkShaderModule> v_modules;
-    Render                render;
-    VkSampleCountFlagBits sampling    = VK_SAMPLE_COUNT_8_BIT;
-    VkRenderPass          render_pass = VK_NULL_HANDLE;
-    Descriptor            desc;
-    GPU                   gpu;
-    VkCommandPool         command;
-    VkDevice              device;
-    VkQueue               queues[GPU::Complete];
-    VkSwapchainKHR        swap_chain;
-    VkFormat              format;
-    VkExtent2D            extent;
-    VkViewport            viewport;
-    VkRect2D              sc;
-    array<Frame>          frames;
-    array<VkImage>        swap_images; // force re-render on watch event.
-    Texture               tx_color;
-    Texture               tx_depth;
-    map<Path, Pair>       tx_cache;
-    
-    static Device &null_device();
-    
-    VkShaderModule module(Path p, VAttribs &vattr, Assets &rsc, Module type);
     ///
-    void            initialize(Window *);
-    /// todo: initialize for compute_only
-    void            update();
-    void            destroy();
-    VkCommandBuffer begin();
-    void            submit(VkCommandBuffer commandBuffer);
+    sh<iDevice> intern;
+    ///
+    Device(nullptr_t n = null);
+    Device(GPU &gpu, bool aa);
+    ///
+    static  Device &null_device();
+    ///
+    void                 update();
+    Device &               sync();
+    void             initialize(Window *window);
+    void                command(std::function<void(VkCommandBuffer &)>);
+    void                destroy();
+    VkQueue              &queue(GPU::Capability cap);
+    void                 module(Path, VAttribs &, Assets &, Module, VkShaderModule &);
     uint32_t        memory_type(uint32_t types, VkMemoryPropertyFlags props);
-    
-    operator        VkPhysicalDevice();
-    operator        VkDevice();
-    operator        VkCommandPool();
-    operator        VkRenderPass();
-    Device &sync();
-    Device(GPU &gpu, bool aa = false);
-    VkQueue &operator()(GPU::Capability cap);
+    ResourceCache    &get_cache();
+    void                   push(PipelineData &pd);
+    /// 
+    Device  &         operator=(const Device &dev);
     ///
-    Device(std::nullptr_t n = null) { }
-    operator VkViewport &() { return viewport; }
-    operator VkPipelineViewportStateCreateInfo() {
-        sc.offset = { 0, 0 };
-        sc.extent = extent;
-        return { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, null, 0, 1, &viewport, 1, &sc };
-    }
-    operator VkPipelineRasterizationStateCreateInfo() {
-        return {
-            VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, null, 0, VK_FALSE, VK_FALSE,
-            VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_FALSE // ... = 0.0f
-        };
-    }
+    operator VkPhysicalDevice &();
+    operator VkCommandPool    &();
+    operator VkViewport       &();
+    operator VkDevice         &();
+    operator VkRenderPass     &();
+    operator VkPipelineViewportStateCreateInfo &();
+    operator VkPipelineRasterizationStateCreateInfo &();
 };

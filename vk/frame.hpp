@@ -1,6 +1,8 @@
 #pragma once
 #include <dx/dx.hpp>
 #include <vk/vk.hpp>
+#include <vk/opaque.hpp>
+#include <vk/opaque.hpp>
 #include <vk/buffer.hpp>
 #include <vk/uniform.hpp>
 /*
@@ -40,7 +42,7 @@ struct Frame {
     };
     ///
     int                       index;
-    Device                   *device;
+    Device                   *dev;
     array<Texture>            attachments;
     VkFramebuffer             framebuffer = VK_NULL_HANDLE;
     map<str, VkCommandBuffer> render_commands;
@@ -48,7 +50,7 @@ struct Frame {
     void destroy();
     void update();
     operator VkFramebuffer &();
-    Frame(Device *device);
+    Frame(Device *dev);
 };
 
 
