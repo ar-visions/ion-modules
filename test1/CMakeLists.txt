@@ -9,48 +9,48 @@ cmake_minimum_required(VERSION 3.3)
 project(ion)
 
 # Add target to build iostream module
-add_custom_target(std_modules ALL
-    COMMAND ${CMAKE_COMMAND} -E echo "Building standard library modules"
-    COMMAND g++-11 -fmodules-ts -std=c++20 -c -x c++-system-header iostream
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+#add_custom_target(std_modules ALL
+#    COMMAND ${CMAKE_COMMAND} -E echo "Building standard library modules"
+#    COMMAND g++-11 -fmodules-ts -std=c++20 -c -x c++-system-header iostream
+#    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+#)
 
 # Function to set up modules in GCC
 function (prepare_for_module TGT)
-    target_compile_options(${TGT} PUBLIC -fmodules-ts)
+    #target_compile_options(${TGT} PUBLIC -fmodules-ts)
     set_property(TARGET ${TGT} PROPERTY CXX_STANDARD 20)
     set_property(TARGET ${TGT} PROPERTY CXX_EXTENSIONS OFF)
-    add_dependencies(${TGT} std_modules)
+    #add_dependencies(${TGT} std_modules)
 endfunction()
 
 # Program name and sources
 set (TARGET prog)
-set (SOURCES dx/apps/dx-test.cpp)
-set (MODULES dx/io.cpp
-             dx/size.cpp
-             dx/map.cpp
-             dx/type.cpp
-             dx/alloc.cpp
-             dx/path.cpp 
-             dx/array.cpp
-             dx/async.cpp
-             dx/bool.cpp
-             dx/build.cpp
-             dx/enum.cpp
-             dx/flags.cpp
-             dx/func.cpp
-             dx/m44.cpp
-             dx/member.cpp
-             dx/model.cpp
-             dx/nan.cpp
-             dx/rand.cpp
-             dx/string.cpp
-             dx/struct.cpp
-             dx/unit.cpp
-             dx/var.cpp
-             dx/vec.cpp
-             dx/watch.cpp
-             dx/dx.cpp)
+set (SOURCES dx/apps/dx-app.cpp)
+set (MODULES dx/io.ixx
+             dx/size.ixx
+             dx/map.ixx
+             dx/type.ixx
+             dx/alloc.ixx
+             dx/path.ixx
+             dx/arr.ixx
+		 dx/string.ixx
+             dx/async.ixx
+             dx/bool.ixx
+             dx/build.ixx
+             dx/enum.ixx
+             dx/flags.ixx
+             dx/func.ixx
+             dx/m44.ixx
+             dx/member.ixx
+             dx/model.ixx
+             dx/nan.ixx
+             dx/rand.ixx
+             dx/struct.ixx
+             dx/unit.ixx
+             dx/var.ixx
+             dx/vec.ixx
+             dx/watch.ixx
+             dx/dx.ixx)
 
 # Setup program modules object library
 set (MODULE_TARGET prog-modules)

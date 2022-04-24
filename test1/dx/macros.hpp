@@ -8,10 +8,10 @@
     C(string s):ex<C>(D) { kind = resolve(s); }
 
 /// ex-bound enums shorthand for most things
-#define enums(C,E,D,ARGS...) \
+#define enums(C,E,D,...) \
     struct C:ex<C> {\
         static Symbols symbols;\
-        enum E { ARGS };\
+        enum E { __VA_ARGS__ };\
         C(E t = D):ex<C>(t)    { }\
         C(string s):ex<C>(D)   { kind = resolve(s); }\
     };\

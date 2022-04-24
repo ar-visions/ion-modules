@@ -1,0 +1,317 @@
+
+template <typename K, typename V>
+struct mpair {
+    K key;
+    V value;
+};
+
+
+template <typename K, typename V>
+class mmap:io {
+public:
+    std::vector<mpair<K,V>> pairs;
+    static typename std::vector<mpair<K,V>>::iterator iterator;
+    
+    mmap(std::nullptr_t n = null) { }
+    
+    mmap(std::initializer_list<mpair<K,V>> p) {
+        pairs.reserve(p.size());
+        for (auto &i: p)
+            pairs.push_back(i);
+    }
+    
+    mmap(size_t reserve) {
+        pairs.reserve(reserve);
+    }
+    
+    mmap(const mmap<K,V> &p) {
+        pairs.reserve(p.size());
+        for (auto &i: p.pairs)
+            pairs.push_back(i);
+    }
+    
+    inline int index(K k) const {
+        int index = 0;
+        for (auto &i: pairs) {
+            if (k == i.key)
+                return index;
+            index++;
+        }
+        return -1;
+    }
+    
+    inline size_t count(K k) const {
+        return index(k) >= 0 ? 1 : 0;
+    }
+    
+    inline V &operator[](K k) {
+        for (auto &i: pairs)
+            if (k == i.key)
+                return i.value;
+        pairs.push_back(mpair <K,V> { k });
+        return pairs.back().value;
+    }
+    
+    inline V &back()                { return pairs.back();     }
+    inline V &front()               { return pairs.front();    }
+    inline V *data()                { return pairs.data();     }
+    inline typeof(iterator) begin() { return pairs.begin();    }
+    inline typeof(iterator) end()   { return pairs.end();      }
+    inline size_t size() const      { return pairs.size();     }
+    inline size_t capacity() const  { return pairs.capacity(); }
+    
+    inline bool erase(K k) {
+        size_t index = 0;
+        for (auto &i: pairs) {
+            if (k == i.key) {
+                pairs.erase(pairs.begin() + index);
+                return true;
+            }
+            index++;
+        }
+        return false;
+    }
+    
+    inline bool operator==(mmap<K,V> &b) {
+        if (size() != b.size())
+            return false;
+        for (auto &[k,v]: b)
+            if ((*this)[k] != v)
+                return false;
+        return true;
+    }
+    
+    inline bool operator!=(mmap<K,V> &b) {
+        return !operator==(b);
+    }
+};
+
+struct vvar {
+    /// so you want 1 allocation, with the type, and the buffer?  yes.
+    enum Specifier {
+        Undefined, /// null state and other uses
+         i8,  u8,
+        i16, u16,
+        i32, u32,
+        i64, u64,
+        f32, f64,
+        Bool,
+        
+        /// high level types...
+        Str, Map, Array, Ref, Arb, Node, Lambda, Any,
+        
+        /// and the mighty general
+        Struct
+    };
+    
+    static std::unordered_map<size_t, std::string> code_names;
+    
+    struct Data {
+        union Window {
+            bool               *b8;
+            int8_t             *i8;
+            int16_t            *i16;
+            int32_t            *i32;
+            int64_t            *i64;
+            float              *f32;
+            double             *f64;      /// we use var to provide i/o to primitives in any shape
+            vvar               *pvar;     /// we use var to point to other vars
+            string             *pstr;     /// just the shell is renewed
+            void               *pvoid;    /// we use var to point anything we want.
+            array<vvar>        *arr;
+            mmap<string, vvar> *fmap;
+        };
+        
+        ///
+        std::atomic<int> refs = 1;
+        array<int>       shape; /// -1 is scalar, 0 >= is vector of (maps dont use this)
+        Specifier        type_id     = Specifier::Undefined;
+        Specifier        compound_id = Specifier::Undefined;
+        Window           w;
+    };
+    
+    struct Alloc {
+        Data *d;
+         Alloc();
+         Alloc(Specifier type_id, int scalar_size, int count);
+        ~Alloc();
+        Data &operator()() const { return *d; }
+    };
+    
+    static void init(Data &intern);
+    static void destructor(Data &intern);
+    
+    /// the var is comprised of layers
+    std::shared_ptr<Alloc> internal;
+    
+    /// return var.
+    vvar operator[](size_t index) {
+        /// none of the whole flags thing, dont need it.
+        /// we want var as minimal as humanly possible while still supporting dx data binding use case on Struct-derrived class
+        
+    }
+    
+    /// size_t key ([0] = type_id), union Window (size_t size)
+    static int type_size(vvar::Specifier type_id) {
+        switch (type_id) {
+            case Bool: return 1;
+            case i8:   return 1;
+            case u8:   return 1;
+            case i16:  return 2;
+            case u16:  return 2;
+            case i32:  return 4;
+            case u32:  return 4;
+            case i64:  return 8;
+            case u64:  return 8;
+            case f32:  return 4;
+            case f64:  return 8;
+            default:
+                break;
+        }
+        return 0;
+    }
+    
+    protected:
+    
+    Data     &intern()              const { return *internal->d; }
+    
+    /// primitives kept in stride in memory
+    template <typename T>
+    void compact_alloc(Specifier type_id, T value, int sz) {
+        internal      = std::shared_ptr<Alloc>(new Alloc { type_id, sizeof(T), sz });
+        Data       *i = internal.get()->d;
+        T        &ref = (T &)i[1];
+        i->type_id    = type_id;
+        i->w.pvoid    = (void *)&ref;
+        ref           = value;
+        for (int n    = 1; n < sz; n++)
+            (&ref)[n] = value;
+    }
+    
+    /// objects allocated in heap (string is an object example)
+    template <typename T>
+    void heap_alloc(Specifier type_id, T &value, int sz) {
+        internal      = std::shared_ptr<Alloc>(new Alloc { type_id, sizeof(T), sz });
+        Data       *i = internal.get()->d;
+        T       **ref = (T **)&i[1];
+        *ref          = new T(value);
+        i->type_id    = type_id;
+        i->w.pvoid    = *ref;
+        for (int n    = 1; n < sz; n++)
+            ref[n]    = new T(value);
+    }
+    
+    public:
+    
+    Specifier type()                   const { return intern().type_id; }
+    Specifier compound()               const { return intern().compound_id; }
+    operator mmap<string, vvar> &()    const { assert(type() == Map); return *intern().w.fmap; }
+    bool operator==(const vvar &b)     const { return intern().type_id == b.intern().type_id; }
+    bool operator==(vvar &b)           const { return intern().type_id == b.intern().type_id; }
+    bool operator==(vvar::Specifier b) const { return intern().type_id == size_t(b); }
+    bool operator>=(vvar::Specifier b) const { return intern().type_id >= size_t(b); }
+    bool operator<=(vvar::Specifier b) const { return intern().type_id <= size_t(b); }
+    bool operator> (vvar::Specifier b) const { return intern().type_id >  size_t(b); }
+    bool operator< (vvar::Specifier b) const { return intern().type_id <  size_t(b); }
+    bool operator!=(vvar::Specifier b) const { return intern().type_id != size_t(b); }
+    
+    ///
+    template <typename T>
+    T type_name() {
+        auto &i = intern();
+        return i.type_id <= Struct ? specifier_name(i.type_id) : code_names[i.type_id];
+    }
+    ///
+    vvar(Specifier type_id, std::string code_name = "") { }
+    
+    vvar() { }
+    
+    ///
+    vvar( int8_t   i8) { compact_alloc(Specifier::i8,   i8, -1); }
+    vvar(uint8_t   u8) { compact_alloc(Specifier::u8,   u8, -1); }
+    vvar( int16_t i16) { compact_alloc(Specifier::i16, i16, -1); }
+    vvar(uint16_t u16) { compact_alloc(Specifier::u16, u16, -1); }
+    vvar( int32_t i32) { compact_alloc(Specifier::i32, i32, -1); }
+    vvar(uint32_t u32) { compact_alloc(Specifier::u32, u32, -1); }
+    vvar( int64_t i64) { compact_alloc(Specifier::i64, i64, -1); }
+    vvar(uint64_t u64) { compact_alloc(Specifier::u64, u64, -1); }
+    vvar(float    f32) { compact_alloc(Specifier::f32, f32, -1); }
+    vvar(double   f64) { compact_alloc(Specifier::f64, f64, -1); }
+    
+    
+    template <typename T>
+    vvar(array<T> a) {
+        compact_alloc(Specifier::f64, f64, -1);
+        
+    }
+    
+    vvar(string   str) {    heap_alloc(Specifier::Str, str, -1); }
+    
+    ///
+    operator   int8_t &() { return (  int8_t &)*intern().w.i8;  }
+    operator  uint8_t &() { return ( uint8_t &)*intern().w.i8;  }
+    ///
+    operator  int16_t &() { return ( int16_t &)*intern().w.i16; }
+    operator uint16_t &() { return (uint16_t &)*intern().w.i16; }
+    ///
+    operator  int32_t &() { return ( int32_t &)*intern().w.i32; }
+    operator uint32_t &() { return (uint32_t &)*intern().w.i32; }
+    ///
+    operator  int64_t &() { return ( int64_t &)*intern().w.i64; }
+    operator uint64_t &() { return (uint64_t &)*intern().w.i64; }
+    ///
+    operator    float &() { return (float    &)*intern().w.f32; }
+    operator   double &() { return (double   &)*intern().w.f64; }
+    
+    operator     string() {
+        auto &i = intern();
+        switch (i.type_id) {
+            case Specifier::Str: return *i.w.pstr;
+            case Specifier::f32: return string(double((    float)*i.w.f32));
+            case Specifier::f64: return string(double((   double)*i.w.f64));
+            case Specifier::i32: return string(int32_t(( int32_t)*i.w.i32));
+            case Specifier::u32: return string(int32_t((uint32_t)*i.w.i32));
+            case Specifier::i64: return string(int64_t(( int64_t)*i.w.i64));
+            case Specifier::u64: return string(int64_t((uint64_t)*i.w.i64));
+            default: break;
+        }
+        return string(null);
+    };
+    
+    ///
+protected:
+    cchar_t *specifier_name(size_t id) { /// allow runtime population of this
+        static std::unordered_map<size_t, cchar_t *> fmap = {
+            { Undefined, "Undefined"    },
+            { i8,        "i8"           }, {   i8,  "u8"      },
+            { i16,       "i16"          }, {  u16,  "u16"     },
+            { i32,       "i32"          }, {   u32, "u32"     },
+            { i64,       "i64"          }, {   u64, "u64"     },
+            { f32,       "f32"          }, {   f64, "f64"     },
+            { Bool,      "Bool"         }, {   Str, "Str"     },
+            { Map,       "Map"          }, { Array, "Array"   },
+            { Ref,       "Ref"          }, {  Node, "Node"    },
+            { Lambda,    "Lambda"       }, {   Any, "Any"     },
+            { Struct,    "Struct"       }
+        };
+        assert(fmap.count(id));
+        return fmap[id];
+    }
+};
+
+template <class T>
+struct IId:vvar {
+    IId() : vvar(0) {
+        std::string code_name = ::code_name<T>();
+        size_t      type_id   = std::hash<std::string>()(code_name);
+        if (code_names.count(type_id) == 0)
+            code_names[type_id] = code_name;
+        compact_alloc(type_id, code_name, -1);
+    }
+};
+
+
+
+A massive asteroid strides the earth when you get the phrase wrong...
+
+
