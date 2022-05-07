@@ -1,5 +1,6 @@
 export module unit;
 
+/**/
 import io;
 import arr;
 import map;
@@ -20,7 +21,7 @@ struct Unit:io {
     ///
     static std::unordered_map<str, int> u_flags;
     str             type   = null;
-    real            value  = dx::nan<real>();
+    real            value  = nan<real>();
     int64_t         millis = 0;
     FlagsOf<Attrib> flags  = null; /// FlagsOf makes flags out of most of the things
     

@@ -49,15 +49,15 @@ public:
         });
     }
     array(ssz  sz, T v)                {   realloc(sz); for (size_t i = 0; i < size_t(sz); i++) a->push_back(v);     }
-    array(int  sz, func<T(size_t)> fn) {   realloc(sz); for (size_t i = 0; i < size_t(sz); i++) a->push_back(fn(i)); }
+    array(int  sz, lambda<T(size_t)> fn) {   realloc(sz); for (size_t i = 0; i < size_t(sz); i++) a->push_back(fn(i)); }
     array(std::nullptr_t n)            { }
     array(ssz  sz)                     { realloc(sz); }
     
     /// quick-sort raw implementation.
-    array<T> sort(func<int(T &a, T &b)> cmp) {
+    array<T> sort(lambda<int(T &a, T &b)> cmp) {
         auto   &self = ref();
         array<T *> r = {size(), [&](size_t i) { return &self[i]; }};
-        std::function<void(int,   int)> qk;
+        lambda <void(int,   int)> qk;
             qk =       [&](int s, int e) {
             /// sanitize, set mutable vars i and j to the start and end
             if (s >= e) return;
@@ -96,6 +96,7 @@ public:
 	
     int                 isize()        const { return a ?     int(a->size()) : 0;  }
 	ssz                  size()		   const { return a ? a->size() : 0; }
+	size_t				   sz()		   const { return a ? a->size() : 0; }
 	ssz              capacity()        const { return a ? a->capacity() : 0;       }
 	
     std::vector<T>    &vector()              { return ref();                       }
@@ -174,7 +175,7 @@ public:
     
     /// its a vector operation it deserves to expand
     template <typename R>
-    R select_first(func<R(T &)> fn) const {
+    R select_first(lambda<R(T &)> fn) const {
         if (a) for (auto &i: *a) {
             R r = fn((T &)i);
             if (r)

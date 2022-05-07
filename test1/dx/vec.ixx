@@ -4,6 +4,8 @@ import io;
 import nan;
 import var;
 
+// start var as early as possible, and you just use the same data structures
+
 export {
 
 template <typename T>

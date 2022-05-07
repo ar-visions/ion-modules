@@ -1,7 +1,6 @@
 export module rand;
 
 import io;
-import std.core;
 
 export struct Rand {
     struct Sequence {

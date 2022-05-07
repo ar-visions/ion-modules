@@ -50,11 +50,11 @@ struct M:Member {
 
     ///
     template <typename R, typename A>
-    R operator()(A a) { return (*(func<R(A)> *)value)(a); }
+    R operator()(A a) { return (*(lambda<R(A)> *)value)(a); }
 
     ///
     template <typename R, typename A, typename B>
-    R operator()(A a, B b) { return (*(func<R(A,B)> *)value)(a, b); }
+    R operator()(A a, B b) { return (*(lambda<R(A,B)> *)value)(a, b); }
     
     ///
     M<T> &operator=(const M<T> &ref) {
@@ -83,9 +83,9 @@ struct M:Member {
 
 // Lambda. forever.
 template <typename F>
-struct Lambda:M<func<F>> {
-    typedef typename func<F>::rtype rtype;
-    static  const    size_t arg_count = func<F>::args;
+struct Lambda:M<lambda<F>> {
+    typedef typename lambda<F>::rtype rtype;
+    static  const    size_t arg_count = lambda<F>::args;
     rtype            last_result; // Lamba is a cached result using member services; likely need controls on when its invalidated in context
 };
 
@@ -146,7 +146,7 @@ struct Meta:var {
 
     ///
     template <typename F>
-    void lambda(cchar_t *name, Lambda<F> &lambda, std::function<F> fn) {
+    void lambda(cchar_t *name, Lambda<F> &lambda, lambda<F> fn) {
         typedef typename Lambda<F>::fun   Lfun;
         typedef typename Lambda<F>::rtype Rtype;
         ///
@@ -165,7 +165,7 @@ struct Meta:var {
       //members          += &lambda; # will need a separate container for introspection
         Fn var_fn = [la=&lambda] (var  &args) {
             Rtype         &r =  la->last_result; /// return memory
-            Lfun          &f = *la->value;       /// lambda memory std::function<F>(fn)
+            Lfun          &f = *la->value;       /// lambda memory lambda<F>(fn)
             ::array<var>  &a =  args.array();    /// each request should allocate an args to prevent realloc
             ///
             if      constexpr (Lambda<F>::arg_count == 0)

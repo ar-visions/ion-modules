@@ -5,10 +5,6 @@ import map;
 
 export {
 
-struct string;
-struct node;
-struct var;
-
 /// definitely want this pattern for var
 struct Instances {
     std::unordered_map<Type, void *> allocs;
@@ -21,7 +17,7 @@ struct Instances {
     inline void set(Type &id, T *ptr) { allocs[id] = ptr; }
 };
 
-/// deprecate usage, convert style.
+/// deprecate usage, convert style. [do not start until first light is confirmed]
 template <typename T>
 struct ptr {
     struct Alloc {

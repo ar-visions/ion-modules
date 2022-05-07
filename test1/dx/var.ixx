@@ -4,8 +4,7 @@ import io;
 import arr;
 import map;
 import str;
-
-void _print(str t, array<var>& a, bool error);
+import type;
 
 export {
 
@@ -14,9 +13,15 @@ struct VoidRef {
     VoidRef(void *v) : v(v) { }
 };
 
-export struct var:io {
-    Type::Specifier t = Type::Undefined;
-    Type::Specifier c = Type::Undefined;
+struct var:io {
+    Type t = Type::Undefined;
+    Type c = Type::Undefined;
+
+	typedef lambda<void(var&)>            Fn2;
+	typedef lambda<void(var&, node*)>     FnNode;
+	typedef lambda< var()>                FnGet;
+	typedef lambda<void(var&, string&)>   FnEach;
+	typedef lambda<void(var&, size_t)>    FnArrayEach;
 
     enum Binding {
         Insert,
@@ -32,8 +37,8 @@ export struct var:io {
     };
     
     struct TypeFlags {
-        Type::Specifier t;
-        int             flags;
+		Type   t = Type::Undefined;
+        int    flags;
     };
     
     typedef map<string, TypeFlags> FieldFlags;
@@ -57,7 +62,7 @@ export struct var:io {
     };
     
     u                            n_value = { 0 }; /// should be n space (n points to unions elsewhere too such as in-stride shorts, very out of fashion)
-    Fn                           fn;
+    Fn2                          fn;
   //FnFilter                     ff;
     std::shared_ptr<uint8_t>     d = null;
     map<string, var>             m = null;
@@ -69,7 +74,7 @@ export struct var:io {
     Shape<Major>                 sh;
 
     /// observer fn and pointer (used by Storage controllers [shakes fist] -- todo: merge into binding allocation via class
-    std::function<void(Binding op, var &row, str &field, var &value)> fn_change;
+    lambda<void(Binding op, var &row, str &field, var &value)> fn_change;
     string     field = "";
     var         *row = null;
     var    *observer = null;
@@ -154,8 +159,11 @@ protected:
     }
 
     static char* parse_value(var& sc, char* start, string field,
-        Type::Specifier enforce_type, FieldFlags& flags) {
+        Type enforce_type, FieldFlags& flags) {
         char* cur = start;
+
+		bool weird_thing = *cur == '-' || isdigit(*cur);
+
         if (*cur == '{') {
             return parse_obj(sc, start, field, flags);
         }
@@ -175,10 +183,10 @@ protected:
             if (flags.count(field) > 0 && (flags[field].flags & Flags::Encode)) {
                 assert(enforce_type == Type::Any || enforce_type == Type::Array);
                 size_t alloc = 0;
-                sc.t = Type::Array;
-                sc.c = flags[field].t;
-                sc.d = decode(s.cstr(), s.size(), &alloc);
-                sc.sh = (alloc - size_t(1)) / size_t(Type::size(sc.c));
+                sc.t  = Type::Array;
+                sc.c  = flags[field].t;
+                sc.d  = decode(s.cstr(), s.size(), &alloc);
+                sc.sh = (alloc - size_t(1)) / sc.c.type_size();
                 assert(alloc > 0);
             }
             else {
@@ -187,7 +195,7 @@ protected:
                 sc.s = s;
             }
         }
-        else if (*cur == '-' || isdigit(*cur)) {
+        else if (weird_thing) {
             string value = parse_numeric(&cur);
             assert(value != "");
             double  d = atof(value.cstr());
@@ -211,19 +219,19 @@ protected:
             ///
             if (sc.t != Type::Str) {
                 sc.n = &sc.n_value;
-                switch (sc.t) {
-                case Type::Bool: *((bool*)sc.n) = bool(i); break;
-                case Type::ui8:  *((uint8_t*)sc.n) = uint8_t(i); break;
-                case Type::i8:   *((int8_t*)sc.n) = int8_t(i); break;
-                case Type::ui16: *((uint16_t*)sc.n) = uint16_t(i); break;
-                case Type::i16:  *((int16_t*)sc.n) = int16_t(i); break;
-                case Type::ui32: *((uint32_t*)sc.n) = uint32_t(i); break;
-                case Type::i32:  *((int32_t*)sc.n) = int32_t(i); break;
-                case Type::ui64: *((uint64_t*)sc.n) = uint64_t(i); break;
-                case Type::i64:  *((int64_t*)sc.n) = int64_t(i); break;
-                case Type::f32:  *((float*)sc.n) = float(d); break;
-                case Type::f64:  *((double*)sc.n) = double(d); break;
-                case Type::Str:
+                switch (Type::Specifier(sc.t)) {
+					case Type::Bool: *((bool     *)sc.n) =     bool(i); break;
+					case Type::ui8:  *((uint8_t  *)sc.n) =  uint8_t(i); break;
+					case Type::i8:   *((int8_t   *)sc.n) =   int8_t(i); break;
+					case Type::ui16: *((uint16_t *)sc.n) = uint16_t(i); break;
+					case Type::i16:  *((int16_t  *)sc.n) =  int16_t(i); break;
+					case Type::ui32: *((uint32_t *)sc.n) = uint32_t(i); break;
+					case Type::i32:  *((int32_t  *)sc.n) =  int32_t(i); break;
+					case Type::ui64: *((uint64_t *)sc.n) = uint64_t(i); break;
+					case Type::i64:  *((int64_t  *)sc.n) =  int64_t(i); break;
+					case Type::f32:  *((float    *)sc.n) =    float(d); break;
+					case Type::f64:  *((double   *)sc.n) =   double(d); break;
+					case Type::Str:
                 default:
                     assert(false);
                     break;
@@ -312,12 +320,12 @@ public:
     var(std::nullptr_t p) : var(Type::Undefined) { }
     var(::array<var> da)  : t(Type::Array)       {
         size_t sz = da.sz();
-        c         = sz ? da[0].t : Type::Undefined;
+        c         = sz ? Type(da[0].t) : Type(Type::Undefined);
         a         = ::array<var>(sz);
         for (auto &d: da)
             a += d;
     }
-    var(Fn fn_) : t(Type::Lambda), fn(fn_) { }
+    var(Fn2 fn_) : t(Type::Lambda), fn(fn_) { }
 
     bool operator==(uint16_t v) { return n && *((uint16_t *)n) == v; }
     bool operator==( int16_t v) { return n && *(( int16_t *)n) == v; }
@@ -328,13 +336,13 @@ public:
     bool operator==( float   v) { return n && *((   float *)n) == v; }
     bool operator==(double   v) { return n && *((  double *)n) == v; }
 
-    bool operator==(Type::Specifier tt) {
+    bool operator==(Type tt) {
         return resolve(*this).t == tt;
     }
 
     /// ----------------------------------------------
 
-    var select_first(std::function<var (var &)> fn) {
+    var select_first(lambda<var (var &)> fn) {
         var &r = resolve(*this);
         if (r.a)
             for (auto &v: r.a) {
@@ -345,7 +353,7 @@ public:
         return null;
     }
 
-    ::array<var> select(std::function<var(var &)> fn) {
+    ::array<var> select(lambda<var(var &)> fn) {
         ::array<var> result;
         var &r = resolve(*this);
         if (r.a)
@@ -466,11 +474,30 @@ public:
             return str(v, len);
         };
         
-        auto rd = std::function<void(var &)>();
-        rd = [&](var &d) {
+		//
+		// pro tip. lambdas do seem to error in strange ways and if
+		// you are not expressing the return value correctly or
+		// worse returning on a void it will bark.
+		// 
+		// it was erroring in static and difficult to actually find
+		// this location baed on the structure of the msvc output,
+		// but its always good to look in log. it was down to the
+		// expressed lambda returning a value, and thus expressing
+		// different type from its prior declaration.
+		//
+		// its very useful to have your own inhouse lambda but its
+		// actually difficult to add all of the luxouries inplace
+		// if anyone has contributions please do so.  the lambda is
+		// important and its Sharable nature is something im keen
+		// on expressing for other types throughout as things shift
+		// and scale. [/tinker-toy-falls-apart-cat-runs]
+		//
+
+		auto rd = Fn2();
+        rd = [&](var& d) -> void {
             int dt;
             f.read((char *)&dt, sizeof(int));
-            d.t = Type::Specifier(size_t(dt));
+            d.t = Type(Type::Specifier(dt));
             
             int meta_sz = 0;
             f.read((char *)&meta_sz, sizeof(int));
@@ -492,7 +519,7 @@ public:
                     }
                     d.sh = sh;
                     if (d.c >= Type::i8 && d.c <= Type::Bool) {
-                        int ts = Type::size(d.c);
+						int ts = d.c.type_size();
                         d.d = std::shared_ptr<uint8_t>(new uint8_t[ts * sz]);
                         f.read((char *)d.data<uint8_t>(), ts * sz);
                     } else {
@@ -515,18 +542,17 @@ public:
                 f.read((char *)&len, sizeof(int));
                 d.s = str(st());
             } else {
-                size_t ts = Type::size(d.t);
+                size_t ts = d.t.type_size();
                 assert(d.t >= Type::i8 && d.t <= Type::Bool);
                 d.n = &d.n_value;
                 f.read((char *)d.n, ts);
             }
-            return d;
         };
         rd(*this);
     }
 
     void write(std::ofstream &f, enum Format format) {
-        auto wri_str = std::function<void(str &)>();
+        auto wri_str = lambda<void(str &)>();
         
         wri_str = [&](str &str) {
             int len = int(str.size());
@@ -534,12 +560,12 @@ public:
             f.write(str.cstr(), size_t(len));
         };
         
-        auto wri = std::function<void(var &)>();
+        auto wri = lambda<void(var &)>();
         
         wri = [&](var &d) {
             int dt = d.t;
             f.write((cchar_t *)&dt, sizeof(int));
-			ssz ts = Type::size(d.t);
+			ssz ts = d.t.type_size();
             
             // meta != map in abstract; we just dont support it at runtime
 			ssz meta_sz = ((d.t != Type::Map) && d.m) ? d.m.size() : 0;
@@ -574,7 +600,7 @@ public:
                     }
                     if (d.c >= Type::i8 && d.c <= Type::Bool) {
                         assert(bool(d.d));
-                        size_t ts = Type::size(d.c);
+						size_t ts = d.c.type_size();
                         f.write((cchar_t *)d.data<uint8_t>(), ts * size_t(sz));
                     } else if (d.c == Type::Map) {
                         assert(d.a);
@@ -611,10 +637,10 @@ public:
         }
     }
 
-    var(Type::Specifier c, std::shared_ptr<uint8_t> d, Shape<Major> sh) : t(Type::Array), c(c), d(d), sh(sh) { }
+    var(Type c, std::shared_ptr<uint8_t> d, Shape<Major> sh) : t(Type::Array), c(c), d(d), sh(sh) { }
 
-    var(Type::Specifier t = Type::Undefined, Type::Specifier c = Type::Undefined, size_t sz = 0)  : t(t == Type::Undefined ? Type::Map : t), c(
-            ((t == Type::Array || t == Type::Map) && c == Type::Undefined) ? Type::Any : c) {
+    var(Type t = Type::Undefined, Type c = Type::Undefined, size_t sz = 0)  : t(t == Type::Undefined ? Type(Type::Map) : Type(t)), c(
+            ((t == Type::Array || t == Type::Map) && c == Type::Undefined) ? Type(Type::Any) : Type(c)) {
         // ------------------------------------
         if (this->t == Type::Array)
             a = ::array<var>(sz);
@@ -633,14 +659,21 @@ public:
     var(uint16_t v) : t(Type::ui16), n(&n_value) { *((uint16_t *)n) = v; }
     var(int32_t  v) : t(Type:: i32), n(&n_value) { *((int32_t  *)n) = v; }
     var(uint32_t v) : t(Type::ui32), n(&n_value) { *((uint32_t *)n) = v; }
+	
 
-    var(Type::Specifier t, string str) : t(t) {
+	template <typename T>
+	operator FlagsOf<T>() { return uint64_t(resolve(*this)); }
+
+	template <typename T>
+	var(FlagsOf<T>& f) : t(Type::ui64), n(&n_value) { *((uint64_t*)n) = f.flags; }
+
+    var(Type t, string str) : t(t) {
         // ------------------------------------
         cchar_t* c = str.cstr();
         int64_t  i = std::strtoll(c, null, 10);
         n          = &n_value;
         // ------------------------------------
-        switch (size_t(t)) {
+        switch (Type::Specifier(t)) {
             case Type::Bool: *((bool*)n) = bool(*c && (*c == 't' || *c == 'T' || isdigit(*c))); break;
             case Type::ui8:  *(( uint8_t*)n) =  uint8_t(i); break;
             case Type::i8:   *((  int8_t*)n) =   int8_t(i); break;
@@ -679,12 +712,12 @@ public:
     var(const var &ref) {
         copy((var &)ref);
     }
-    var(Type::Specifier t, void* v) : t(t), sh(0) {
+    var(Type t, void* v) : t(t), sh(0) {
         assert(t == Type::Arb);
         /// unsafe pointer use-case. [merge]
         n_value.vstar = (void*)v;
     }
-    var(Type::Specifier t, u* n) : t(t), n((u*)n) {
+    var(Type t, u* n) : t(t), n((u*)n) {
         /// unsafe pointer use-case. [merge]
         // assert(false);
     }
@@ -695,8 +728,8 @@ public:
             vref = vref->n_value.vref; // refactor the names.
         n_value.vref = vref;
     }
-    var(Type::Specifier c, Shape<Major> sh) : sh(sh) {
-        size_t t_sz = Type::size(c);
+    var(Type c, Shape<Major> sh) : sh(sh) {
+		size_t t_sz = c.type_size();
         this->t = Type::Array;
         this->c = c;
         this->d = std::shared_ptr<uint8_t>((uint8_t*)calloc(t_sz, size_t(sh)));
@@ -704,7 +737,7 @@ public:
     }
 
     template <typename T>
-    var(Type::Specifier c, std::shared_ptr<T> d, Shape<Major> sh) : sh(sh) {
+    var(Type c, std::shared_ptr<T> d, Shape<Major> sh) : sh(sh) {
         this->t = Type::Array;
         this->c = c;
         this->d = std::static_pointer_cast<uint8_t>(d);
@@ -712,7 +745,7 @@ public:
     }
 
     template <typename T>
-    var(Type::Specifier c, std::shared_ptr<T> d, ssz sz) {
+    var(Type c, std::shared_ptr<T> d, ssz sz) {
         this->t = Type::Array;
         this->c = c;
         this->d = std::static_pointer_cast<uint8_t>(d);
@@ -739,7 +772,7 @@ public:
             || (std::is_same_v<T, int32_t>) || (std::is_same_v<T, uint32_t>)
             || (std::is_same_v<T, int64_t>) || (std::is_same_v<T, uint64_t>)
             || (std::is_same_v<T, float>)   || (std::is_same_v<T, double>)) {
-            size_t ts = Type::size(c);
+			size_t ts = c.type_size();
             sh = Shape<Major>(sz);
             d = std::shared_ptr<uint8_t>((uint8_t*)calloc(ts, sz));
             flags = Flags::Compact;
@@ -803,9 +836,9 @@ public:
     void compact() {
         if (!a || t != Type::Array || (flags & Flags::Compact))
             return;
-        flags    |= Flags::Compact;
-        int type  = -1;
-        int types =  0;
+        flags     |= Flags::Compact;
+        Type type  = Type::Undefined;
+        int types  =  0;
         
         for (auto &i: a)
             if (i.t != type) {
@@ -814,14 +847,14 @@ public:
             }
         
         if (types == 1) {
-            size_t ts = Type::size(Type::Specifier(size_t(type)));
+            size_t ts = type.type_size();
             if (ts == 0)
                 return;
             sh     = a.size();
             var *r = a.data();
             d      = std::shared_ptr<uint8_t>((uint8_t *)malloc(ts * size_t(sh)));
             
-            switch (type) {
+            switch (Type::Specifier(type)) {
                 case Type::Bool: {
                     bool *v = (bool *)d.get();
                     for (size_t i = 0; i < size_t(sh); i++) {
@@ -928,12 +961,12 @@ public:
     Shape<Major> shape() {
         var &v = resolve(*this);
         Shape<Major> sm;
-        if (v.sh.size())
-            sm = v.sh;
-        else if (v.size())
-            sm = v.size();
-        else
-            sm = Type::size(v.t);
+		if (v.sh.size())
+			sm = v.sh;
+		else if (v.size())
+			sm = v.size();
+		else
+			sm = v.t.type_size();
         return sm;
     }
 
@@ -970,7 +1003,7 @@ public:
     void each(FnArrayEach each) { size_t i = 0; for (auto &d: a) each(d, i++); }
 
     /// once we get an assign= operator, you are notified with the value, and you call update
-    void observe(std::function<void(Binding op, var &row, str &field, var &value)> fn) {
+    void observe(lambda<void(Binding op, var &row, str &field, var &value)> fn) {
         var &v = resolve(*this);
         assert(v.t == Type::Array);
         for (auto &row: v.a)
@@ -1032,11 +1065,11 @@ public:
         uint8_t *vdata = data<uint8_t>();
         ///
         std::ofstream f(p, std::ios::out | std::ios::binary);
-        f.write((cchar_t *)vdata, a.sz() * size_t(Type::size(c)));
+        f.write((cchar_t *)vdata, a.sz() * c.type_size());
         f.close();
     }
 
-    void attach(string name, void *arb, std::function<void(var &)> fn) {
+    void attach(string name, void *arb, lambda<void(var &)> fn) {
         auto &m = map();
         m[name]        = var { Type::Arb, arb };
         m[name].flags |= DestructAttached;
@@ -1137,7 +1170,7 @@ public:
         if (v.t != ref.t)
             return true;
         else if (v == Type::Lambda)
-            return fn_id((Fn&)ref.fn) != fn_id((Fn&)fn);
+            return !(fn_id(((var &)ref).fn) == fn_id(fn));
         else if (v.t == Type::Undefined || v.t == Type::Any)
             return false;
         else if (v.t == Type::Str)
@@ -1172,7 +1205,7 @@ public:
         }
         else {
             assert(v.t >= Type::i8 && v.t <= Type::Bool);
-            size_t  ts = Type::size(v.t);
+			size_t  ts = v.t.type_size();
             bool match = memcmp(v.n, ref.n, ts) == 0;
             return !match;
         }
@@ -1188,7 +1221,7 @@ public:
     operator str() {
         // ------------------------------------
         var& r = resolve(*this);
-        switch (size_t(r.t)) {
+        switch (Type::Specifier(r.t)) {
             // ------------------------------------
         case Type::i8: [[fallthrough]];
         case Type::ui8:  return std::to_string(*((int8_t*)r.n));
@@ -1206,7 +1239,7 @@ public:
             str ss = "[";
             if (c >= Type::i8 && c <= Type::Bool) {
                 size_t  sz = size_t(sh);
-                size_t  ts = Type::size(c);
+				size_t  ts = c.type_size();
                 uint8_t* v = d.get();
                 for (size_t i = 0; i < sz; i++) {
                     if (i > 0)
@@ -1276,7 +1309,7 @@ public:
     operator bool() {
         // ------------------------------------
         var& v = resolve(*this);
-        switch (size_t(v.t)) {
+        switch (Type::Specifier(v.t)) {
             case Type::Bool:  return *((bool*)v.n) != false;
             case Type::i8:    return *((  int8_t*)v.n) > 0;
             case Type::ui8:   return *(( uint8_t*)v.n) > 0;
@@ -1309,7 +1342,7 @@ public:
         bool needs_refs = (sz > 0 && !v.a);
         if (needs_refs) {
             uint8_t *u8 = (uint8_t *)v.d.get();
-            size_t   ts = Type::size(v.c);
+            size_t   ts = v.c.type_size();
             v.a.clear(sz); 
             for (int i = 0; i < sz; i++)
                 v.a += var { v.c, (u *)&u8[i * ts] };
@@ -1322,7 +1355,7 @@ public:
         return std::static_pointer_cast<T>(d);
     }
     
-    operator Fn &() { return resolve(*this).fn; } // [fixed] without resolve this was not playing ball
+    operator Fn2 &() { return resolve(*this).fn; } // [fixed] without resolve this was not playing ball
 
     template <typename T>
     inline T deref_value() {
@@ -1387,13 +1420,13 @@ public:
         m = null;
         t = Type::Array;
         c = Type::Any;
-        Type::Specifier last_type = Type::Specifier(-1);
+        Type last_type = Type::Undefined;
         int types = 0;
         a = ::array<var>(aa.size());
         for (auto &v: aa) {
             var d = var(v);
             if (d.t != last_type) {
-                last_type  = Type::Specifier(size_t(d.t));
+				last_type = d.t;
                 types++;
             }
             a += v;
@@ -1415,7 +1448,7 @@ public:
         return *this;
     }
     
-    var &operator=(Fn _fn) {
+    var &operator=(Fn2 _fn) {
          t = Type::Lambda;
         fn = _fn;
         notify_update();
@@ -1508,7 +1541,7 @@ enum LogType {
 };
 
 /// could have a kind of Enum for LogType and LogDissolve, if fancied.
-typedef std::function<void(str &)> FnPrint;
+typedef lambda<void(str &)> FnPrint;
 
 template <const LogType L>
 struct Logger {

@@ -26,31 +26,8 @@ endfunction()
 # Program name and sources
 set (TARGET prog)
 set (SOURCES dx/apps/dx-app.cpp)
-set (MODULES dx/io.ixx
-             dx/size.ixx
-             dx/map.ixx
-             dx/type.ixx
-             dx/alloc.ixx
-             dx/path.ixx
-             dx/arr.ixx
-		 dx/string.ixx
-             dx/async.ixx
-             dx/bool.ixx
-             dx/build.ixx
-             dx/enum.ixx
-             dx/flags.ixx
-             dx/func.ixx
-             dx/m44.ixx
-             dx/member.ixx
-             dx/model.ixx
-             dx/nan.ixx
-             dx/rand.ixx
-             dx/struct.ixx
-             dx/unit.ixx
-             dx/var.ixx
-             dx/vec.ixx
-             dx/watch.ixx
-             dx/dx.ixx)
+set (MODULES dx/dx.ixx 
+)
 
 # Setup program modules object library
 set (MODULE_TARGET prog-modules)

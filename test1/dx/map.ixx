@@ -1,6 +1,5 @@
 export module map;
 
-import std.core;
 import io;
 
 export {
@@ -78,7 +77,7 @@ struct map:io {
         for (auto &i: *pairs)
             if (k == i.key)
                 return i.value;
-        pairs->push_back(pair <K,V> { k });
+        pairs->push_back(pair <K,V> { k, V() });
         return pairs->back().value;
     }
     

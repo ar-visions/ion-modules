@@ -9,8 +9,8 @@ import std.random;
 
 import nan;
 import arr;
-import async;
 import var;
+import async;
 
 export module watch;
 export {
@@ -37,22 +37,22 @@ struct PathState {
 
 /// a protected-struct concept with async service
 struct Watch {
-    typedef std::function<void(bool, array<PathOp> &)> Fn;
+    typedef lambda<void(bool, array<PathOp> &)> Fn;
 protected:
-    bool         safe = false;
-    bool    canceling = false;
-    const int polling = 1000;
-    array<Path>   paths;
-    Fn       watch_fn;
-    array<PathOp>   ops;
-    int          iter = 0;
-    int       largest = 0;
-    array<str>     exts;
+    bool              safe = false;
+    bool         canceling = false;
+    const int      polling = 1000;
+    array<Path>      paths;
+    Fn            watch_fn;
+    array<PathOp>      ops;
+    int               iter = 0;
+    int            largest = 0;
+    array<str>        exts;
     std::unordered_map<str, PathState> path_states;
 public:
     /// initialize, modified, created, deleted
     static Watch &spawn(array<Path> paths, array<str> exts, FlagsOf<Path::Flags> flags,
-                        std::function<void(bool, array<PathOp> &)> watch_fn) {
+                        lambda<void(bool, array<PathOp> &)> watch_fn) {
         ///
         Watch *pw = new Watch();
         pw->paths    = paths;

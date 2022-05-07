@@ -1,6 +1,8 @@
 import io;
 import flags;
 import arr;
+import str;
+import var;
 
 /// this is local to this module only
 #include <sys/types.h>
@@ -8,8 +10,12 @@ import arr;
 // this is used with fstat i think
 //#include <unistd.h>
 
-export module dx:path;
+export module path;
 export {
+
+void chdir(std::string c) {
+
+}
 
 struct dir {
     std::filesystem::path prev;
@@ -19,7 +25,7 @@ struct dir {
 
 ///
 struct Path {
-    typedef func<void(Path)> Fn;
+    typedef lambda<void(Path)> Fn;
     
     enum Flags {
         Recursion,
@@ -30,22 +36,22 @@ struct Path {
     
     path_t p;
     ///
-    str             stem() const { return p.stem().string(); }
-    static Path      cwd() { return std::filesystem::current_path(); }
-    bool operator==(Path &b)                const { return p == b.p; } //
-    bool operator!=(Path &b)                const { return p != b.p; } //
+    str               stem() const { return p.stem().string();               }
+    static Path        cwd()       { return std::filesystem::current_path(); }
+    bool operator==(Path &b) const { return p == b.p;                        } //
+    bool operator!=(Path &b) const { return p != b.p;                        } //
 
     /// act like bash, and be functional
     Path(std::filesystem::directory_entry ent): p(ent.path()) { }
-    Path(std::nullptr_t n)        { }
-    Path(cchar_t *p)       : p(p) { }
-    Path(path_t   p)       : p(p) { }
-    Path(var      v)       : p(v) { }
-    Path(str      s)       : p(s) { }
-    cchar_t *cstr() const { return p.c_str(); }
-    str  ext ()                   { return p.extension().string(); }
-    Path file()                   { return std::filesystem::is_regular_file(p) ? Path(p) : Path(null); }
-    bool copy(Path to) const {
+    Path(std::nullptr_t n)  { }
+    Path(cchar_t       *p) : p(p) { }
+    Path(path_t         p) : p(p) { }
+    Path(var            v) : p(v) { }
+    Path(str            s) : p(s) { }
+    cchar_t *cstr(       ) const  { return p.c_str(); }
+    str      ext (       )        { return p.extension().string(); }
+    Path     file(       )        { return std::filesystem::is_regular_file(p) ? Path(p) : Path(null); }
+    bool     copy(Path to) const  {
         /// no recursive implementation at this point
         assert(is_file() && exists());
         if (!to.exists())
@@ -117,7 +123,7 @@ struct Path {
         return int64_t(st.st_ctime);
     }
 
-    bool read(size_t bs, func<void(const char *, size_t)> fn) {
+    bool read(size_t bs, lambda<void(const char *, size_t)> fn) {
         try {
             std::error_code ec;
             size_t rsize = std::filesystem::file_size(p, ec); /// this should be independent of any io caching facilities; it should work down to a second
@@ -168,7 +174,7 @@ struct Path {
         bool recursive = flags[Recursion];
         bool no_hidden = flags[NoHidden];
         auto ignore    = flags[UseGitIgnores] ? str::read_file(p / ".gitignore").split("\n") : array<str>();
-        std::function<void(Path)> res;
+        lambda<void(Path)> res;
         std::unordered_map<Path, bool> fetched_dir;
         path_t parent = p; /// parent relative to the git-ignore index; there may be multiple of these things.
         ///
@@ -241,13 +247,13 @@ struct Path {
 
 
 };
-
+/*
 namespace std {
     template<> struct hash<Path> {
         size_t operator()(Path const& p) const { return hash<std::string>()(p); }
     };
 }
-
+*/
 struct SymLink {
     str alias;
     Path path;

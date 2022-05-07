@@ -51,7 +51,7 @@ public:
     string      operator() (int s)               const { return substr(s);                      }
     bool        operator<  (const string&  rhs)  const { return ref() < rhs.ref();              }
     bool        operator>  (const string&  rhs)  const { return ref() > rhs.ref();              }
-    bool        operator== (const string&  b)    const { return sh == b.sh || ref() == b.ref(); }
+    bool        operator== (const string&    b)  const { return sh == b.sh || ref() == b.ref(); }
     bool        operator!= (const char   *cstr)  const { return !operator==(cstr);              }
     bool        operator== (std::string    str)  const { return str == ref();                   }
     bool        operator!= (std::string    str)  const { return str != ref();                   }
@@ -61,17 +61,30 @@ public:
     void        operator+= (const char      ch)        { ref().push_back(ch);                   }
     const char &operator[] (size_t       index)  const { return ref()[index];                   }
                 operator std::filesystem::path() const { return ref();                          }
-                operator std::string &()         const { return ref();                          }
-                operator bool()                  const { return  sh && *sh != "";               }
-    bool        operator!()                      const { return !(operator bool());             }
-                operator int()                   const { return integer();                      }
-                operator real()                  const { return real();                         }
+                operator        std::string &()  const { return ref();                          }
+                operator                 bool()  const { return  sh && *sh != "";               }
+    bool        operator!()						 const { return !(operator bool());             }
+                operator                  int()  const { return integer();                      }
+                operator                 real()  const { return real();                         }
               //operator const char *()          const { return ref().c_str(); } -- shes not safe to fly.
     string     &operator= (const string &s)            { if (this != &s) sh = s.sh; return *this; }
+	bool        operator==(const char* cstr)     const {
+		auto& s = ref();
+		if (!cstr)
+			return s.length() == 0;
+		const char* s0 = s.c_str();
+		for (size_t i = 0; ; i++)
+			if (s0[i] != cstr[i])
+				return false;
+			else if (s0[i] == 0 || cstr[i] == 0)
+				break;
+		return true;
+	}
+
     friend std::ostream &operator<< (std::ostream& os, string const& m) { return os << m.ref(); }
 
     ///
-    static string fill(ssz n, func<char(size_t &)> fn) {
+    static string fill(ssz n, lambda<char(size_t &)> fn) {
         auto ret = string(n);
         for (size_t i = 0; i < size_t(n); i++)
             ret += fn(i);
@@ -91,7 +104,7 @@ public:
     }
 
     /// a string of lambda results
-    static string of(int count, func<char(size_t)> fn) {
+    static string of(int count, lambda<char(size_t)> fn) {
         string s;
         std::string &str = s.ref();
         for (size_t i = 0; i < count; i++)
@@ -243,8 +256,10 @@ public:
     }
     
     int index_of(string s)     const { return index_of(s.cstr()); }
+
+
     int index_of(MatchType ct, const char *mp = null) const {
-        typedef func<bool(const char &)> Fn;
+        typedef lambda<bool(const char &)> Fn;
         typedef std::unordered_map<MatchType, Fn> Map;
         ///
         int index = 0;
@@ -255,15 +270,19 @@ public:
             memcpy(mp0, cstr(), sz);
             mp0[sz]   = 0;
         }
-        auto m = Map {
+		auto   test = [&](const char& c) -> bool { return  false; };
+		auto f_test = lambda<bool(const char&)>(test);
+
+        /*auto m = Map{
             { Alpha,     [&](const char &c) -> bool { return  isalpha (c);            }},
             { Numeric,   [&](const char &c) -> bool { return  isdigit (c);            }},
             { WS,        [&](const char &c) -> bool { return  isspace (c);            }}, // lambda must used copy-constructed syntax
             { Printable, [&](const char &c) -> bool { return !isspace (c);            }},
             { String,    [&](const char &c) -> bool { return  strcmp  (&c, mp0) == 0; }},
             { CIString,  [&](const char &c) -> bool { return  strcmp  (&c, mp0) == 0; }}
-        };
-        Fn &fn = m[ct];
+        };*/
+		Fn zz;
+		Fn& fn = zz;// m[ct];
         for (const char c:ref()) {
             if (fn(c))
                 return index;
@@ -275,26 +294,14 @@ public:
         return -1;
     }
 
-    int index_icase(const char *f) const {
-        const std::string fs = f;
-        auto &s = ref();
-        auto it = std::search(s.begin(), s.end(), fs.begin(), fs.end(),
-            [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); });
-        return int((it == s.end()) ? -1 : it - s.begin());
-    }
 
-    bool operator==(const char *cstr) const {
-        auto &s = ref();
-        if (!cstr)
-            return s.length() == 0;
-        const char *s0 = s.c_str();
-        for (size_t i = 0; ;i++)
-            if (s0[i] != cstr[i])
-                return false;
-            else if (s0[i] == 0 || cstr[i] == 0)
-                break;
-        return true;
-    }
+	int index_icase(const char* f) const {
+		const std::string fs = f;
+		auto& s = ref();
+		auto it = std::search(s.begin(), s.end(), fs.begin(), fs.end(),
+			[](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); });
+		return int((it == s.end()) ? -1 : it - s.begin());
+	}
 
     int integer() const {
         auto &s = ref();
@@ -327,7 +334,7 @@ public:
     /// wildcard match
     bool matches(string pattern) const {
         auto &s = ref();
-        std::function<bool(char *, char *)> s_cmp;
+        lambda<bool(char *, char *)> s_cmp; // well this doesnt work AT toll. i will try
         ///
         s_cmp = [&](char *str, char *pat) -> bool {
             if (!*pat)

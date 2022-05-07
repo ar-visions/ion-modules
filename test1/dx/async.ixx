@@ -4,15 +4,20 @@ import io;
 import arr;
 import var;
 
+// move everything into dx, no question. everything goes in there.
+// only after it COMPILES do you split it up.  this is the better way clearly, obfuscates less things and trivializes the sub division later
+// infact, you should know that it can be roughly as fast use you use multiple exports
+// at any rate its good to do to know what works
+
 export {
 
-struct Process;
-typedef std::function<var(Process*, int)> FnProcess; // silver auto-forwards if the struct is accessible
-typedef std::function<void(var& d)>       FnFuture;
+// var cannot be seen as undeclared at this point. so there is a dependency issue.
+typedef lambda<void(var&        d)> FnFuture;
+typedef lambda<var (Process*, int)> FnProcess;
 
 struct Customer {
     FnFuture fn;
-    Customer(FnFuture fn) :fn(fn) { }
+    Customer(FnFuture fn) : fn(fn) { }
 };
 
 struct CompleterData {
@@ -25,7 +30,7 @@ struct CompleterData {
 
 struct Completer {
     CompleterData* cdata;
-    Completer(func<void(var&)>& fn_success, func<void(var&)>& fn_failure);
+    Completer(lambda<void(var&)>& fn_success, lambda<void(var&)>& fn_failure);
     virtual ~Completer() { }
     operator Future();
 };
@@ -36,9 +41,9 @@ protected:
 public:
     Future& then  (FnFuture fn);
     Future& except(FnFuture fn);
-    Future  (const Future& ref);
-    Future  (Completer& c);
-    ~Future ();
+    Future		  (const Future& ref);
+    Future		  (Completer& c);
+   ~Future		  ();
     ///
     Future& operator=(const Future& ref);
     void sync();
@@ -59,9 +64,9 @@ public:
     static int                         exit_code;
     bool                               deletable = false;
     std::mutex                         mx_self;
-    func<void(var &)>                  on_complete;
-    func<void(var &)>                  on_failure;
-    func<var(Process *, int i)>        fn;
+	lambda<void(var &)>                on_complete;
+	lambda<void(var &)>                on_failure;
+	FnProcess						   fn;
     var                                data;
     std::vector<std::thread>           threads;
     int                                completed = 0;
@@ -86,10 +91,10 @@ struct async {
     async(str exec) : async(1, [&](Process* p, int i) -> var {
         return int(std::system(exec.cstr())); }) { }
 
-    async(int count, FnProcess fn) {
-        std::unique_lock<std::mutex>  lock(Process::mx_list);
-        process = new Process;
-        process->fn = fn;
+    async(int count, FnProcess ffn) {
+        std::unique_lock<std::mutex> lock(Process::mx_list);
+		process = new Process();
+        process->fn = ffn;
         if (count <= 0) {
             Process::processes += process;
             lock.unlock();
@@ -107,7 +112,7 @@ struct async {
         }
     }
 
-    async(std::function<var(Process* p, int i)> fn) : async(1, fn) { }
+    async(lambda<var(Process* p, int i)> fn) : async(1, fn) { }
     
     async(const async& r) {
         assert(false);
@@ -176,12 +181,12 @@ struct async {
     }
 
     operator Future() {
-        std::function<void(var&)> s, f;
+        lambda<void(var&)> s, f;
         Completer c = { s, f };
         assert(process);
         assert(!process->on_complete);
-        process->on_complete = [&, s, f](var& d) { s(d); };
-        process->on_failure = [&, s, f](var& d) { f(d); };
+        process->on_complete = lambda<void(var &)>([&, s, f](var& d) { s(d); });
+        process->on_failure  = [&, s, f](var& d) { f(d); };
         return Future(c);
     }
 
@@ -191,50 +196,6 @@ struct async {
         return *this;
     }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 bool             Process::init;
 std::thread      Process::th_manager;
@@ -324,7 +285,7 @@ Completer::operator Future() {
     return Future(*this);
 }
 
-Completer::Completer(func<void(var &)> &fn_success, func<void(var &)> &fn_failure) {
+Completer::Completer(lambda<void(var &)> &fn_success, lambda<void(var &)> &fn_failure) {
     cdata = new CompleterData(); // not free'd by this of course; success/error operation deletes
     fn_success = [cdata=cdata](var& d) {
         cdata->completed = true;
