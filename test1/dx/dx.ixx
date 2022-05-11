@@ -2,6 +2,7 @@ export module dx;
 
 /// windows has far too many macros which effectively pollute dx
 /// contain in dx/path.cpp
+
 //#if defined(_WIN32) || defined(_WIN64)
 //#include <windows.h>
 //#endif
@@ -13,8 +14,6 @@ export module dx;
 
 #include "macros.hpp"
 //import   <stdio.h>;
-
-
 
 export import std.core;
 export import std.threading;
@@ -67,43 +66,94 @@ export {
 	template <typename> struct is_map       : std::false_type { };
 	template <typename> struct is_array     : std::false_type { };
 
-	struct is_apple :
+
+	// needs to go in 'Build', but i'm not so sure about the conversion macros
+	// 
+	//namespace env {
+
+		///
+		struct is_apple :
 #if defined(__APPLE__)
-		std::true_type
+			std::true_type
 #else
-		std::false_type
+			std::false_type
 #endif
-	{};
+		{ };
 
-	///
-	struct is_android :
+		///
+		struct is_android :
 #if defined(__ANDROID_API__)
-		std::true_type
+			std::true_type
 #else
-		std::false_type
+			std::false_type
 #endif
-	{};
+		{ };
 
-	///
-	struct is_win :
+		///
+		struct is_win :
 #if defined(_WIN32) || defined(_WIN64)
-		std::true_type
+			std::true_type
 #else
-		std::false_type
+			std::false_type
 #endif
-	{};
+		{ };
 
-	///
-	struct is_gpu : std::true_type {};
+		///
+		struct is_gpu : std::true_type { };
 
-	///
-	struct is_debug :
+		///
+		struct is_debug :
 #if !defined(NDEBUG)
-		std::true_type
+			std::true_type
 #else
-		std::false_type
+			std::false_type
 #endif
-	{ };
+		{ };
+
+		///
+		template <class U, class T>
+		struct can_convert {
+			enum { value = std::is_constructible<T, U>::value && !std::is_convertible<U, T>::value };
+		};
+
+		///
+		template<class T, class E>
+		struct has_assign_impl {
+			template<class U, class V>   static auto eq(U* ) -> decltype(std::declval<U>() == std::declval<V>());
+			template<typename, typename> static auto eq(...) -> std::false_type;
+			///
+			using imps = typename std::is_same<bool, decltype(eq<T, E>(0))>::type;
+		};
+
+		///
+		template<class T, class E = T>
+		struct has_assign : has_assign_impl<T, E>::imps { };
+
+		/// usage: has_operator <A, std::string>()
+		template <typename A, typename B, typename = void>
+		struct has_operator : std::false_type { };
+
+		template <typename A, typename B>
+		struct has_operator <A, B, decltype((void)(void (A::*)(B))& A::operator())> : std::true_type { };
+
+		///
+		template<class T, class EqualTo>
+		struct has_compare_impl {
+			template<class U, class V>
+			static auto test(U*) -> decltype(std::declval<U>() == std::declval<V>());
+
+			template<typename, typename>
+			static auto test(...)->std::false_type;
+
+			using type = typename std::is_same<bool, decltype(test<T, EqualTo>(0))>::type;
+		};
+
+		/// todo: must also check !is_std_vec<T>()
+		template<class T, class EQ = T>
+		struct has_compare : has_compare_impl<T, EQ>::type { };
+
+	//};
+	
 
 	/// define assert fn because the macro ones are super lame
 	inline void assert(const bool b) {
@@ -115,7 +165,7 @@ export {
 #if defined(_WIN32) || defined(_WIN64)
 	#define sprintf(b, v, ...) sprintf_s(b, sizeof(b), v, __VA_ARGS__)
 #else
-	#define sprintf(v, b, ...) snprintf(v, sizeof(b), v, __VA_ARGS__)
+	#define sprintf(v, b, ...) snprintf (v, sizeof(b), v, __VA_ARGS__)
 #endif
 
 	/// we like null instead of NULL. friendly.
@@ -161,44 +211,6 @@ export {
 	struct Bool:scalar <bool, uint8_t>     { inline Bool(bool b) : scalar(b)    { } };
 
 	enum Stride { Major, Minor };
-
-	template <class U, class T>
-	struct can_convert {
-		enum {
-			value = std::is_constructible<T, U>::value && !std::is_convertible<U, T>::value
-		};
-	};
-
-	template<class T, class E>
-	struct _has_equal_to {
-		template<class U, class V>   static auto eq(U*)  -> decltype(std::declval<U>() == std::declval<V>());
-		template<typename, typename> static auto eq(...)->std::false_type;
-		///
-		using imps = typename std::is_same<bool, decltype(eq<T, E>(0))>::type;
-	};
-
-	template<class T, class E = T>
-	struct has_equal_to : _has_equal_to<T, E>::imps {};
-
-	/// usage: has_overload<A, std::string>()
-	template <typename A, typename B, typename = void>
-	struct has_overload : std::false_type {};
-	template <typename A, typename B>
-	struct has_overload<A, B, decltype((void)(void (A::*)(B))& A::operator())> : std::true_type {};
-
-
-	template<class T, class EqualTo>
-	struct has_compare_impl
-	{
-		template<class U, class V>
-		static auto test(U*) -> decltype(std::declval<U>() == std::declval<V>());
-		template<typename, typename>
-		static auto test(...)->std::false_type;
-
-		using type = typename std::is_same<bool, decltype(test<T, EqualTo>(0))>::type;
-	};
-
-	template<class T, class EQ = T> struct has_compare : has_compare_impl<T, EQ>::type {};
 
 	// these must be cleaned. i also want to use () or 
 
@@ -246,11 +258,6 @@ export {
 		bool operator&&(FlagsOf<T>& f) const { return contain(f); }
 	};
 
-	struct str2;
-	struct Shared;
-
-	Shared* str_ref(str2* ps);
-
 	/// you express these with int(var, int, str); U unwraps inside the parenthesis
 	template <typename T, typename... U>
 	size_t fn_id(lambda<T(U...)>& fn) { // dump this when alternate lambda is operational, the prototypes used currently are not compatible with it, and thats not acceptable during a port.. it seems on msvc
@@ -264,24 +271,8 @@ export {
 	// from there we have control of primitives over a vector
 	enum Trait { TArray = 1, TMap = 2 };
 
+	struct Shared;
 	struct Type;
-
-
-
-
-
-	struct Data2 {
-		void* ptr;
-		size_t count;
-	};
-
-	typedef int (*CompareOp2)  (Data2*, Data2*);
-
-	struct SomeStruct {
-		int arb;
-		int arb2;
-	};
-
 	struct Data {
 		enum AllocType { Arb, Manage };
 		void*       ptr;    // pointer to first byte (sometimes on the tail, depending on alloc type)
@@ -291,8 +282,6 @@ export {
 		AllocType   alloc;  // 
 	};
 
-		/// msvc has problems with static fn templates performing constexpr, thats why TypeOps is here with a template arg.
-	/// curtousy of msvc is all.
 	/// prototypes for the various function pointers
 	typedef void    (*Constructor)(Data*);
 	typedef void    (*Destructor) (Data*);
@@ -441,9 +430,9 @@ export {
 
 		template <typename T, const bool L = false>
 		static IntegerOp fn_integer() {
-			if constexpr (has_overload<T, int64_t>::value && !L) {
+			if constexpr (has_operator<T, int64_t>::value && !L) {
 				static auto intv = [](Data* d) -> int64_t {
-					if constexpr (has_overload<T, int64_t>::value)
+					if constexpr (has_operator<T, int64_t>::value)
 						return int64_t(*(T*)d->ptr);
 
 					return int64_t(0);
@@ -455,9 +444,9 @@ export {
 
 		template <typename T, const bool L = false>
 		static RealOp fn_real() {
-			if constexpr (has_overload<T, ::real>::value && !L) {
+			if constexpr (has_operator<T, ::real>::value && !L) {
 				static auto realv = [](Data* d) -> ::real {
-					if constexpr (has_overload<T, ::real>::value)
+					if constexpr (has_operator<T, ::real>::value)
 						return ::real(*(T*)d->ptr);
 					else
 						return ::real(0); // nan possible but i dunno about using the null state for interface
@@ -469,7 +458,7 @@ export {
 
 		template <typename T, const bool L = false>
 		static StringOp fn_string() {
-			if constexpr (has_overload<T, ::str>::value && is_strable<T>() && !L) {
+			if constexpr (has_operator<T, ::str>::value && is_strable<T>() && !L) {
 				// 
 				static auto strv = [](Data* d) -> Shared* { return str_ref((T *)d->ptr); };
 				return StringOp(&strv);
@@ -517,7 +506,7 @@ export {
 
 		template <typename T, const bool L = false>
 		static BooleanOp fn_boolean() {
-			if constexpr (!L && has_overload<T, bool>::value) {
+			if constexpr (!L && has_operator<T, bool>::value) {
 				static    auto bC  = [](Data* a) -> bool {
 					       bool r  = false;
 					for (size_t i  = 0; i < a->count; i++) {
@@ -570,7 +559,8 @@ export {
 
 		enum IMode { Default };
 
-		Type(IMode im)     { }
+		Type(IMode im) { }
+		Type()		   { }
 
 		bool     is_integer() { return id >= ident<int8_t>  ().id && 
 									   id <= ident<uint64_t>().id; }
@@ -660,7 +650,7 @@ export {
 					type.dtr = fn_dtr <_ZZion, _isFunctor>();
 					type.cpy = fn_cpy <_ZZion, _isFunctor>();
 
-					if constexpr (!is_lambda<_ZZion>()) {
+					if constexpr (!_isFunctor && !is_lambda<_ZZion>()) {
 						type.integer     = fn_integer    <_ZZion, _isFunctor>();
 						type.real        = fn_real       <_ZZion, _isFunctor>();
 						type.string      = fn_string     <_ZZion, _isFunctor>();
@@ -705,15 +695,39 @@ export {
 		inline size_t				  sz() const { return type_size();		   }
 	};
 
+	/// holds pointers to these so one can enumerate through
+	const Type** Type::primitives;
+
+	/// type objects (const)
+	const Type Type::Undefined;
+	const Type Type::  i8;
+	const Type Type:: ui8;
+	const Type Type:: i16;
+	const Type Type::ui16;
+	const Type Type:: i32;
+	const Type Type::ui32;
+	const Type Type:: i64;
+	const Type Type::ui64;
+	const Type Type:: f32;
+	const Type Type:: f64;
+	const Type Type::Bool;
+	const Type Type::Str;
+	const Type Type::Map;
+	const Type Type::Array;
+	const Type Type::Ref;
+	const Type Type::Arb;
+	const Type Type::Node;
+	const Type Type::Lambda;
+	const Type Type::Member;
+	const Type Type::Any;
+	const Type Type::Meta;
+
 	namespace fs = std::filesystem;
 
-	/// do we or do we not use Type & refs or ptrs.
-	/// if we can Manage a ref then its better
-	/// 
 	template <typename T>
 	inline Type* Id() { return &Type::ident<T>(); }
 
-	//namespace std { template<> struct hash<Type> { size_t operator()(Type const& id) const { return id; } }; }
+	namespace std { template<> struct hash<Type> { size_t operator()(Type const& id) const { return id; } }; }
 
 	struct  Memory;
 
@@ -1011,8 +1025,6 @@ export {
 		bool operator!=(Shared& b) const { return !(operator==(b)); }
 	};
 
-	/// it finally feels like saturday. lol.
-
 	/// these are easier to pass around than before.
 	/// i want to use these more broadly as well, definite a good basis delegate for tensor.
 	template <typename T>
@@ -1180,16 +1192,14 @@ export {
 
 	template<typename>   struct is_lambda			       : std::false_type {};
 	template<typename T> struct is_lambda<lambda<T>>       : std::true_type  {};
-	
 	template<typename T> struct is_std_vec<std::vector<T>> : std::true_type {};
 
-	struct node;
-	struct string;
+	struct  node;
+	struct  string;
 
-	typedef lambda<bool()>                FnBool;
-	typedef lambda<void(void*)>           FnArb;
-	typedef lambda<void(void)>            FnVoid;
-
+	typedef lambda<bool()>       FnBool;
+	typedef lambda<void(void*)>  FnArb;
+	typedef lambda<void(void)>   FnVoid;
 
 	template <typename T>
 	struct sh:Shared {
@@ -1643,230 +1653,6 @@ export {
 	typedef int ichar;
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	struct str2 {
-	protected:
-		//typedef sh<std::string> shared;
-		//shared sh;
-		std::string* sh = null;
-
-	public:
-		enum MatchType {
-			Alpha,
-			Numeric,
-			WS,
-			Printable,
-			String,
-			CIString
-		};
-
-		std::string& ref() const { static std::string ssh;  return ssh; }
-
-		/// best way to serialize a string is to return the Shared
-		/// Shared just hides many dependency quirks, so do this with all of the types.
-		//inline operator Shared() { return sh; }
-    
-		// constructors
-		//str2(shared &sh)				: sh(sh) { }
-		str2()                          : sh(new std::string()) { }
-		str2(nullptr_t n)               : sh(new std::string()) { }
-		str2(cchar_t* cstr)             : sh(cstr ? new std::string(cstr)      : new std::string()) { }
-		//str2(cchar_t* cstr, size_t len) : sh(cstr ? new std::string(cstr, len) : new std::string()) {
-		//	if (!cstr && len) sh->reserve(len);
-		//}
-		//str2(const char      ch)      : sh(new std::string(&ch, 1))              { }
-		//str2(size_t          sz)      : sh(new std::string())                    { sh->reserve(sz); }
-
-		str2(std::string    str)      : sh(new std::string(str))                 { }
-		//str2(const str2&s)             : sh(s.sh)                                 { }
-	   //~str2() { }
-	    
-
-		/// methods
-		//const char *cstr()                           const { return ref().c_str();                  }
-		//bool        contains(array<str2>   a)      const { return index_of_first(a, null) >= 0;   }
-		//size_t      size()                           const { return ref().length();                 }
-    
-		/// operators
-		//str2      operator+  (const str2&s)         const { return ref() + s.ref();                }
-		//str2      operator+  (const char      *s)  const { return ref() + s;                      }
-		//str2      operator() (int s, int l)        const { return substr(s, l);                   }
-		//str2      operator() (int s)               const { return substr(s);                      }
-		//bool        operator<  (const str2&  rhs)  const { return ref() < rhs.ref();              }
-		//bool        operator>  (const str2&  rhs)  const { return ref() > rhs.ref();              }
-		//bool        operator== (const str2&    b)  const {
-		//	bool bb = sh == ((str2&)b).sh;
-		//	return sh == b.sh || ref() == b.ref();
-		//}
-		//bool        operator!= (const char* cstr)  const { return false; }
-		bool        operator== (std::string    str)  const { return str == ref();                   }
-
-
-		//void        operator+= (const char      ch)        { ref().push_back(ch);                   }
-		const char &operator[] (size_t       index)  const { return ref()[index];                   }
-		//			operator std::filesystem::path() const { return ref();                          }
-		//			operator         std::string &() const { return ref();                          }
-		//			operator                  bool() const { return  sh && *sh != "";               }
-		//bool        operator!()						 const { return !(operator bool());             }
-
-				  //operator          const char *() const { return ref().c_str(); } -- shes not safe to fly.
-
-		//str2        &operator= (const str2 &s) {
-		//	return *this;
-		//}
-
-		///
-		static str2 read_file(fs::path f) {
-			return null;
-		}
-
-		int index_of_first(array<str2> &a, int *a_index) const {
-			return 0;
-		}
-
-		///
-		bool starts_with(const char *cstr) const {
-			return false;
-		}
-
-		///
-		bool ends_with(const char *cstr) const {
-			return false;
-		}
-
-		///
-		static str2 read_file(std::ifstream& in) {
-			return null;
-		}
-    
-		///
-		str2 to_lower() const {
-			return null;
-		}
-
-		///
-		str2 to_upper() const {
-			return null;
-		}
-    
-		static int nib_value(cchar_t c) {
-			return 0;
-		}
-    
-		static cchar_t char_from_nibs(cchar_t c1, cchar_t c2) {
-			return 0;
-		}
-
-		str2 replace(str2 sfrom, str2 sto, bool all = true) const {
-			return null;
-		}
-
-		str2 substr(int start, size_t len) const {
-			return null;
-		}
-
-		str2 substr(int start) const {
-			return null;
-		}
-
-		array<str2> split(str2 delim) const {
-			return null;
-		}
-
-		array<str2> split(const char *delim) const {
-			return null;
-		}
-    
-		array<str2> split()         const { return null; }
-
-		int index_of(const char *f) const { return 0; }
-    
-		int index_of(str2 s)        const { return 0; }
-
-
-		int index_of(MatchType ct, const char *mp = null) const {
-			return -1;
-		}
-
-
-		int index_icase(const char* f) const {
-			return 0;
-		}
-
-		int64_t integer() const {
-			return int64_t(0);
-		}
-
-		real realz() const {
-			return strtod(sh->c_str(), null);
-		}
-
-		bool has_prefix(str2 i) const {
-			return false;
-		}
-
-		bool numeric() const {
-			return false;
-		}
-    
-		/// wildcard match
-		bool matches(str2 pattern) const {
-			return false;
-		}
-
-		str2 trim() const {
-			return null;
-		}
-	};
-
-	//static inline str2 operator+(const char *cstr, str2 rhs) { return str2(cstr) + rhs; }
-
-	// ref std::string in a Memory -> str resolution down here.
-
-	template<> struct is_strable<str2> : std::true_type  {};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	struct str {
 	protected:
 		typedef sh<std::string> shared;
@@ -2284,7 +2070,7 @@ export {
 	typedef array<Symbol> Symbols;
 	typedef array<str>    Strings;
 
-	/*
+	// it would be useful to put this in the Meta
 	namespace std {
 		template<> struct hash<str> {
 			size_t operator()(str const& s) const { return hash<std::string>()(std::string(s)); }
@@ -2295,7 +2081,7 @@ export {
 		template<> struct hash<path_t> {
 			size_t operator()(path_t const& p) const { return hash<std::string>()(p.string()); }
 		};
-	}*/
+	}
 //};
 
 //export module map;
@@ -2788,9 +2574,6 @@ export {
 
 
 	struct var {
-	protected:
-		static var vconsts[22];
-	public:
 		Shared  d;
 		str     s; // attach!
 
@@ -2819,12 +2602,15 @@ export {
 			}
 		}
 
+		// msvc gives an internal error with a protected static array atm. just one of the many land mines in C++ 23
 		var &vconst_for(size_t id) {
-			static bool init;
-			if (!init) {
-				 init       = true;
-				 vconsts[0] = var(Type::Undefined);
-			}
+			static array<var> vconsts;
+			if (!vconsts)
+				vconsts = { size_t(22), lambda<var(size_t)> {
+					[](size_t i) -> var {
+						return *Type::primitives[i];
+					}
+				}};
 			return vconsts[id];
 		}
 
@@ -2895,9 +2681,6 @@ export {
 		map<str, var>& cc91 = (map<str, var>  &) * (map<str, var>*)0;
 		cc91.size();
 
-		///
-		map<str2, var>& cc9 = (map<str2, var> &) * (map<str2, var>*)0;
-		cc9.size();
 	}
 
 	///
@@ -3101,7 +2884,8 @@ export {
 		Meta        = 91
 	};
 	*/
-	extern Logger<LogType::Dissolvable> console;
+
+	Logger<LogType::Dissolvable> console;
 
 //export module model;
 //export {
@@ -3112,9 +2896,7 @@ export {
 
 	int abc() {
 		var test = var(0);
-		var  *mm = new var(Type::Map);
-
-		map<str2, var> m1 = {};
+		var   mm = var(Type::Map);
 		return 0;
 	}
 
@@ -3341,8 +3123,8 @@ export {
 		Vec2(std::nullptr_t n = nullptr) : x(nan<T>()) { }
 		Vec2(T x)      : x(x), y(x) { }
 		Vec2(T x, T y) : x(x), y(y) { }
-    
-		Vec4<T> xxyy();
+
+		Vec2<T> xxyy();
     
 		friend auto operator<<(std::ostream& os, Vec2<T> const& m) -> std::ostream& {
 			return os << "[" << decimal(m.x, 4) << "," << decimal(m.y, 4) << "]";
@@ -3355,9 +3137,7 @@ export {
 			return *n;
 		}
     
-		operator size_t() const {
-			return size_t(x) * size_t(y);
-		}
+		operator size_t() const { return size_t(x) * size_t(y); }
     
 		Vec2(var &d) {
 			auto t = d.type();
@@ -3815,16 +3595,7 @@ export {
 ///}
 
 
-// if its an io struct it has a map of shared data?..
-// this can be reduced a bit.
-// except for attachments.  not on shared and not for member identity,
-// but it is important to 'attach' for life cycle management, not for
-// retrieval because then the streams are crossed and egon gets a
-// massive amount of slime to sample
-// 
-// 
-// 	
-// should not need to change anything.
+//
 //export module member;
 //export {
 struct Member {
@@ -3896,41 +3667,6 @@ struct Member {
 
 	virtual void style_value_set(void* ptr, StTrans*) { }
 };
-//}
-
-//export module build;
-//export {
-	struct Build {
-		str version;
-
-        /*
-        /// attach to enum? so map with name, those names app-based or general
-        Symbols Build::Role::symbols = {
-            { Undefined,        "undefined" },
-            { Terminal,         "terminal"  },
-            { Mobile,           "mobile"    },
-            { Desktop,          "desktop"   },
-            { AR,               "ar"        },
-            { VR,               "vr"        },
-            { Cloud,            "cloud"     } };
-
-        Symbols Build::OS::symbols = {
-            { Undefined,        "undefined" },  /// Arb behaviour with this null state
-            { macOS,            "macOS"     },  /// Simple binary
-            { Linux,            "Linux"     },  /// Simple binary
-            { Windows,          "Windows"   },  /// Universal App Packaging (if its actually a thing for compiled apps)
-            { iOS,              "iOS"       },  /// Universal App Packaging
-            { Android,          "Android"   } }; /// Universal Binaries as done with the bin images in zip
-
-        Symbols Build::Arch::symbols = {
-            { Undefined,        "undefined" },
-            { x86,              "x86"       },
-            { x86_64,           "x86_64"    },
-            { Arm32,            "arm32"     },
-            { Arm64,            "arm64"     },
-            { Mx,               "Mx"        } };
-        */
-	};
 //}
 
 //export import meta; // Component uses a collection of metas, default is just 'members'; they will have a different namespace in context
@@ -4138,7 +3874,7 @@ INITIALIZER(initialize) {
 		{ 21, "Meta"      }
 	};
 
-	//
+	// not sure if i can initialize const in a way that lets me also bootstrap the type
 	size_t p                   = 0;
 	*(Type **)Type::primitives = (Type *)calloc(sizeof(Type), 22); // C++ is champ
 	*(Type *)&Type::Undefined  = Type::bootstrap<void>        (decls[0]);  Type::primitives[p++] = &Type::Undefined;
@@ -4165,4 +3901,12 @@ INITIALIZER(initialize) {
 	*(Type*)&Type::Member	   = Type::bootstrap<Member>	  (decls[19]); Type::primitives[p++] = &Type::Member;
 	*(Type*)&Type::Any		   = Type::bootstrap<Any>		  (decls[20]); Type::primitives[p++] = &Type::Any;
 	*(Type*)&Type::Meta		   = Type::bootstrap<Meta>		  (decls[21]); Type::primitives[p++] = &Type::Meta;
+
+
+	vec2f a = { 1, 2 };
+	vec2f b = { 2, 4 };
+	vec2f c = a + b + b;
+
+
+
 }
