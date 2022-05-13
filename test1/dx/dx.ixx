@@ -24,6 +24,10 @@ export import std.filesystem;
 typedef struct { int token; } Internal;
 int icursor = 0;
 
+
+
+// isolate problem: std::_Can_call_function_object': too few template arguments
+
 export {
 
 	/// immediately attempt to establish what is real
@@ -187,6 +191,15 @@ export {
 	struct			   Memory;
 	struct			   Type;
 
+	/// hash stays away from size_t. far away.
+	struct Hash {
+		union u_value {
+			uint64_t u64;
+			double   f64;
+		};
+		u_value v;
+	};
+
 	template <typename V>
 	using lambda = std::function<V>; // you win again, gravity
 
@@ -213,7 +226,6 @@ export {
 	enum Stride { Major, Minor };
 
 	// these must be cleaned. i also want to use () or 
-
 	template <typename K, typename V>
 	struct pair {
 		K key;
@@ -279,7 +291,7 @@ export {
 		size_t      count;  // > 0 for valid data
 		Type	   &type;   // the type of data assembly,
 		Type       &origin; // the type of data assembler
-		AllocType   alloc;  // 
+		AllocType   alloc;  // how to make map out of this structure?
 	};
 
 	/// prototypes for the various function pointers
@@ -287,6 +299,7 @@ export {
 	typedef void    (*Destructor) (Data*);
 	typedef void    (*CopyCtr)    (Data*, void*, size_t);
 	typedef bool    (*BooleanOp)  (Data*);
+	typedef Hash    (*HashOp)	  (Data*);
 	typedef int64_t (*IntegerOp)  (Data*);
 	typedef Shared* (*AddOp)      (Data*, Data*);
 	typedef Shared* (*SubOp)      (Data*, Data*);
@@ -297,43 +310,9 @@ export {
 	typedef size_t  (*SizeOfOp)   ();
 
 	template <typename D>
-	struct Ops2 {
-		template <typename T>
-		static CompareOp compare_check(T *ph = null) {
-
-			// 
-			if constexpr (has_compare<T>::value) {
-
-				/// if there is a compare method, call it
-				static auto compare = [](D* a, D* b) -> int {
-					if (a == b)
-						return 0;
-					
-					assert(a->count == b->count);
-
-					T*      ap = (T *)a->ptr;
-					T*      bp = (T *)b->ptr;
-					size_t  c  = a->count;
-
-					for (size_t i = 0; i < c; i++)
-						return ap[i] == bp[i];
-
-					return 0;
-				};
-				return CompareOp(&compare);
-			} else
-				return null;
-		}
-	};
-
-
-
-	template <typename D>
 	struct Ops {
 
-
 		// this should validate matters for msvc?
-
 		template <typename T, const bool L = false>
 		static Constructor fn_ctr() {
 			if constexpr (std::is_default_constructible<T>() && !L) {
@@ -429,13 +408,22 @@ export {
 		}*/
 
 		template <typename T, const bool L = false>
+		static HashOp fn_hash() {
+			if constexpr (has_operator<T, Hash>::value && !L) {
+				static auto hashv = [](Data* d) -> Hash {
+					return Hash(*(T*)d->ptr);
+				};
+				return HashOp(&hashv);
+			}
+			else
+				return null;
+		}
+
+		template <typename T, const bool L = false>
 		static IntegerOp fn_integer() {
 			if constexpr (has_operator<T, int64_t>::value && !L) {
 				static auto intv = [](Data* d) -> int64_t {
-					if constexpr (has_operator<T, int64_t>::value)
-						return int64_t(*(T*)d->ptr);
-
-					return int64_t(0);
+					return int64_t(*(T*)d->ptr);
 				};
 				return IntegerOp(&intv);
 			} else
@@ -838,10 +826,11 @@ export {
 				.refs = int(1)
 			};
 
-			if (construct) // there is no bother for basic primitive types, and a vector saved is a vector earned.
-				for (size_t i = 0, c = count; i < c; i++) {
+			// type constructable could be stored if needed
+			if constexpr (std::is_default_constructible<T>())
+				for (size_t i = 0, c = count; construct && i < c; i++)
 					new (&ds[i]) T();
-				}
+
 			return mem;
 		}
 
@@ -908,6 +897,13 @@ export {
 
 		Shared(nullptr_t n = null)			 { }
 	    Shared(Memory* mem) : mem(mem)		 { }
+		Shared(cchar_t* cstr) { // too much to test but it could be used symbolically as const char * if certain linting can be done
+			size_t ln    = strlen(cstr);
+			mem		     = Memory::valloc<uint8_t>(ln + 1);
+			char*    dst = (char*)(uint8_t*)pointer();
+			memcpy((void*)dst, (void*)cstr, ln);
+			dst[ln]      = 0;
+		}
 	   ~Shared()							 { drop(mem); }
 		Shared(const Shared& r) : mem(r.mem) { grab(mem); }
 
@@ -916,6 +912,8 @@ export {
 
 		void*          raw() const { return mem ? mem->data.ptr : null; }
 
+		operator  bool() { return mem != null; }
+		bool operator!() { return mem == null; }
 		///
 		template <typename T>
 		T*         pointer();
@@ -940,6 +938,8 @@ export {
 		bool operator==(Type& t)   const { return type() == &t; }
 
 		bool operator==(Shared& d) const { return (!mem && !d.mem) || (mem && d.mem && mem->data.type.compare(&mem->data, &d.mem->data) == 0); }
+		
+		operator Hash()			   const { return {{ .u64 = uint64_t(type()->integer(data())) }}; }
 
 		/// common for shared objects
 		/// case, an array<int> is 
@@ -1016,20 +1016,42 @@ export {
 				t->assign(&mem->data, &value);
 			} else {
 				/// dislike type case
+				assert(false);
 			}
 			return *this;
 		}
 
-		// Type* complicates 
 		bool operator==(Type*   t) const { return type() == t; }
 		bool operator!=(Shared& b) const { return !(operator==(b)); }
 	};
+
+	/// for shared objects, the std hash use-case is using its integer functor call (int64_t operator)
+	/// this should be reasonable for now, but it could be preferred to hash differently
+	namespace std {
+		template <> struct hash<Shared> {
+			size_t operator()(Shared &s) const { return size_t(s.integer<int64_t>()); }
+		};
+	}
 
 	/// these are easier to pass around than before.
 	/// i want to use these more broadly as well, definite a good basis delegate for tensor.
 	template <typename T>
 	struct vec:Shared {
 		// #ifndef NDEBUG window vars here; set them in each vec.
+
+		template <typename F>
+		vec(size_t sz, F fn) {
+			Shared::mem = Memory::valloc<T>(sz);
+			if constexpr (std::is_same_v<F, T>)
+				for (size_t i = 0; i < sz; i++)
+					((T*)Shared::mem->data.ptr)[i] = fn;
+			else
+				for (size_t i = 0; i < sz; i++)
+					((T*)Shared::mem->data.ptr)[i] = fn(i);
+		}
+
+		vec(vec<T> &b)			  { Shared::mem = Memory::copy(b.mem, &Type::ident<T>()); }
+
 		vec(T x)				  {						     Shared::mem = Memory::manage<T>(&x,    1); }
 		vec(T x, T y)             { T v[2] = { x, y };       Shared::mem = Memory::manage<T>(&v[0], 2); }
 		vec(T x, T y, T z)        { T v[3] = { x, y, z };    Shared::mem = Memory::manage<T>(&v[0], 3); }
@@ -1043,89 +1065,78 @@ export {
 			return sz;
 		}
 
+		operator Shared() {
+			return Shared();
+		}
+
 		T&   operator[](size_t i) {
 			T&   a = *cast<T>();
 			return a[i];
 		}
 
-		vec& operator+=(vec b) {
-			vec& a = *this;
-			T*  va = (T*)a,
-				vb = (T*)b;
-			for (size_t i = 0, sz = size(b); i < sz; i++)
-				va[i]    += vb[i];
-			return *this;
-		}
-
-		vec& operator-=(vec b) {
-			vec& a = *this;
-			T*  va = (T*)a,
-				vb = (T*)b;
-			for (size_t i = 0, sz = size(b); i < sz; i++)
-				va[i]    -= vb[i];
-			return *this;
-		}
-
-		vec& operator*=(vec b) {
-			vec& a = *this;
-			T*  va = (T*)a, vb = (T*)b;
-			for (size_t i = 0, sz = size(b); i < sz; i++)
-				va[i] *= vb[i];
-			return *this;
-		}
-
-		vec& operator*=(T b) {
-			vec& a = *this;
-			T*  va = (T*)a;
-			for (size_t i = 0, sz = size(); i < sz; i++)
-				va[i] *= b;
-			return *this;
-		}
-
-		vec& operator/=(vec b) {
-			vec& a = *this;
-			T*  va = (T*)a,
-				vb = (T*)b;
-			for (size_t i = 0, sz = size(b); i < sz; i++)
-				va[i] /= vb[i];
-			return *this;
-		}
-
-		vec& operator/=(T b) {
-			vec& a = *this;
-			T*  va = (T*)a;
-			for (size_t i = 0, sz = size(); i < sz; i++)
-				va[i] /= b;
-			return *this;
-		}
-
 		vec& operator=(const vec& b) {
 			if (this != &b)
-				mem = Memory::copy(b.mem);
+				mem = Memory::copy(b.mem, Type::ident<T>());
 			return *this;
 		}
 
 		vec operator+(vec b) const {
-			vec& a = *this;
-			vec  c = vec(size(), T(0));
-			T*  va = (T *)a, vb = (T *)b, vc = (T *)c;
-			for (size_t i = 0, sz = size(b); i < sz; i++)
-				vc[i] = va[i] + vb[i];
+			vec<T>& a = (vec<T> &)*this;
+			size_t sa = size();
+			size_t sb = size(b);
+			///
+			if (sa == sb) {
+				vec c = vec(sa, T(0));
+				T* va = (T*)a,
+				 * vb = (T*)b,
+				 * vc = (T*)c;
+				for (size_t i = 0; i < sa; i++)
+					vc[i] = va[i] + vb[i];
+				return c;
+			} else if (sa > sb) {
+				vec c = vec(a);
+				T* vb = (T*)b,
+				 * vc = (T*)c;
+				for (size_t i = 0; i < sb; i++)
+					vc[i] += vb[i];
+				return c;
+			}
+			vec c = vec(b);
+			T* va = (T*)a,
+			 * vc = (T*)c;
+			for (size_t i = 0; i < sa; i++)
+				vc[i] += va[i];
 			return c;
 		}
 
 		vec operator-(vec b) const {
-			vec& a = *this;
-			vec  c = vec(size(), T(0));
-			T*  va = (T*)a, vb = (T*)b, vc = (T*)c;
-			for (size_t i = 0, sz = size(b); i < sz; i++)
-				vc[i] = va[i] - vb[i];
+			vec&    a = *this;
+			size_t sa = size(a);
+			size_t sb = size(b);
+			///
+			if (sa == sb) {
+				vec c = vec(sa, T(0));
+				T* va = (T*)a, *vb = (T*)b, *vc = (T*)c;
+				for (size_t i = 0; i < sa; i++)
+					vc[i] = va[i] - vb[i];
+				return c;
+			} else if (sa > sb) {
+				vec c = vec(a);
+				T* vb = (T*)b, *vc = (T*)c;
+				for (size_t i = 0; i < sb; i++)
+					vc[i] -= vb[i];
+				return c;
+			}
+			vec c = vec(b);
+			T* va = (T*)a, vc = (T*)c;
+			for (size_t i = 0; i < sa; i++)
+				vc[i] -= va[i];
 			return c;
 		}
 
 		vec operator*(T b) const {
 			vec& a = *this;
-			vec  c = vec(size(), T(0));
+			vec  c = vec(size(a), T(0));
 			T*  va = (T*)a, vc = (T*)c;
 			for (size_t i = 0, sz = size(); i < sz; i++)
 				vc[i] = va[i] * b;
@@ -1134,12 +1145,124 @@ export {
 
 		vec operator/(T b) const {
 			vec& a = *this;
-			vec  c = vec(size(), T(0));
+			vec  c = vec(size(a), T(0));
 			T*  va = (T*)a, vc = (T*)c;
 			for (size_t i = 0, sz = size(); i < sz; i++)
 				vc[i] = va[i] / b;
 			return c;
 		}
+
+		vec& operator+=(vec b) const { return (*this = *this + b); }
+		vec& operator-=(vec b) const { return (*this = *this - b); }
+
+		vec& operator*=(vec b) const { return (*this = *this * b); }
+		vec& operator/=(vec b) const { return (*this = *this / b); }
+		vec& operator*=(T   b) const { return (*this = *this * b); }
+		vec& operator/=(T   b) const { return (*this = *this / b); }
+
+		// i am in favor of a C++-like language with reflection, and 1/4th the keywords,
+		// with far more implicit facility and better succinctness!
+
+		operator Hash() const {
+			vec& a = *this;
+			T	ac = 0.0;
+			int  m = 1234;
+			///
+			for (size_t i = 0, sz = size(); i < sz; i++) {
+				ac += a[i] * m;
+				m  *= 11;
+			}
+			return {{ .f64 = ac }};
+		}
+
+		/// this is just the product of the components; it was performed in size_t prior and i dont like that.
+		/// it makes sense to have it here, however this NEEDS to be explicit.
+		explicit operator T() const {
+			vec& a = *this;
+			T	ac = 0.0;
+			for (size_t i = 0, sz = size(); i < sz; i++)
+				ac = (i == 0) ? a[i] : (ac * a[i]);
+			return ac;
+		}
+
+		/// value, point, coord, homogenous
+		static void aabb(vec<T> *a, size_t sz, vec<T>& mn, vec<T>& mx) {
+			mn = a[0];
+			mx = a[0];
+			for (size_t i = 1; i < sz; i++) {
+				auto& v = a[i];
+				mn      = mn.min(v);
+				mx      = mx.max(v);
+			}
+		}
+
+		inline vec<T>    sqr() { return { *this, [](T v, size_t i) { return v * v;			 }}; }
+		inline vec<T>    abs() { return { *this, [](T v, size_t i) { return std::abs   (v); }}; }
+		inline vec<T>  floor() { return { *this, [](T v, size_t i) { return std::floor (v); }}; }
+		inline vec<T>   ceil() { return { *this, [](T v, size_t i) { return std::ceil  (v); }}; }
+
+		inline vec<T>  clamp( vec<T> mn, vec<T> mx )  {
+			return { *this, [&](T& v, size_t i) { return std::clamp(v, mn[i], mx[i]); }};
+		}
+
+		friend auto operator<<(std::ostream& os, vec<T> const& m) -> std::ostream& {
+			vec& a = *this;
+			os    << "[";
+			for (size_t i = 0, sz = size(); i < sz; i++) {
+				os << decimal(a[i], 4);
+				if (i != 0) os << ",";
+			}
+			os     << "]";
+			return os;
+		}
+
+		inline     T  max()          const {
+			vec& a = *this;
+			T mx = a[0];
+			for (size_t i = 1, sz = size(); i < sz; i++)
+				mx = std::max(mx, a[i]);
+			return mx;
+		}
+		inline     T  min()          const {
+			vec& a = *this;
+			T mn = a[0];
+			for (size_t i = 1, sz = size(); i < sz; i++)
+				mn = std::min(mn, a[i]);
+			return mn;
+		}
+		inline vec<T> min(    T  mn) const { return { *this, [](T v, size_t i) { return std::min(v, mn);    }}; }
+		inline vec<T> max(    T  mx) const { return { *this, [](T v, size_t i) { return std::max(v, mx);    }}; }
+		inline vec<T> min(vec<T> mn) const { return { *this, [](T v, size_t i) { return std::min(v, mn[i]); }}; }
+		inline vec<T> max(vec<T> mx) const { return { *this, [](T v, size_t i) { return std::max(v, mx[i]); }}; }
+
+		static double area(vec<T> *p, size_t sz) {
+			double area = 0.0;
+			const int n = int(p.size());
+			int       j = n - 1;
+
+			// shoelace formula
+			for (int i = 0; i < n; i++) {
+				vec<T>& pj = p[j];
+				vec<T>& pi = p[i];
+				area      += (pj.x + pi.x) * (pj.y - pi.y);
+				j          = i;
+			}
+
+			// return absolute value
+			return std::abs(area / 2.0);
+		}
+
+		T len_sqr() const {
+			vec&    a = *this;
+			size_t sz = size();
+			T	   sq = 0;
+			for (size_t i = 0; i < sz; i++)
+				sq   += a[i] * a[i];
+			return sq;
+		}
+
+		T             len() const { return sqrt(len_sqr()); }
+		vec<T>  normalize() const { return *this / len(); }
 	};
 
 	// we must get this in working order.
@@ -1192,7 +1315,7 @@ export {
 
 	template<typename>   struct is_lambda			       : std::false_type {};
 	template<typename T> struct is_lambda<lambda<T>>       : std::true_type  {};
-	template<typename T> struct is_std_vec<std::vector<T>> : std::true_type {};
+	template<typename T> struct is_std_vec<std::vector<T>> : std::true_type  {};
 
 	struct  node;
 	struct  string;
@@ -1386,8 +1509,8 @@ export {
 //export {
 	typedef std::filesystem::path path_t;
 
-	template <class T>
-	struct array:io {
+	template <typename T>
+	struct array {
 	public:
 		typedef sh<std::vector<T>> vshared;
 		
@@ -1648,10 +1771,179 @@ export {
 	//}
 ///}
 
+	template <typename T>
+	struct Vec2:vec<T> {
+		static T def;
+		T &x, &y;
+		Vec2(std::nullptr_t n = null) : vec(n), x(def), y(def) { }
+		Vec2(T x, T y) : vec<T>(x, y), x(this[0]), y(this[1]) { }
+	};
+
+	template <typename T>
+	struct Vec3:vec<T> {
+		static T def;
+		T &x, &y, &z;
+		Vec3(std::nullptr_t n = null) : vec(n), x(def), y(def), z(def) { }
+		Vec3(T x, T y, T z) : vec<T>(x, y, z), x(this[0]), y(this[1]), z(this[2]) { }
+	};
+
+	template <typename T>
+	struct Vec4:vec<T> {
+		static T def;
+		T &x, &y, &z, &w;
+		Vec4(std::nullptr_t n = null) : vec(n), x(def), y(def), z(def), w(def) { }
+		Vec4(T x, T y, T z, T w) : vec<T>(x, y, z, w), x(*this[0]), y(*this[1]), z(*this[2]), w(*this[3]) { }
+	};
+	
+	template <typename T>
+	static inline T decimal(T x, size_t dp) {
+		T sc = std::pow(10, dp);
+		return std::round(x * sc) / sc;
+	}
+
+	template <typename T>
+	struct Edge {
+		vec<T> &a;
+		vec<T> &b;
+    
+		/// returns x-value of intersection of two lines
+		inline T x(vec<T> c, vec<T> d) {
+			T  ax = a[0], ay = a[1];
+			T  bx = b[0], by = b[1];
+			T  cx = c[0], cy = c[1];
+			T  dx = d[0], dy = d[1];
+			
+			T num = (ax*by  -  ay*bx) * (cx-dx) - (ax-bx) * (cx*dy - cy*dx);
+			T den = (ax-bx) * (cy-dy) - (ay-by) * (cx-dx);
+			return num / den;
+		}
+    
+		/// returns y-value of intersection of two lines
+		inline T y(vec<T> c, vec<T> d) {
+			T  ax = a[0], ay = a[1];
+			T  bx = b[0], by = b[1];
+			T  cx = c[0], cy = c[1];
+			T  dx = d[0], dy = d[1];
+
+			T num = (ax*by  -  ay*bx) * (cy-dy) - (ay-by) * (cx*dy - cy*dx);
+			T den = (ax-bx) * (cy-dy) - (ay-by) * (cx-dx);
+			return num / den;
+		}
+    
+		/// returns xy-value of intersection of two lines
+		inline vec<T> xy(vec<T> c, vec<T> d) { return { x(c, d), y(c, d) }; }
+	};
+
+
+	template <typename T>
+	struct Rect: vec<T> {
+		static T def;
+		T &x, &y, &sx, &sy;
+
+		Rect(std::nullptr_t n = nullptr) : vec(n), x(def), y(def), sx(def), sy(def)      { }
+		Rect(T x, T y, T sx, T sy)		 : vec(x, y, sx, sy), x(x), y(y), sx(sx), sy(sy) { }
+		
+		Rect(vec<T> pos, vec<T> sz, bool ctr) {
+			T px = pos[0];
+			T py = pos[1];
+			T sx =  sz[0];
+			T sy =  sz[1];
+			if (ctr)
+				*this = { px - sx / 2, py - sy / 2, sx, sy };
+			else
+				*this = { px, py, sx, sy };
+		}
+
+		Rect(vec<T> p0, vec<T> p1) {
+			T  x0 = std::min(p0[0], p1[0]);
+			T  y0 = std::min(p0[1], p0[1]);
+			T  x1 = std::max(p1[0], p1[0]);
+			T  y1 = std::max(p1[1], p1[1]);
+			*this = { x0, y0, x1 - x0, y1 - y0 };
+		}
+    
+		inline Rect<T> offset(T a) const { return { x - a, y - a, sx + (a * 2), sy + (a * 2) }; }
+		static Rect<T>     &null()       { static Rect<T> n = null; return n; }
+    
+		Vec2<T>               xy() const { return { x, y }; }
+		Vec2<T>           center() const { return { x + sx / 2.0, y + sy / 2.0 }; }
+		bool   contains (vec<T> p) const {
+			T px = p[0],
+			  py = p[1];
+			return px >= x && px <= (x + sx) &&
+				   py >= y && py <= (y + sy);
+		}
+		bool    operator== (const Rect<T> &r) { return x == r.x && y == r.y && sx == r.sx && sy == r.sy; }
+		bool    operator!= (const Rect<T> &r) { return !operator==(r); }
+		///
+		Rect<T> operator + (Rect<T> r)        { return { x + r.x, y + r.y, sx + r.sx, sy + r.sy }; }
+		Rect<T> operator - (Rect<T> r)        { return { x - r.x, y - r.y, sx - r.sx, sy - r.sy }; }
+
+		// make this behaviour implicit to vec<T>
+		Rect<T> operator + (vec<T> v)         { return { x + v.x, y + v.y, sx, sy }; }
+		Rect<T> operator - (vec<T> v)         { return { x - v.x, y - v.y, sx, sy }; }
+    
+		///
+		Rect<T> operator * (T r) { return { x * r, y * r, sx * r, sy * r }; }
+		Rect<T> operator / (T r) { return { x / r, y / r, sx / r, sy / r }; }
+		operator Rect<int>    () { return {    int(x),    int(y),    int(sx),    int(sy) }; }
+		operator Rect<float>  () { return {  float(x),  float(y),  float(sx),  float(sy) }; }
+		operator Rect<double> () { return { double(x), double(y), double(sx), double(sy) }; }
+
+		Rect<T>(vec<T>& a) : vec<T>(a), x(a[0]), y(a[1]), sx(a[2]), sy(a[3]) { }
+    
+		array<Vec2<T>> edges() const {
+			return {{x,y},{x+sx,y},{x+sx,y+sy},{x,y+sy}};
+		}
+    
+		array<Vec2<T>> clip(array<Vec2<T>> &poly) const {
+			const Rect<T> &clip = *this;
+			array<Vec2<T>>    p = poly;
+			array<Vec2<T>>    e = clip.edges();
+			for (int i = 0; i < e.size(); i++) {
+				Vec2<T>  &e0 = e[i];
+				Vec2<T>  &e1 = e[(i + 1) % e.size()];
+				Edge<T> edge = { e0, e1 };
+				array<Vec2<T>> cl;
+				for (int ii = 0; ii < p.size(); ii++) {
+					const Vec2<T> &pi = p[(ii + 0)];
+					const Vec2<T> &pk = p[(ii + 1) % p.size()];
+					const bool    top = i == 0;
+					const bool    bot = i == 2;
+					const bool    lft = i == 3;
+					if (top || bot) {
+						const bool cci = top ? (edge.a.y <= pi.y) : (edge.a.y > pi.y);
+						const bool cck = top ? (edge.a.y <= pk.y) : (edge.a.y > pk.y);
+						if (cci) {
+							cl     += cck ? pk : Vec2<T> { edge.x(pi, pk), edge.a.y };
+						} else if (cck) {
+							cl     += Vec2<T> { edge.x(pi, pk), edge.a.y };
+							cl     += pk;
+						}
+					} else {
+						const bool cci = lft ? (edge.a.x <= pi.x) : (edge.a.x > pi.x);
+						const bool cck = lft ? (edge.a.x <= pk.x) : (edge.a.x > pk.x);
+						if (cci) {
+							cl     += cck ? pk : Vec2<T> { edge.a.x, edge.y(pi, pk) };
+						} else if (cck) {
+							cl     += Vec2<T> { edge.a.x, edge.y(pi, pk) };
+							cl     += pk;
+						}
+					}
+				}
+				p = cl;
+			}
+			return p;
+		}
+	};
+
+
+
+
+
 //export module str;
 //export {
 	typedef int ichar;
-
 
 	struct str {
 	protected:
@@ -1672,7 +1964,8 @@ export {
 
 		/// best way to serialize a string is to return the Shared
 		/// Shared just hides many dependency quirks, so do this with all of the types.
-		inline operator Shared() { return sh; }
+		/// shared has access to hashing functor
+		operator Shared() { return sh; }
     
 		// constructors
 		str(shared &sh)				: sh(sh) { }
@@ -1740,18 +2033,13 @@ export {
 		bool        operator!()						 const { return !(operator bool());             }
 					operator               int64_t() const { return integer();                      }
 					operator                  real() const { return real();                         }
-				  //operator          const char *() const { return ref().c_str(); } -- shes not safe to fly.
 		str        &operator= (const str &s) {
 			if (this != &s)
 				sh = ((str &)s).sh;
 			return *this;
 		}
 
-		
-		// i guess silver inserts these too; i simply do not see why you double them up its such a bad feature of the language
-		// stating that it could be 'either' const or non-const; say volitile.  can go either way lol.
-		// that emits.  its just a silver thing; silver reflects.
-		bool        operator==(const char* cstr)     const {
+		bool        operator==(const char* cstr) const {
 			auto& s = ref();
 			if (!cstr)
 				return s.length() == 0;
@@ -2087,8 +2375,24 @@ export {
 //export module map;
 //export {
 
+
+
+
+
+
+
+
+
+
+
+
+	
+//export module map;
+//export {
+	// no io inheritence; phasing it out. the M structs can do the rest.
+	// this is a reasonable reduction of map to be simplified by access to shared type- hash functor
 	template <typename K, typename V>
-	struct map:io {
+	struct pairs {
 		typedef std::vector<pair<K,V>> vpairs;
 		sh<vpairs>                     arr;
 		static typename vpairs::iterator iterator;
@@ -2101,16 +2405,20 @@ export {
 			return *arr;
 		}
 
-		map(std::nullptr_t n = null)            { realloc(0);         }
-		map(size_t               sz)            { realloc(sz);        }
-		void reserve(size_t      sz)            { arr->reserve(sz); }
-		void clear(size_t    sz = 0)            { arr->clear(); if (sz) arr->reserve(sz); }
-		map(std::initializer_list<pair<K,V>> p) {
+		///
+		pairs(std::nullptr_t n = null)  { realloc(0);       }
+		pairs(size_t               sz)  { realloc(sz);      }
+		void reserve(size_t        sz)  { arr->reserve(sz); }
+		void clear(size_t      sz = 0)  { arr->clear(); if (sz) arr->reserve(sz); }
+
+		///
+		pairs(std::initializer_list<pair<K,V>> p) {
 			realloc(p.size());
 			for (auto &i: p) arr->push_back(i);
 		}
 
-		map(const map<K,V> &p) {
+		///
+		pairs(const pairs<K,V> &p) {
 			realloc(p.size());
 			for (auto &i: *p.arr)
 				arr->push_back(i);
@@ -2164,9 +2472,9 @@ export {
 			return false;
 		}
 
-		inline bool operator!=(map<K,V> &b) { return !operator==(b);    }
+		inline bool operator!=(pairs<K,V> &b) { return !operator==(b);    }
 		inline operator bool()              { return arr->size() > 0; }
-		inline bool operator==(map<K,V> &b) {
+		inline bool operator==(pairs<K,V> &b) {
 			if (size() != b.size())
 				return false;
 			for (auto &[k,v]: b)
@@ -2176,8 +2484,21 @@ export {
 		}
 	};
 
-	template<typename K, typename V> struct is_map <map<K,V>>   : std::true_type  { };
-	template<typename V>			 struct is_array <array<V>> : std::true_type  { };
+
+	template <typename>
+	struct is_map_wat : std::false_type {};
+
+	template <typename K, typename V>
+	struct is_map_wat<pairs<K, V>> : std::true_type {};
+
+
+
+	template <typename V> using map = pairs<Shared, V>;
+
+	//template <typename V>			  struct is_map   <map     <V>> : std::true_type { };
+	
+	
+	template <typename V>			  struct is_array <array   <V>> : std::true_type { };
 ///}
 
 /// ---------------------------------------------------------------------------
@@ -2353,7 +2674,7 @@ export {
 
 			lambda<void(Path)> res;
 			
-			map<Path, bool> fetched_dir; // this is temp and map needs a hash table pronto
+			pairs<Path, bool> fetched_dir; // this is temp and map needs a hash table pronto
 			path_t parent		= p; /// parent relative to the git-ignore index; there may be multiple of these things.
 			///
 			res = [&](Path p) {
@@ -2473,8 +2794,8 @@ export {
 //export {
 
 	struct base64 {
-		static map<size_t, size_t> b64_encoder() {
-			auto mm = map<size_t, size_t>();
+		static pairs<size_t, size_t> b64_encoder() {
+			auto mm = pairs<size_t, size_t>();
 			/// --------------------------------------------------------
 			for (size_t i = 0; i < 26; i++) mm[i]          = size_t('A') + size_t(i);
 			for (size_t i = 0; i < 26; i++) mm[26 + i]     = size_t('a') + size_t(i);
@@ -2488,8 +2809,8 @@ export {
 
 
 		/// base64 validation/value map
-		static map<size_t, size_t> b64_decoder() {
-			auto m = map<size_t, size_t>();
+		static pairs<size_t, size_t> b64_decoder() {
+			auto m = pairs<size_t, size_t>();
 
 			for (size_t i = 0; i < 26; i++) m['A' + i] = i;
 			for (size_t i = 0; i < 26; i++) m['a' + i] = 26 + i;
@@ -2522,7 +2843,7 @@ export {
 		static sh<uint8_t> decode(cchar_t* b64, size_t b64_len, size_t* alloc_sz) {
 			assert(b64_len % 4 == 0);
 			/// --------------------------------------
-			auto          m = b64_decoder();
+			auto          m = base64::b64_decoder();
 			*alloc_sz       = b64_len / 4 * 3;
 			sh<uint8_t> out = sh<uint8_t>::valloc(*alloc_sz + 1);
 			uint8_t*      o = out.pointer<uint8_t>();
@@ -2630,7 +2951,7 @@ export {
 
 		var &operator[](str name) {
 			if (d.type() == Type::Map) {
-				auto re = d.reorient<map<str, var>>({ Trait::TMap });
+				auto re = d.reorient<map<var>>({ Trait::TMap });
 				return re[name];
 			}
 			return vconst_for(0);
@@ -2675,10 +2996,10 @@ export {
 
 	void test() {
 		
-		map<str, var> m = {};
+		map<var> m = {};
 		m.size();
 		//m["test"] = null;
-		map<str, var>& cc91 = (map<str, var>  &) * (map<str, var>*)0;
+		map<var>& cc91 = (map<var>  &) * (map<var>*)0;
 		cc91.size();
 
 	}
@@ -2889,10 +3210,10 @@ export {
 
 //export module model;
 //export {
-	typedef map<str, var> Schema;
-	typedef map<str, var> SMap;
-	typedef array<var>     Table;
-	typedef map<str, var>  ModelMap;
+	typedef map<var>  Schema;
+	typedef map<var>  SMap;
+	typedef array<var> Table;
+	typedef map<var>   ModelMap;
 
 	int abc() {
 		var test = var(0);
@@ -2966,6 +3287,11 @@ export {
 //}
 
 
+
+
+
+
+
 	
 /// ---------------------------------------------------------------------------
 //export module unit;
@@ -3009,7 +3335,7 @@ export {
 	template <typename T>
 	const T nan() { return std::numeric_limits<T>::quiet_NaN(); };
 
-	struct Unit:io {
+	struct Unit {
 		enum Attrib {
 			Standard,
 			Metric,
@@ -3077,458 +3403,18 @@ export {
 		void assert_types(array<str> &types, bool allow_none) {
 			console.assertion((allow_none && !type) || types.index_of(type) >= 0, "unit not recognized");
 		}
+
 		///
 		operator str  &() { return type;  }
 		operator real &() { return value; }
-    
-		//operator var() {
-		//	return Map {
-		//		{"type",  var(type)},
-		//		{"value", var(value)}
-		//	};
-		//}
 	};
 //}
 
 //export module vec;
 //export {
 
-	template <typename T>
-	struct Vector {
-		explicit operator bool() const {
-			if constexpr (std::is_same_v<T, double> || std::is_same_v<T, float>)
-				return !std::isnan(*(T *)this);
-			return true;
-		}
-		bool operator!() const { return !(operator bool()); }
+	// size_t reserved for hash use-case
 
-		inline T &operator[](size_t i) const {
-			T *v = (T *)this;
-			return v[i];
-		}
-	};
-
-	template <typename T>
-	static inline T decimal(T x, size_t dp) {
-		T sc = std::pow(10, dp);
-		return std::round(x * sc) / sc;
-	}
-
-	template <typename T>
-	struct Vec4;
-
-	template <typename T>
-	struct Vec2: Vector<T> {
-		alignas(T) T x, y;
-		Vec2(std::nullptr_t n = nullptr) : x(nan<T>()) { }
-		Vec2(T x)      : x(x), y(x) { }
-		Vec2(T x, T y) : x(x), y(y) { }
-
-		Vec2<T> xxyy();
-    
-		friend auto operator<<(std::ostream& os, Vec2<T> const& m) -> std::ostream& {
-			return os << "[" << decimal(m.x, 4) << "," << decimal(m.y, 4) << "]";
-		}
-    
-		static Vec2<T> &null() {
-			static Vec2<T> *n = nullptr;
-			if (!n)
-				 n = new Vec2<T>(nullptr);
-			return *n;
-		}
-    
-		operator size_t() const { return size_t(x) * size_t(y); }
-    
-		Vec2(var &d) {
-			auto t = d.type();
-			if (d.size() < 2) {
-				x = nan<T>();
-			} else if (t == Type::Array) {
-				x = T(d[size_t(0)]);
-				y = T(d[size_t(1)]);
-			} else if (t == Type::Map) {
-				x = T(d["x"]);
-				y = T(d["y"]);
-			} else {
-				assert(false);
-			}
-		}
-    
-		static void aabb(array<Vec2<T>> &a, Vec2<T> &v_min, Vec2<T> &v_max) {
-			const int sz = a.size();
-			v_min        = a[0];
-			v_max        = a[0];
-			for (int i   = 1; i < sz; i++) {
-				auto &v  = a[i];
-				v_min    = v_min.min(v);
-				v_max    = v_max.max(v);
-			}
-		}
-    
-		T xs() { return x * x; }
-		T ys() { return y * y; }
-    
-		inline Vec2<T> abs() {
-			if constexpr (std::is_same_v<T, int>)
-				return *this;
-			return Vec2<T> { std::abs(x), std::abs(y) };
-		}
-    
-		inline Vec2<T> floor() {
-			if constexpr (std::is_same_v<T, int>)
-				return *this;
-			return Vec2<T> { std::floor(x), std::floor(y) };
-		}
-    
-		inline Vec2<T> ceil() {
-			if constexpr (std::is_same_v<T, int>)
-				return *this;
-			return Vec2<T> { std::ceil(x),  std::ceil(y) };
-		}
-    
-		inline Vec2<T> clamp(Vec2<T> mn, Vec2<T> mx) {
-			return Vec2<T> {
-				std::clamp(x, mn.x, mx.x),
-				std::clamp(y, mn.y, mx.y)
-			};
-		}
-    
-		inline T max() {
-			return std::max(x, y);
-		}
-    
-		inline T min() {
-			return std::min(x, y);
-		}
-    
-		inline Vec2<T> max(T v) {
-			return Vec2<T> {
-				std::max(x, v),
-				std::max(y, v)
-			};
-		}
-    
-		inline Vec2<T> min(T v) {
-			return Vec2<T> {
-				std::min(x, v),
-				std::min(y, v)
-			};
-		}
-    
-		inline Vec2<T> max(Vec2<T> v) {
-			return Vec2<T> {
-				std::max(x, v.x),
-				std::max(y, v.y)
-			};
-		}
-    
-		inline Vec2<T> min(Vec2<T> v)   {
-			return Vec2<T> {
-				std::min(x, v.x),
-				std::min(y, v.y)
-			};
-		}
-    
-		operator var() { return array<T> { x, y }; }
-		///
-		bool operator== (const Vec2<T> &r) const { return x == r.x && y == r.y; }
-		///
-		void operator += (Vec2<T>  r)   { x += r.x; y += r.y; }
-		void operator -= (Vec2<T>  r)   { x -= r.x; y -= r.y; }
-		void operator *= (Vec2<T>  r)   { x *= r.x; y *= r.y; }
-		void operator /= (Vec2<T>  r)   { x /= r.x; y /= r.y; }
-		///
-		void operator *= (T r)          { x *= r;   y *= r; }
-		void operator /= (T r)          { x /= r;   y /= r; }
-		///
-		Vec2<T> operator + (Vec2<T> r)  { return { x + r.x, y + r.y }; }
-		Vec2<T> operator - (Vec2<T> r)  { return { x - r.x, y - r.y }; }
-		Vec2<T> operator * (Vec2<T> r)  { return { x * r.x, y * r.y }; }
-		Vec2<T> operator / (Vec2<T> r)  { return { x / r.x, y / r.y }; }
-		///
-		Vec2<T> operator * (T r)        { return { x * r, y * r }; }
-		Vec2<T> operator / (T r)        { return { x / r, y / r }; }
-		///
-		operator Vec2<float>()          { return Vec2<float>  {  float(x),  float(y) }; }
-		operator Vec2<double>()         { return Vec2<double> { double(x), double(y) }; }
-		operator Vec2<int>()            { return Vec2<int>    {    int(x),    int(y) }; }
-		///
-		static double area(array<Vec2<T>> &p) {
-			double area = 0.0;
-			const int n = int(p.size());
-			int       j = n - 1;
-        
-			// shoelace formula
-			for (int i = 0; i < n; i++) {
-				Vec2<T> &pj = p[j];
-				Vec2<T> &pi = p[i];
-				area += (pj.x + pi.x) * (pj.y - pi.y);
-				j = i;
-			}
-     
-			// return absolute value
-			return std::abs(area / 2.0);
-		}
-	};
-
-	template <typename T>
-	struct Vec3: Vector<T> {
-		alignas(T) T x, y, z;
-		Vec3(std::nullptr_t n = nullptr) : x(nan<T>()) { }
-		Vec3(T x) : x(x), y(x), z(x) { }
-		Vec3(T x, T y, T z) : x(x), y(y), z(z) { }
-    
-		static Vec3<T> &null() {
-			static Vec3<T> *n = nullptr;
-			if (!n)
-				 n = new Vec3<T>(nullptr);
-			return *n;
-		}
-
-		bool operator== (const Vec3<T> &r) const { return x == r.x && y == r.y && z == r.z; }
-
-		void operator += (Vec3<T> &r)   { x += r.x; y += r.y; z += r.z; }
-		void operator -= (Vec3<T> &r)   { x -= r.x; y -= r.y; z -= r.z; }
-		void operator *= (Vec3<T> &r)   { x *= r.x; y *= r.y; z *= r.z; }
-		void operator /= (Vec3<T> &r)   { x /= r.x; y /= r.y; z /= r.z; }
-    
-		void operator *= (T r)          { x *= r;   y *= r;   z *= r.z; }
-		void operator /= (T r)          { x /= r;   y /= r;   z /= r.z; }
-    
-		Vec3<T> operator + (Vec3<T> &r) { return { x + r.x, y + r.y, z + r.z }; }
-		Vec3<T> operator - (Vec3<T> &r) { return { x - r.x, y - r.y, z - r.z }; }
-		Vec3<T> operator * (Vec3<T> &r) { return { x * r.x, y * r.y, z * r.z }; }
-		Vec3<T> operator / (Vec3<T> &r) { return { x / r.x, y / r.y, z / r.z }; }
-    
-		Vec3<T> operator * (T r)        { return { x * r.x, y * r.y, z * r.z }; }
-		Vec3<T> operator / (T r)        { return { x / r.x, y / r.y, z / r.z }; }
-
-		inline Vec2<T> xy()             { return Vec2<T> { x, y }; }
-		inline operator Vec3<float>()   { return Vec3<float>  { float(x),  float(y),  float(z)  }; }
-		inline operator Vec3<double>()  { return Vec3<double> { double(x), double(y), double(z) }; }
-    
-		operator var() {
-			return std::vector<T> { x, y, z };
-		}
-    
-		Vec3(var &d) {
-			x = T(d[size_t(0)]);
-			y = T(d[size_t(1)]);
-			z = T(d[size_t(2)]);
-		}
-    
-		Vec3<T> &operator=(const std::vector<T> f) {
-			assert(f.size() == 3);
-			x = f[0];
-			y = f[1];
-			z = f[2];
-			return *this;
-		}
-    
-		T len_sqr() const {
-			return x * x + y * y + z * z;
-		}
-    
-		T len() const {
-			return sqrt(len_sqr());
-		}
-    
-		Vec3<T> normalize() const {
-			T l = len();
-			return *this / l;
-		}
-    
-		inline Vec3<T> cross(Vec3<T> b) {
-			Vec3<T> &a = *this;
-			return { a.y * b.z - a.z * b.y,
-					 a.z * b.x - a.x * b.z,
-					 a.x * b.y - a.y * b.x };
-		}
-	};
-
-
-	template <typename T>
-	struct Vec4: Vector<T> {
-		alignas(T) T x, y, z, w;
-		Vec4(std::nullptr_t n = nullptr) {
-			x = nan<T>();
-		}
-		Vec4(T x)                  : x(x),   y(x),   z(x),   w(x)   { }
-		Vec4(T x, T y, T z, T w)   : x(x),   y(y),   z(z),   w(w)   { }
-		Vec4(Vec2<T> x, Vec2<T> y) : x(x.x), y(x.y), z(y.x), w(y.y) { }
-    
-		static Vec4<T> &null() {
-			static Vec4<T> *n = nullptr;
-			if (!n)
-				 n = new Vec4<T>(nullptr);
-			return *n;
-		}
-
-		bool operator== (const Vec4<T> &r) const { return x == r.x && y == r.y && z == r.z && w == r.w; }
-
-		void operator += (Vec4<T> &r)          { x += r.x; y += r.y; z += r.z; w += r.w; }
-		void operator -= (Vec4<T> &r)          { x -= r.x; y -= r.y; z -= r.z; w -= r.w; }
-		void operator *= (Vec4<T> &r)          { x *= r.x; y *= r.y; z *= r.z; w *= r.w; }
-		void operator /= (Vec4<T> &r)          { x /= r.x; y /= r.y; z /= r.z; w /= r.w; }
-    
-		inline void operator *= (T r)          { x *= r;   y *= r;   z *= r;   w *= r; }
-		inline void operator /= (T r)          { x /= r;   y /= r;   z /= r;   w /= r; }
-    
-		inline Vec4<T> operator + (Vec4<T>  r) { return { x + r.x, y + r.y, z + r.z, w + r.w }; }
-		inline Vec4<T> operator - (Vec4<T>  r) { return { x - r.x, y - r.y, z - r.z, w - r.w }; }
-		inline Vec4<T> operator * (Vec4<T>  r) { return { x * r.x, y * r.y, z * r.z, w * r.w }; }
-		inline Vec4<T> operator / (Vec4<T>  r) { return { x / r.x, y / r.y, z / r.z, w / r.w }; }
-    
-		inline Vec4<T> operator * (T v)        { return { x * v, y * v, z * v, w * v }; }
-		inline Vec4<T> operator / (T v)        { return { x / v, y / v, z / v, w / v }; }
-    
-		inline Vec3<T> xyz()                   { return Vec3<T> { x, y, z }; }
-    
-		inline operator Vec4<float>()          { return Vec4<float>  {  float(x),  float(y),  float(z),  float(w) }; }
-		inline operator Vec4<double>()         { return Vec4<double> { double(x), double(y), double(z), double(w) }; }
-    
-		inline Vec2<T> xy()                    { return Vec2<T> { x, y }; }
-		inline Vec2<T> xz()                    { return Vec2<T> { x, z }; }
-		inline Vec2<T> yz()                    { return Vec2<T> { y, z }; }
-		inline Vec2<T> xw()                    { return Vec2<T> { x, w }; }
-		inline Vec2<T> yw()                    { return Vec2<T> { y, w }; }
-	};
-
-	template <typename T>
-	struct Edge {
-		Vec2<T> &a;
-		Vec2<T> &b;
-    
-		/// returns x-value of intersection of two lines
-		inline T x(Vec2<T> c, Vec2<T> d) {
-			T num = (a.x*b.y - a.y*b.x) * (c.x-d.x) - (a.x-b.x) * (c.x*d.y - c.y*d.x);
-			T den = (a.x-b.x) * (c.y-d.y) - (a.y-b.y) * (c.x-d.x);
-			return num / den;
-		}
-    
-		/// returns y-value of intersection of two lines
-		inline T y(Vec2<T> c, Vec2<T> d) {
-			T num = (a.x*b.y - a.y*b.x) * (c.y-d.y) - (a.y-b.y) * (c.x*d.y - c.y*d.x);
-			T den = (a.x-b.x) * (c.y-d.y) - (a.y-b.y) * (c.x-d.x);
-			return num / den;
-		}
-    
-		/// returns xy-value of intersection of two lines
-		inline Vec2<T> xy(Vec2<T> c, Vec2<T> d) {
-			return { x(c, d), y(c, d) };
-		}
-	};
-
-	template <typename T>
-	struct Rect: Vector<T> {
-		alignas(T) T x, y, w, h;
-		Rect(std::nullptr_t n = nullptr) : x(std::numeric_limits<T>::quiet_NaN()) { }
-		Rect(T x, T y, T w, T h) : x(x), y(y), w(w), h(h) { }
-		Rect(Vec2<T> p, Vec2<T> s, bool c) {
-			if (c)
-				*this = { p.x - s.x / 2, p.y - s.y / 2, s.x, s.y };
-			else
-				*this = { p.x, p.y, s.x, s.y };
-		}
-		Rect(Vec2<T> p0, Vec2<T> p1) {
-			auto x0 = std::min(p0.x, p1.x);
-			auto y0 = std::min(p0.y, p0.y);
-			auto x1 = std::max(p1.x, p1.x);
-			auto y1 = std::max(p1.y, p1.y);
-			*this   = { x0, y0, x1 - x0, y1 - y0 };
-		}
-    
-		operator bool() {
-			return !std::isnan(x) && !std::isnan(y) && w > 0 && h > 0;
-		}
-    
-		inline Rect<T> offset(T a) const { /// rename to something else
-			return { x - a, y - a, w + (a * 2), h + (a * 2) };
-		}
-    
-		static Rect<T> &null() {
-			static Rect<T> *n = nullptr;
-			if (!n)
-				 n = new Rect<T>(nullptr);
-			return *n;
-		}
-    
-		Vec2<T> size()   const { return { w, h }; }
-		Vec2<T> xy()     const { return { x, y }; }
-		Vec2<T> center() const { return { x + w / 2.0, y + h / 2.0 }; }
-		bool contains(Vec2<T> p) const {
-			return p.x >= x && p.x <= (x + w) &&
-				   p.y >= y && p.y <= (y + h);
-		}
-		bool    operator== (const Rect<T> &r) { return x == r.x && y == r.y && w == r.w && h == r.h; }
-		bool    operator!= (const Rect<T> &r) { return !operator==(r); }
-		///
-		Rect<T> operator + (Rect<T> r)        { return { x + r.x, y + r.y, w + r.w, h + r.h }; }
-		Rect<T> operator - (Rect<T> r)        { return { x - r.x, y - r.y, w - r.w, h - r.h }; }
-		Rect<T> operator + (Vec2<T> v)        { return { x + v.x, y + v.y, w, h }; }
-		Rect<T> operator - (Vec2<T> v)        { return { x - v.x, y - v.y, w, h }; }
-    
-		///
-		Rect<T> operator * (T r) { return { x * r, y * r, w * r, h * r }; }
-		Rect<T> operator / (T r) { return { x / r, y / r, w / r, h / r }; }
-		operator Rect<int>()     { return {    int(x),    int(y),    int(w),    int(h) }; }
-		operator Rect<float>()   { return {  float(x),  float(y),  float(w),  float(h) }; }
-		operator Rect<double>()  { return { double(x), double(y), double(w), double(h) }; }
-		operator var()           { return ::array<T> { x, y, w, h }; }
-		Rect<T>(var &d)          {
-			if (d.size()) {
-				x = T(d[size_t(0)]);
-				y = T(d[size_t(1)]);
-				w = T(d[size_t(2)]);
-				h = T(d[size_t(3)]);
-			} else
-				x = std::numeric_limits<double>::quiet_NaN();
-		}
-    
-		array<Vec2<T>> edges() const {
-			return {{x,y},{x+w,y},{x+w,y+h},{x,y+h}};
-		}
-    
-		array<Vec2<T>> clip(array<Vec2<T>> &poly) const {
-			const Rect<T>  &clip = *this;
-			array<Vec2<T>>       p = poly;
-			array<Vec2<T>>       e = clip.edges();
-			for (int i = 0; i < e.size(); i++) {
-				Vec2<T>  &e0 = e[i];
-				Vec2<T>  &e1 = e[(i + 1) % e.size()];
-				Edge<T> edge = { e0, e1 };
-				array<Vec2<T>> cl;
-				for (int ii = 0; ii < p.size(); ii++) {
-					const Vec2<T> &pi = p[(ii + 0)];
-					const Vec2<T> &pk = p[(ii + 1) % p.size()];
-					const bool    top = i == 0;
-					const bool    bot = i == 2;
-					const bool    lft = i == 3;
-					if (top || bot) {
-						const bool cci = top ? (edge.a.y <= pi.y) : (edge.a.y > pi.y);
-						const bool cck = top ? (edge.a.y <= pk.y) : (edge.a.y > pk.y);
-						if (cci) {
-							cl     += cck ? pk : Vec2<T> { edge.x(pi, pk), edge.a.y };
-						} else if (cck) {
-							cl     += Vec2<T> { edge.x(pi, pk), edge.a.y };
-							cl     += pk;
-						}
-					} else {
-						const bool cci = lft ? (edge.a.x <= pi.x) : (edge.a.x > pi.x);
-						const bool cck = lft ? (edge.a.x <= pk.x) : (edge.a.x > pk.x);
-						if (cci) {
-							cl     += cck ? pk : Vec2<T> { edge.a.x, edge.y(pi, pk) };
-						} else if (cck) {
-							cl     += Vec2<T> { edge.a.x, edge.y(pi, pk) };
-							cl     += pk;
-						}
-					}
-				}
-				p = cl;
-			}
-			return p;
-		}
-	};
 
 	/// never change:
 	typedef Vec2<float>  vec2f;
@@ -3874,9 +3760,12 @@ INITIALIZER(initialize) {
 		{ 21, "Meta"      }
 	};
 
-	// not sure if i can initialize const in a way that lets me also bootstrap the type
+	/// initialize type primitives
 	size_t p                   = 0;
-	*(Type **)Type::primitives = (Type *)calloc(sizeof(Type), 22); // C++ is champ
+	const size_t p_count	   = sizeof(decls) / sizeof(Type::Decl);
+	Type::primitives		   = (const Type **)calloc(sizeof(Type), p_count);
+
+	/// initialize all of the consts, set the pointer to each in primitives.
 	*(Type *)&Type::Undefined  = Type::bootstrap<void>        (decls[0]);  Type::primitives[p++] = &Type::Undefined;
 	*(Type *)&Type::  i8       = Type::bootstrap<int8_t>      (decls[1]);  Type::primitives[p++] = &Type::i8;
 	*(Type *)&Type:: ui8	   = Type::bootstrap<uint8_t>     (decls[2]);  Type::primitives[p++] = &Type::ui8;
@@ -3891,7 +3780,7 @@ INITIALIZER(initialize) {
 	*(Type *)&Type::Bool	   = Type::bootstrap<Bool>        (decls[11]); Type::primitives[p++] = &Type::Bool;
 	*(Type *)&Type::Str		   = Type::bootstrap<str>         (decls[12]); Type::primitives[p++] = &Type::Str;
 	*(Type *)&Type::Map        = Type::bootstrap<array<var>>  (decls[13]); Type::primitives[p++] = &Type::Array;
-	*(Type *)&Type::Array	   = Type::bootstrap<map<str,var>>(decls[14]); Type::primitives[p++] = &Type::Map;
+	*(Type *)&Type::Array	   = Type::bootstrap<map<var>>    (decls[14]); Type::primitives[p++] = &Type::Map;
 	*(Type *)&Type::Ref	       = Type::bootstrap<Ref>		  (decls[15]); Type::primitives[p++] = &Type::Ref;
 	*(Type *)&Type::Arb        = Type::bootstrap<Arb>         (decls[16]); Type::primitives[p++] = &Type::Arb;
 	*(Type *)&Type::Node	   = Type::bootstrap<Node>		  (decls[17]); Type::primitives[p++] = &Type::Node;
@@ -3902,11 +3791,18 @@ INITIALIZER(initialize) {
 	*(Type*)&Type::Any		   = Type::bootstrap<Any>		  (decls[20]); Type::primitives[p++] = &Type::Any;
 	*(Type*)&Type::Meta		   = Type::bootstrap<Meta>		  (decls[21]); Type::primitives[p++] = &Type::Meta;
 
+	assert(p == p_count); /// 22
 
 	vec2f a = { 1, 2 };
 	vec2f b = { 2, 4 };
 	vec2f c = a + b + b;
+	vec2f d = { 3, 4 };
 
+	map<bool> abc; // i think its better to have shared hashing management
 
-
+	Shared sh = a;
+	
+	str  s = a; //
+	// we wanted quick access to hash compute, because map stores by Hash 
+	abc[s] = true;
 }

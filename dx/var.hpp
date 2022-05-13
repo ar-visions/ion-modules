@@ -73,7 +73,7 @@ struct var:io {
         int flags;
     };
     
-    typedef map<string, TypeFlags> FieldFlags;
+    typedef map<TypeFlags> FieldFlags;
     
     enum Format {
         Binary,
@@ -97,7 +97,7 @@ struct var:io {
     Fn                           fn;
   //FnFilter                     ff;
     std::shared_ptr<uint8_t>     d = null;
-    map<string, var>             m = null;
+    map<var>                     m = null;
     ::array<var>                 a = null;
     str                          s = null;
     u                           *n = null;
@@ -165,7 +165,7 @@ public:
         return r;
     }
 
-    var tag(map<string, var> m);
+    var tag(map<var> m);
     var(std::ifstream &f, enum var::Format format);
     
     var(Type::Specifier c, Shape<Major> sh) : sh(sh) {
@@ -212,7 +212,7 @@ public:
   //var(uint64_t v);
   //var(FnFilter v);
     var(Fn       v);
-  //var(map<string, var> data_map);
+  //var(map<var> data_map);
     var(::array<var> data_array);
     var(string str);
     var(const char *str);
@@ -229,8 +229,9 @@ public:
         return result;
     }
     
-    map<string, var> &map()   { return var::resolve(*this).m; }
-    ::array<var>     &array() { return var::resolve(*this).a; }
+        map<var>   &map() { return var::resolve(*this).m; }
+    ::array<var> &array() { return var::resolve(*this).a; }
+
     var   operator()(var &d) {
         var &v = var::resolve(*this);
         var res;
@@ -244,18 +245,18 @@ public:
         //var &v = var::resolve(*this);
         //assert(v == Type::ui8);
         assert(d != null);
-        assert(size() == sizeof(T)); /// C3PO: that isn't very reassuring.
+        assert(size() == sizeof(T));
         return T(*(T *)d.get());
     }
     
     template <typename T>
-    T value(string key, T default_v) {
+    T value(str key, T default_v) {
         var &v = var::resolve(*this);
         return (v.m.count(key) == 0) ? default_v : T(v.m[key]);
     }
     
-    template <typename K, typename T>
-    var(::map<K, T> mm) : t(Type::Map) {
+    template <typename T>
+    var(::map<T> mm) : t(Type::Map) {
         for (auto &[k, v]: mm)
             m[k] = var(v);
     }
@@ -301,7 +302,7 @@ public:
         flags = Compact;
     }
 
-         operator ::map<string, var> &() { return m; }
+         operator ::map<var> &()         { return m; }
     var &operator[] (const char *s)      { return var::resolve(*this).m[string(s)]; }
     var &operator[] (str s);
     var &operator[] (const size_t i)    {
@@ -440,8 +441,8 @@ public:
     bool operator==(const var &ref);
     bool operator==(var &ref);
     var& operator= (const var &ref);
-    bool operator==(::map<string, var> &m);
-    bool operator!=(::map<string, var> &m);
+    bool operator==(::map<var> &m);
+    bool operator!=(::map<var> &m);
     bool operator==(uint16_t v);
     bool operator==( int16_t v);
     bool operator==(uint32_t v);
@@ -487,7 +488,7 @@ public:
     }
     
     template <typename T>
-    var& operator=(::map<string, T> mm) {
+    var& operator=(::map<T> mm) {
         a = null; // so much neater when the smart pointers dont show. hide those nerds
         m = null;
         for (auto &[k, v]: mm)
@@ -541,15 +542,15 @@ struct Map:var {
     static typename vpairs::iterator iterator;
     
     /// default
-    Map(::map<string, var> m = {}) : var(m)  { }
-    Map(nullptr_t n)               : var(::map<string, var>()) { }
+    Map(::map<var> m = {}) : var(m) { }
+    Map(nullptr_t n)       : var(::map<var>()) { }
     
     /// map from args
     Map(int argc, cchar_t* argv[], Map def = {}, string field_field = "");
     
     /// map from initializer list
-    Map(std::initializer_list<pair<string, var>> args) : var(::map<string, var>()) {
-        m = ::map<string, var>(args.size());
+    Map(std::initializer_list<::map<var>> args) : var(::map<var>()) {
+        m = ::map<var>(args.size());
         for (auto &[k,v]: args)
             m[k ] = v;
     }

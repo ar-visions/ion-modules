@@ -41,7 +41,7 @@ struct var:io {
         int    flags;
     };
     
-    typedef map<string, TypeFlags> FieldFlags;
+    typedef map<TypeFlags> FieldFlags;
     
     enum Format {
         Binary,
@@ -65,7 +65,7 @@ struct var:io {
     Fn2                          fn;
   //FnFilter                     ff;
     std::shared_ptr<uint8_t>     d = null;
-    map<string, var>             m = null;
+    map<var>                     m = null;
     ::array<var>                 a = null;
     str                          s = null;
     u                           *n = null;
@@ -109,7 +109,7 @@ protected:
 
         sc.t = Type::Map;
         sc.c = Type::Any;
-        sc.m = ::map<string, var>();
+        sc.m = ::map<var>();
 
         while (*cur != '}') {
             auto field = parse_quoted(&cur);
@@ -411,7 +411,7 @@ public:
     static std::shared_ptr<uint8_t> decode(cchar_t *b64, size_t b64_len, size_t *alloc_sz) {
         assert(b64_len % 4 == 0);
         /// --------------------------------------
-        auto    m = ::map<int, int>::base64();
+        auto    m = pairs <int, int>::base64();
         *alloc_sz = b64_len / 4 * 3;
         auto  out = std::shared_ptr<uint8_t>(new uint8_t[*alloc_sz + 1]);
         auto    o = out.get();
@@ -721,7 +721,7 @@ public:
         /// unsafe pointer use-case. [merge]
         // assert(false);
     }
-    var(ssz sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); n = &n_value; } // clean this area up. lol [gets mop; todo]
+    var(ssz sz) : t(Type::i64) { n_value.vi64 = ssize_t(sz); n = &n_value; }
     var(var* vref) : t(Type::Ref), n(null) {
         assert(vref);
         while (vref->t == Type::Ref)
@@ -975,7 +975,7 @@ public:
         v.sh = s;
     }
 
-    var tag(::map<string, var> m) {
+    var tag(::map<var> m) {
         var v = copy();
         assert(v.t != Type::Map);
         for (auto &[field, value]:v.m)
@@ -1127,7 +1127,7 @@ public:
         return result;
     }
     
-    map<string, var> &map()   { return resolve(*this).m; }
+    map<var> &map()           { return resolve(*this).m; }
     ::array<var>     &array() { return resolve(*this).a; }
     var   operator()(var &d) {
         var &v = resolve(*this);
@@ -1181,7 +1181,7 @@ public:
             for (auto& [field, value] : v.m) {
                 if (ref.m.count(field) == 0)
                     return true;
-                auto& rd = ((::map<string, var> &)ref.m)[field];
+                auto& rd = ((::map<var> &)ref.m)[field];
                 if (value != rd)
                     return true;
             }
@@ -1212,8 +1212,8 @@ public:
         return true;
     }
 
-    bool operator==(::map<string, var>& m) { return resolve(*this).m == m; }
-    bool operator!=(::map<string, var>& map) { return !operator==(map); }
+    bool operator==(::map<var>& m) { return resolve(*this).m == m; }
+    bool operator!=(::map<var>& map) { return !operator==(map); }
     bool operator==(const var& ref) { return !(operator!=(ref)); }
     bool operator==(var& ref) { return !(operator!=((const var&)ref)); }
 
@@ -1334,7 +1334,7 @@ public:
 
     bool operator!() { return !(operator bool()); }
 
-         operator ::map<string, var> &() { return m; }
+         operator ::map<var>         &() { return m; }
     var &operator[] (const char  *s)     { return resolve(*this).m[string(s)]; }
     var &operator[] (const size_t i)     {
         var &v = resolve(*this);
@@ -1439,7 +1439,7 @@ public:
     }
     
     template <typename T>
-    var& operator=(::map<string, T> mm) {
+    var& operator=(::map<T> mm) {
         a = null;
         m = null;
         for (auto &[k, v]: mm)
@@ -1463,12 +1463,12 @@ struct Map:var {
     typedef std::vector<pair<string,var>> vpairs;
     
     /// default
-    Map(::map<string, var> m = {}) : var(m)  { }
-    Map(nullptr_t n)               : var(::map<string, var>()) { }
+    Map(::map<var> m = {}) : var(m)  { }
+    Map(nullptr_t n)       : var(::map<var>()) { }
     
     /// map from initializer list
-    Map(std::initializer_list<pair<string, var>> args) : var(::map<string, var>()) {
-        m = ::map<string, var>(args.size());
+    Map(std::initializer_list<::map<var>> args) : var(::map<var>()) { 
+        m = ::map<var>(args.size());
         for (auto &[k,v]: args)
             m[k] = v;
     }
