@@ -295,218 +295,188 @@ export {
 	};
 
 	/// prototypes for the various function pointers
-	typedef void    (*Constructor)(Data*);
-	typedef void    (*Destructor) (Data*);
-	typedef void    (*CopyCtr)    (Data*, void*, size_t);
-	typedef bool    (*BooleanOp)  (Data*);
-	typedef Hash    (*HashOp)	  (Data*);
-	typedef int64_t (*IntegerOp)  (Data*);
-	typedef Shared* (*AddOp)      (Data*, Data*);
-	typedef Shared* (*SubOp)      (Data*, Data*);
-	typedef Shared* (*StringOp)   (Data*);
-	typedef bool    (*RealOp)     (Data*);
-	typedef int     (*CompareOp)  (Data*, Data*);
-	typedef void    (*AssignOp)   (Data*, void*);
-	typedef size_t  (*SizeOfOp)   ();
+	typedef lambda<void   (Data*)>					 Constructor;
+	typedef lambda<void   (Data*)>					 Destructor;
+	typedef lambda<void   (Data*, void*, size_t)>	 CopyCtr;
+	typedef lambda<bool   (Data*)>					 BooleanOp;
+	typedef lambda<Hash   (Data*)>					 HashOp;
+	typedef lambda<int64_t(Data*)>					 IntegerOp;
+	typedef lambda<Shared*(Data*,Data*)>			 AddOp;
+	typedef lambda<Shared*(Data*, Data*)>			 SubOp;
+	typedef lambda<Shared*(Data*)>					 StringOp;
+	typedef lambda<bool   (Data*)>					 RealOp;
+	typedef lambda<int    (Data*, Data*)>			 CompareOp;
+	typedef lambda<void   (Data*, void*)>			 AssignOp;
+	typedef lambda<size_t()>						 SizeOfOp;
 
 	template <typename D>
 	struct Ops {
-
-		// this should validate matters for msvc?
 		template <typename T, const bool L = false>
-		static Constructor fn_ctr() {
+		static Constructor *fn_ctr() {
 			if constexpr (std::is_default_constructible<T>() && !L) {
-				/// run the constructor on memory
-				static auto ctr = [](Data* d) -> T * {
-					T* ptr = (T *)d->ptr;
-					for (size_t i = 0, c = d->count; i < c; i++)
-						new (&ptr[i]) T();
-				};
-				return Constructor(&ctr);
+				static Constructor *cp = new Constructor(
+					[](Data* d) {
+						T* ptr = (T *)d->ptr;
+						for (size_t i = 0, c = d->count; i < c; i++)
+							new (&ptr[i]) T();
+					});
+
+				return cp;
 			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static Destructor fn_dtr() {
+		static Destructor* fn_dtr() {
 			if constexpr (!L) {
 				/// run the destructor on memory
-				static auto   dtr = [](Data* d) {
+				static Destructor *dtr = new Destructor([](Data* d) -> void {
 					T* ptr = (T*)d->ptr;
 					for (size_t i = 0, c = d->count; i < c; i++)
 						ptr[i]. ~T();
-				};
-				return Destructor(&dtr);
-			}
-			else
+				});
+				return dtr;
+			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static CopyCtr fn_cpy() {
+		static CopyCtr* fn_cpy() {
 			if constexpr (!L) {
 				/// run the copy-constructor on memory
-				static auto cpy = [](Data* ds, void* sc, size_t c) {
-					T*     p_ds = (T *)ds->ptr;
-					T*     p_sc = (T *)sc;
-					// for basic types, one could avoid 
-					// the construction for each, just one memcpy
-					for (size_t i = 0, c = ds->count; i < c; i++)
-						new (&p_ds[i]) T(p_sc[i]);
-				};
-				return CopyCtr(&cpy);
-			}
-			else
+				static CopyCtr *cpy = new CopyCtr(
+					[](Data* ds, void* sc, size_t c) -> void {
+						T*     p_ds = (T *)ds->ptr;
+						T*     p_sc = (T *)sc;
+
+						// for basic types, check with is_constructable
+						// the construction for each, just one memcpy
+						for (size_t i = 0, c = ds->count; i < c; i++)
+							new (&p_ds[i]) T(p_sc[i]);
+					});
+				return cpy;
+			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static AssignOp fn_assign() {
+		static AssignOp* fn_assign() {
 			if constexpr (!L) {
-				static auto assignv = [](Data* a, T *b) -> Data* {
-					for (size_t i = 0; i < a->count; i++)
-						*((T*)a->ptr)[i] = b[i];
-				};
-				return AssignOp(&assignv);
-			}
-			else
-				return null;
-		}
-
-		/*
-		template <typename T, const bool L = false>
-		static AddOp fn_add() {
-			if constexpr (!L) {
-				static auto addv = [](Data* a, Data *b) -> Data* {
-					assert(a->count == b->count);
-					const size_t ac = a->count;
-					T c[ac];
-					for (size_t i = 0; i < a->count; i++)
-						c[i] = *((T*)a->ptr)[i] + *((T*)b->ptr)[i];
-					return Memory::manage(&c, 1);
-				};
-				return AddOp(&addv);
-			}
-			else
+				static AssignOp *assignv = new AssignOp(
+					[](Data* a, T* b) -> Data* {
+						for (size_t i = 0; i < a->count; i++)
+							*((T*)a->ptr)[i] = b[i];
+					});
+				return assignv;
+			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static SubOp fn_sub() {
-			if constexpr (!L) {
-				static auto subv = [](Data* a, Data* b) -> Data* {
-					assert(a->count == b->count);
-					T c[a->count];
-					for (size_t i = 0; i < a->count; i++)
-						c[i] = *((T*)a->ptr)[i] + *((T*)b->ptr)[i];
-					return Memory::manage(&c, 1);
-				};
-				return SubOp(&subv);
-			}
-			else
-				return null;
-		}*/
-
-		template <typename T, const bool L = false>
-		static HashOp fn_hash() {
+		static HashOp* fn_hash() {
 			if constexpr (has_operator<T, Hash>::value && !L) {
-				static auto hashv = [](Data* d) -> Hash {
-					return Hash(*(T*)d->ptr);
-				};
-				return HashOp(&hashv);
-			}
-			else
+				static HashOp *hashv = new HashOp(
+					[](Data* d) -> Hash {
+						return Hash(*(T*)d->ptr);
+					});
+				return hashv;
+			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static IntegerOp fn_integer() {
+		static IntegerOp* fn_integer() {
 			if constexpr (has_operator<T, int64_t>::value && !L) {
-				static auto intv = [](Data* d) -> int64_t {
-					return int64_t(*(T*)d->ptr);
-				};
-				return IntegerOp(&intv);
+				static IntegerOp *intv = new IntegerOp(
+					[](Data* d) -> int64_t {
+						return int64_t(*(T*)d->ptr);
+					});
+				return intv;
 			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static RealOp fn_real() {
+		static RealOp* fn_real() {
 			if constexpr (has_operator<T, ::real>::value && !L) {
-				static auto realv = [](Data* d) -> ::real {
-					if constexpr (has_operator<T, ::real>::value)
+				static RealOp *realv = new RealOp(
+					[](Data* d) -> ::real {
 						return ::real(*(T*)d->ptr);
-					else
-						return ::real(0); // nan possible but i dunno about using the null state for interface
-				};
-				return RealOp(&realv);
+					});
+				return *realv.target<RealOp>();
 			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static StringOp fn_string() {
+		static StringOp* fn_string() {
 			if constexpr (has_operator<T, ::str>::value && is_strable<T>() && !L) {
-				// 
-				static auto strv = [](Data* d) -> Shared* { return str_ref((T *)d->ptr); };
-				return StringOp(&strv);
+				static StringOp *strv = new StringOp(
+					[](Data* d) -> Shared* { return str_ref((T*)d->ptr); });
+				return strv;
 			} else
 				return null;
 		}
 
 		// never leave the success state.
 		template <typename T, const bool L = false>
-		static CompareOp fn_compare(T *ph = null) {
+		static CompareOp* fn_compare(T *ph = null) {
 			// must have compare, and must return int. not just a bool.
 			if constexpr (!is_std_vec<T>() && has_compare<T>::value) {
 				/// compare memory; if there is a compare method call it, otherwise require the equal_to
-				static auto compare = [](Data* a, Data* b) -> int {
-					if (a == b)
-						return 0;
+				static CompareOp *compare = new CompareOp(
+					[](Data* a, Data* b) -> int {
+						if (a == b)
+							return 0;
 				
-					assert(a->count == b->count);
-					assert(a->count == size_t(1));
+						assert(a->count == b->count);
+						assert(a->count == size_t(1));
 
-					T*      ap = (T *)a->ptr;
-					T*      bp = (T *)b->ptr;
-					size_t  c  = a->count;
+						T*      ap = (T *)a->ptr;
+						T*      bp = (T *)b->ptr;
+						size_t  c  = a->count;
 
-					if constexpr (has_compare<T>::value) { //
-						for (size_t i = 0; i < c; i++)
-							return ap[i] == bp[i]; // need enums
-					}
-					return 0;
-				};
-				return CompareOp(&compare);
+						if constexpr (has_compare<T>::value) { //
+							for (size_t i = 0; i < c; i++)
+								return ap[i] == bp[i]; // need enums
+						}
+						return 0;
+					});
+				return compare;
 			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static SizeOfOp fn_type_size() {
+		static SizeOfOp *fn_type_size() {
 			if constexpr (!L) {
 				/// compare memory; if there is a compare method call it, otherwise require the equal_to
-				static auto type_size = []() { return sizeof(T); };
-				return SizeOfOp(&type_size);
+				static SizeOfOp *type_size = new SizeOfOp(
+					[]() -> size_t { return sizeof(T); }
+				);
+				return type_size;
 			} else
 				return null;
 		}
 
 		template <typename T, const bool L = false>
-		static BooleanOp fn_boolean() {
+		static BooleanOp *fn_boolean() {
 			if constexpr (!L && has_operator<T, bool>::value) {
-				static    auto bC  = [](Data* a) -> bool {
-					       bool r  = false;
-					for (size_t i  = 0; i < a->count; i++) {
-						        r &= bool(((T *)a->ptr)[i]);
-						   if (!r) break;
-					}
-					return r;
-				};
-				return BooleanOp(&bC);
+				static BooleanOp *bC  = new BooleanOp(
+					[](Data* a) -> bool {
+						bool r  = false;
+						for (size_t i  = 0; i < a->count; i++) {
+									r &= bool(((T *)a->ptr)[i]);
+							   if (!r) break;
+						}
+						return r;
+					});
+				return bC;
 			} else {
-				static auto bL = [](Data* d) -> bool { return bool(d->ptr); };
-				return BooleanOp(&bL);
+				static BooleanOp *bL = new BooleanOp(
+					[](Data* d) -> bool { return bool(d->ptr); }
+				);
+				return bL;
 			}
 		}
 	};
@@ -566,18 +536,18 @@ export {
 			return *this;
 		}
 
-		Constructor     ctr;
-		Destructor      dtr;
-		CopyCtr		    cpy;
-		IntegerOp       integer;
-		RealOp          real;
-		StringOp        string;
-		BooleanOp       boolean;
-		CompareOp       compare;
-		SizeOfOp		type_size;
-		//AddOp			add; # use case isnt panning out
-		//SubOp			sub;
-		AssignOp		assign;
+		Constructor    *ctr;
+		Destructor	   *dtr;
+		CopyCtr		   *cpy;
+		IntegerOp      *integer;
+		RealOp         *real;
+		StringOp       *string;
+		BooleanOp      *boolean;
+		CompareOp      *compare;
+		SizeOfOp	   *type_size;
+		//AddOp		   *add; # use case isnt panning out
+		//SubOp		   *sub;
+		AssignOp       *assign;
 
 		FlagsOf<Trait>  traits;
 
@@ -680,7 +650,7 @@ export {
 		inline void				  unlock()       { mx.unlock();                }
 		
 		//
-		inline size_t				  sz() const { return type_size();		   }
+		inline size_t				  sz() const { return (*type_size)(); }
 	};
 
 	/// holds pointers to these so one can enumerate through
@@ -750,8 +720,8 @@ export {
 			return null;
 		}
 
-		inline bool boolean()			 { return data.type.boolean(&data); }
-		inline int  compare(Memory* rhs) { return data.type.compare(&data, &rhs->data); }
+		inline bool boolean()			 { return (*data.type.boolean)(&data); }
+		inline int  compare(Memory* rhs) { return (*data.type.compare)(&data, &rhs->data); }
 
 		template <typename T>
 		static Memory*  arb(T* ptr, size_t count, Type *origin = null) {
@@ -836,7 +806,7 @@ export {
 
 		/// one without template (Type and count, and you get a Memory vector allocation of that)
 		static Memory* valloc(Type *type, size_t count, Type *origin = null) {
-			Memory* mem = (Memory*)calloc(1, sizeof(Memory) + type->type_size() * count);
+			Memory* mem = (Memory*)calloc(1, sizeof(Memory) + (*type->type_size)() * count);
 			new    (mem)   Memory {
 				.data = Data {
 					.ptr    = &mem[1],
@@ -847,7 +817,7 @@ export {
 				},
 				.refs = int(1)
 			};
-			type->ctr(&mem->data); // vector construction happens inside (where best karate lay)
+			(*type->ctr)(&mem->data); // vector construction happens inside (where best karate lay)
 			return mem;
 		}
 
@@ -857,7 +827,7 @@ export {
 		static Memory* copy(T& r, Type* origin) { return Memory::manage(&r, 1, origin); }
 
 		/// copy vector of types, this is accepted by Shared receivers for implicit fun and love
-		static Memory* copy(Memory* mem, Type *origin) {
+		static Memory* copy(Memory* mem, Type* origin) {
 			/// this is banging good, i think.
 			/// origins are just a total good for debugging. everybody loves an origin, and their own.
 			Memory* dst = (Memory*)calloc(1, sizeof(Memory) + mem->data.type.sz() * mem->data.count);
@@ -874,7 +844,7 @@ export {
 			};
 
 			// vector construction happens inside
-			mem->data.type.cpy (&dst->data, mem->data.ptr, mem->data.count); 
+			(*mem->data.type.cpy)(&dst->data, mem->data.ptr, mem->data.count); 
 			return dst;
 		}
 
@@ -895,8 +865,8 @@ export {
 	struct Shared {
 		Memory* mem;
 
-		Shared(nullptr_t n = null)			 { }
-	    Shared(Memory* mem) : mem(mem)		 { }
+		Shared(nullptr_t n = null) : mem(null) { }
+	    Shared(Memory* mem)		   : mem(mem)  { }
 		Shared(cchar_t* cstr) { // too much to test but it could be used symbolically as const char * if certain linting can be done
 			size_t ln    = strlen(cstr);
 			mem		     = Memory::valloc<uint8_t>(ln + 1);
@@ -926,20 +896,20 @@ export {
 		/// generic integer conversion
 		/// based on type traits this can just be 0
 		template <typename I>
-		I          integer()             { return I(type()->integer(data())); }
+		I          integer()             { return I((*type()->integer)(data())); }
 
 		/// real value
 		template <typename R>
-		R             real()             { return R(type()->real(data())); }
+		R             real()             { return R((*type()->real)(data())); }
 
 		/// string value
-		Shared     *string()             { return type()->string(data()); }
+		Shared     *string()             { return (*type()->string)(data()); }
 
 		bool operator==(Type& t)   const { return type() == &t; }
 
-		bool operator==(Shared& d) const { return (!mem && !d.mem) || (mem && d.mem && mem->data.type.compare(&mem->data, &d.mem->data) == 0); }
+		bool operator==(Shared& d) const { return (!mem && !d.mem) || (mem && d.mem && (*mem->data.type.compare)(&mem->data, &d.mem->data) == 0); }
 		
-		operator Hash()			   const { return {{ .u64 = uint64_t(type()->integer(data())) }}; }
+		operator Hash()			   const { return {{ .u64 = uint64_t((*type()->integer)(data())) }}; }
 
 		/// common for shared objects
 		/// case, an array<int> is 
@@ -1001,7 +971,7 @@ export {
 		operator          void* () const { return mem ? mem->data.ptr : null; }
 
 		template <typename T>
-		T&                  cast() const { return *(T *) (mem ? mem->data.ptr : null);      }
+		T                  *cast() const { return  (T *) (mem ? mem->data.ptr : null);      }
 		size_t             count() const { return  mem ?  mem->data.count     : size_t(0);  }
 		Memory*            ident() const { return  mem;                                     }
 		void*            pointer() const { return  mem ?  mem->data.ptr       : null;       }
@@ -1037,7 +1007,9 @@ export {
 	/// i want to use these more broadly as well, definite a good basis delegate for tensor.
 	template <typename T>
 	struct vec:Shared {
-		// #ifndef NDEBUG window vars here; set them in each vec.
+		static T& def() { static T d; return d; }
+		
+		vec() :Shared() { }
 
 		template <typename F>
 		vec(size_t sz, F fn) {
@@ -1053,8 +1025,11 @@ export {
 		vec(vec<T> &b)			  { Shared::mem = Memory::copy(b.mem, &Type::ident<T>()); }
 
 		vec(T x)				  {						     Shared::mem = Memory::manage<T>(&x,    1); }
-		vec(T x, T y)             { T v[2] = { x, y };       Shared::mem = Memory::manage<T>(&v[0], 2); }
-		vec(T x, T y, T z)        { T v[3] = { x, y, z };    Shared::mem = Memory::manage<T>(&v[0], 3); }
+		vec(T x, T y)             {
+			T v[2] = { x, y };
+			Shared::mem = Memory::manage<T>(&v[0], 2);
+		}
+		vec(T x, T y, T z)        { T v[3] = { x, y, z    }; Shared::mem = Memory::manage<T>(&v[0], 3); }
 		vec(T x, T y, T z, T w)   { T v[4] = { x, y, z, w }; Shared::mem = Memory::manage<T>(&v[0], 4); }
 		
 		size_t  type_size() const { return sizeof(T); }
@@ -1065,16 +1040,9 @@ export {
 			return sz;
 		}
 
-		operator Shared() {
-			return Shared();
-		}
+		T&   operator[](size_t i)     { return cast<T>()[i]; }
 
-		T&   operator[](size_t i) {
-			T&   a = *cast<T>();
-			return a[i];
-		}
-
-		vec& operator=(const vec& b) {
+		vec&  operator=(const vec& b) {
 			if (this != &b)
 				mem = Memory::copy(b.mem, Type::ident<T>());
 			return *this;
@@ -1382,7 +1350,7 @@ export {
 		type.lock();
 		if (--m->refs == 0) {
 			// Destructor.
-			m->data.type.dtr(&m->data);
+			(*m->data.type.dtr)(&m->data);
 			if (m->att) {
 				for (auto &att:*m->att)
 					if (att.closure)
@@ -1505,18 +1473,15 @@ export {
 	};
 //}
 
+// shared could use a realloc, and then array could be much simpler; sh<T> template can have a data window when in debug
 //export module arr
 //export {
 	typedef std::filesystem::path path_t;
 
 	template <typename T>
-	struct array {
+	struct array { // sh can possibly maintain a debug window to the data, not important now though but useful.  refactor this to depend on vec<T*>
 	public:
 		typedef sh<std::vector<T>> vshared;
-		
-		// todo: need iterator on Vector abstract
-		//typedef  Vector<T> vshared; // just a Shared type
-
 	protected:
 		vshared  a;
 		vshared &realloc(size_t res) {
@@ -1773,28 +1738,25 @@ export {
 
 	template <typename T>
 	struct Vec2:vec<T> {
-		static T def;
 		T &x, &y;
-		Vec2(std::nullptr_t n = null) : vec(n), x(def), y(def) { }
-		Vec2(T x, T y) : vec<T>(x, y), x(this[0]), y(this[1]) { }
+		Vec2(std::nullptr_t n = null) : vec<T>(), x(vec<T>::def()), y(vec<T>::def()) { }
+		Vec2(T x, T y) : vec<T>(x, y), x((*this)[0]), y((*this)[1]) { }
 	};
 
 	template <typename T>
 	struct Vec3:vec<T> {
-		static T def;
 		T &x, &y, &z;
-		Vec3(std::nullptr_t n = null) : vec(n), x(def), y(def), z(def) { }
-		Vec3(T x, T y, T z) : vec<T>(x, y, z), x(this[0]), y(this[1]), z(this[2]) { }
+		Vec3(std::nullptr_t n = null) : vec(), x(vec<T>::def()), y(vec<T>::def()), z(vec<T>::def()) { }
+		Vec3(T x, T y, T z) : vec<T>(x, y, z), x((*this)[0]), y((*this)[1]), z((*this)[2]) { }
 	};
 
 	template <typename T>
 	struct Vec4:vec<T> {
-		static T def;
 		T &x, &y, &z, &w;
-		Vec4(std::nullptr_t n = null) : vec(n), x(def), y(def), z(def), w(def) { }
-		Vec4(T x, T y, T z, T w) : vec<T>(x, y, z, w), x(*this[0]), y(*this[1]), z(*this[2]), w(*this[3]) { }
+		Vec4(std::nullptr_t n = null) : vec(), x(vec<T>::def()), y(vec<T>::def()), z(vec<T>::def()), w(vec<T>::def()) { }
+		Vec4(T x, T y, T z, T w) : vec<T>(x, y, z, w), x((*this)[0]), y((*this)[1]), z((*this)[2]), w((*this)[3]) { }
 	};
-	
+
 	template <typename T>
 	static inline T decimal(T x, size_t dp) {
 		T sc = std::pow(10, dp);
@@ -1837,11 +1799,11 @@ export {
 
 	template <typename T>
 	struct Rect: vec<T> {
-		static T def;
 		T &x, &y, &sx, &sy;
 
-		Rect(std::nullptr_t n = nullptr) : vec(n), x(def), y(def), sx(def), sy(def)      { }
-		Rect(T x, T y, T sx, T sy)		 : vec(x, y, sx, sy), x(x), y(y), sx(sx), sy(sy) { }
+		Rect(std::nullptr_t n = null) : vec(), x(vec<T>::def()),  y(vec<T>::def()),
+											  sx(vec<T>::def()), sy(vec<T>::def()) { }
+		Rect(T x, T y, T sx, T sy)	  : vec(x, y, sx, sy), x(x), y(y), sx(sx), sy(sy) { }
 		
 		Rect(vec<T> pos, vec<T> sz, bool ctr) {
 			T px = pos[0];
@@ -1863,8 +1825,7 @@ export {
 		}
     
 		inline Rect<T> offset(T a) const { return { x - a, y - a, sx + (a * 2), sy + (a * 2) }; }
-		static Rect<T>     &null()       { static Rect<T> n = null; return n; }
-    
+
 		Vec2<T>               xy() const { return { x, y }; }
 		Vec2<T>           center() const { return { x + sx / 2.0, y + sy / 2.0 }; }
 		bool   contains (vec<T> p) const {
@@ -2990,7 +2951,7 @@ export {
 		operator    uint32_t () { return d.integer<uint32_t>(); }
 		operator     int64_t () { return d.integer< int64_t>(); }
 		operator    uint64_t () { return d.integer<uint64_t>(); }
-		operator         str () { Type*  t = d.type(); return (t == Type::Str) ? str(*d.string()) : str(*t->string(d)); }
+		operator         str () { Type*  t = d.type(); return (t == Type::Str) ? str(*d.string()) : str(*(*t->string)(d)); }
 		operator      Shared&() { return d; }
 	};
 
@@ -3793,10 +3754,14 @@ INITIALIZER(initialize) {
 
 	assert(p == p_count); /// 22
 
-	vec2f a = { 1, 2 };
-	vec2f b = { 2, 4 };
-	vec2f c = a + b + b;
-	vec2f d = { 3, 4 };
+	vec2f      a = { 1, 2 };
+	vec2f      b = { 2, 4 };
+	Shared& sh_b = b;
+	Type      *t = sh_b.type(); // that is sizeof(vec2f), its basically
+	size_t   tsz = (*t->type_size)(); // vec2f is a compact allocation of vector size float, the type float, is type_size 4, the count is 2
+	size_t   tcn = b.size();
+	vec2f      c = a + b + b;
+	vec2f      d = { 3, 4 };
 
 	map<bool> abc; // i think its better to have shared hashing management
 
@@ -3805,4 +3770,13 @@ INITIALIZER(initialize) {
 	str  s = a; //
 	// we wanted quick access to hash compute, because map stores by Hash 
 	abc[s] = true;
+
+	array<Shared> vecs = {};
+
+	vecs += Vec2<double>(1.0, 2.0);
+
+	Vec2<double> v0 = vecs[0];
+
+	int test = 0;
+	test++;
 }
