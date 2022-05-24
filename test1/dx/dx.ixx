@@ -24,10 +24,6 @@ export import std.filesystem;
 typedef struct { int token; } Internal;
 int icursor = 0;
 
-
-
-// isolate problem: std::_Can_call_function_object': too few template arguments
-
 export {
 
 	/// immediately attempt to establish what is real
@@ -69,7 +65,6 @@ export {
 	template <typename> struct is_vec	    : std::false_type { };
 	template <typename> struct is_map       : std::false_type { };
 	template <typename> struct is_array     : std::false_type { };
-
 
 	// needs to go in 'Build', but i'm not so sure about the conversion macros
 	// 
@@ -114,15 +109,15 @@ export {
 #endif
 		{ };
 
-		///
+		/// the case that uses this (UX state bool) should now use has_operator for the same task, then deprecate after it works
 		template <class U, class T>
-		struct can_convert {
-			enum { value = std::is_constructible<T, U>::value && !std::is_convertible<U, T>::value };
+		struct converts {
+			enum { value = std::is_constructible<T, U>::value && std::is_convertible<U, T>::value };
 		};
 
 		///
 		template<class T, class E>
-		struct has_assign_impl {
+		struct implement_assigns {
 			template<class U, class V>   static auto eq(U* ) -> decltype(std::declval<U>() == std::declval<V>());
 			template<typename, typename> static auto eq(...) -> std::false_type;
 			///
@@ -131,7 +126,7 @@ export {
 
 		///
 		template<class T, class E = T>
-		struct has_assign : has_assign_impl<T, E>::imps { };
+		struct assigns : implement_assigns <T, E>::imps { };
 
 		/// usage: has_operator <A, std::string>()
 		template <typename A, typename B, typename = void>
@@ -140,21 +135,37 @@ export {
 		template <typename A, typename B>
 		struct has_operator <A, B, decltype((void)(void (A::*)(B))& A::operator())> : std::true_type { };
 
-		///
-		template<class T, class EqualTo>
-		struct has_compare_impl {
-			template<class U, class V>
-			static auto test(U*) -> decltype(std::declval<U>() == std::declval<V>());
-
-			template<typename, typename>
-			static auto test(...)->std::false_type;
-
-			using type = typename std::is_same<bool, decltype(test<T, EqualTo>(0))>::type;
+		template<class T, class C>
+		struct implement_compares {
+			template<class U,  class V>  static auto test(U *) -> decltype(std::declval<U>() == std::declval<V>());
+			template<typename, typename> static auto test(...) -> std::false_type;
+			using type = typename std::is_same<bool, decltype(test<T, C>(0))>::type;
 		};
+		template<class T, class C = T> struct compares : implement_compares<T, C>::type { };
 
-		/// todo: must also check !is_std_vec<T>()
-		template<class T, class EQ = T>
-		struct has_compare : has_compare_impl<T, EQ>::type { };
+		template<class T, class C>
+		struct implement_adds {
+			template<class U,   class V> static auto test(U* ) -> decltype(std::declval<U>() + std::declval<V>());
+			template<typename, typename> static auto test(...) -> std::false_type;
+			using type = typename std::is_same<bool, decltype(test<T, C>(0))>::type;
+		};
+		template<class T, class C = T>
+		struct adds : implement_adds<T, C>::type { };
+
+		template<class T, class C>
+		struct implement_subs {
+			template<class U,   class V> static auto test(U* ) -> decltype(std::declval<U>() - std::declval<V>());
+			template<typename, typename> static auto test(...) -> std::false_type;
+			using type = typename std::is_same<bool, decltype(test<T, C>(0))>::type;
+		};
+		template<class T, class C = T>
+		struct subs : implement_subs<T, C>::type { };
+
+
+
+
+
+
 
 	//};
 	
@@ -172,56 +183,56 @@ export {
 	#define sprintf(v, b, ...) snprintf (v, sizeof(b), v, __VA_ARGS__)
 #endif
 
-	/// we like null instead of NULL. friendly.
-	/// in abstract it does not mean anything of 'pointer', is all.
-	std::nullptr_t     null = nullptr;
-	real               PI   = 3.141592653589793238462643383279502884L;
-
 	/// r32 and r64 are explicit float and double,
 	/// more of an attempt to get real; of course we never really can.
 	typedef float      r32;
 	typedef double     r64;
 	typedef double	   real;
+
+	/// we like null instead of NULL. friendly.
+	/// in abstract it does not mean anything of 'pointer', is all.
+	std::nullptr_t     null = nullptr;
+	real               PI   = 3.141592653589793238462643383279502884L;
+
+	/// cchar_t replaces const char, not the pointer type but the type
 	typedef const char cchar_t;
-	typedef int64_t    isize;
-	typedef int64_t    ssize_t;
-	typedef const char cchar_t;
+
+	/// idx is just an indexing integer of 64bit.
+	///used for many things such as operator[] ambiguity, supporting negative npy-like syntax
+	typedef int64_t    idx;
+
+	/// the rest of the int types are i or u for signed or unsigned, with their bit count.
+	typedef int8_t	   i8;
+	typedef int16_t	   i16;
+	typedef int32_t	   i32;
+	typedef int64_t    i64;
+	typedef uint8_t	   u8;
+	typedef uint16_t   u16;
+	typedef uint32_t   u32;
+	typedef uint64_t   u64;
 
 	struct			   TypeOps;
 	struct			   Memory;
 	struct			   Type;
 
-	/// hash stays away from size_t. far away.
+	template <typename T> T clamp(T va, T mn, T mx) { return va < mn ? mn : va > mx ? mx : va; }
+	template <typename T> T min  (T a, T b)			{ return  a < b  ? a  : b; }
+	template <typename T> T max  (T a, T b)			{ return  a > b  ? a  : b; }
+
+	/// by moving hash case to size_t we make it size_t more sizey.
 	struct Hash {
 		union u_value {
+			size_t   sz;  /// we're a level of abstraction in, so we can still have ye
+			 int64_t i64;
 			uint64_t u64;
-			double   f64;
+			double   f64; /// i like having unions more than casting for too many reasons, readibility and debugging the most
+			void    *ptr; /// this is for symbolic memory, like something read-only too like cstr* (which we attempt to save as Constant.)
 		};
 		u_value v;
 	};
 
 	template <typename V>
-	using lambda = std::function<V>; // you win again, gravity
-
-	template <typename, const bool=false>
-	Type*  type_of();
-
-	template <typename, const bool = false>
-	Type*  type_ops();
-
-	template <typename T, typename S>
-	struct scalar {
-		S val;
-		inline scalar(T val) : val(S(val)) { }
-		inline operator T()				   { return T(val); }
-		inline T operator= (const T &v)    {
-			if (this != &v)
-				val = v;
-			return T(val);
-		}
-	};
-
-	struct Bool:scalar <bool, uint8_t>     { inline Bool(bool b) : scalar(b)    { } };
+	using lambda = std::function<V>; // you win again, gravity [lambdas not working atm]
 
 	enum Stride { Major, Minor };
 
@@ -232,10 +243,8 @@ export {
 		V value;
 	};
 
-	struct io { };
-
 	template <typename T>
-	struct FlagsOf:io {
+	struct FlagsOf {
 		uint64_t flags = 0;
 		///
 		FlagsOf(std::nullptr_t = null)      { }
@@ -261,10 +270,7 @@ export {
 		void operator -= (T v) { flags &= ~flag_for(v); }
 		
 		// used for get
-		bool operator[]  (T v) {
-			uint32_t f = flag_for(v);
-			return (flags & f) == f;
-		}
+		bool operator[]  (T v) { uint32_t f = flag_for(v); return (flags & f) == f; }
 
 		bool contain   (FlagsOf<T>& f) const { return (flags & f.flags) == f.flags; }
 		bool operator&&(FlagsOf<T>& f) const { return contain(f); }
@@ -285,40 +291,120 @@ export {
 
 	struct Shared;
 	struct Type;
-	struct Data {
-		enum AllocType { Arb, Manage };
-		void*       ptr;    // pointer to first byte (sometimes on the tail, depending on alloc type)
-		size_t      count;  // > 0 for valid data
-		Type	   &type;   // the type of data assembly,
-		Type       &origin; // the type of data assembler
-		AllocType   alloc;  // how to make map out of this structure?
+
+	template <typename T> T& default_of() {
+		static T d_value;
+		return   d_value; // useful for null token in ref context, and other uses.
+	}
+
+	/// so no pointers just refs that you can set with an assign, and set the destination of with a * deref.
+
+	struct Alloc {
+		enum AllocType { None, Arb, Manage };
+		enum Attr      { ReadOnly, Symbolic };
+
+		void*				ptr;
+		idx					count;
+		idx					reserve;
+		Type			   *type;
+		FlagsOf<Attr>		flags;
+		AllocType			alloc;
+
+		Alloc() : ptr(null), count(0), reserve(0), type(null), flags(null), alloc(None) { }
+
+		Alloc(const Alloc& ref) : 
+			    ptr(ref.ptr),
+			  count(ref.count),
+			reserve(ref.reserve),
+			   type(ref.type),
+			  flags(ref.flags),
+			  alloc(ref.alloc) { }
+
+		Alloc& operator=(const Alloc& ref) {
+			if (this != &ref) {
+				ptr     = ref.ptr;
+				count   = ref.count;
+				reserve = ref.reserve;
+				type    = ref.type;
+				flags   = ref.flags;
+				alloc   = ref.alloc;
+			}
+			return *this;
+		}
+
+		Alloc(void*			ptr,
+			  idx			count,
+			  idx			reserve,
+			  Type*			type,
+			  FlagsOf<Attr> flags,
+			  AllocType     alloc) :
+					ptr(ptr),
+					count(count),
+					reserve(reserve),
+					type(type),
+					flags(flags) { }
+	};
+
+	/// data is based on this allocation, 
+	/// one is spec and one is data.
+	struct Data:Alloc {
+		Data():Alloc() { }
 	};
 
 	/// prototypes for the various function pointers
-	typedef lambda<void   (Data*)>					 Constructor;
-	typedef lambda<void   (Data*)>					 Destructor;
-	typedef lambda<void   (Data*, void*, size_t)>	 CopyCtr;
-	typedef lambda<bool   (Data*)>					 BooleanOp;
-	typedef lambda<Hash   (Data*)>					 HashOp;
-	typedef lambda<int64_t(Data*)>					 IntegerOp;
-	typedef lambda<Shared*(Data*,Data*)>			 AddOp;
-	typedef lambda<Shared*(Data*, Data*)>			 SubOp;
-	typedef lambda<Shared*(Data*)>					 StringOp;
-	typedef lambda<bool   (Data*)>					 RealOp;
-	typedef lambda<int    (Data*, Data*)>			 CompareOp;
-	typedef lambda<void   (Data*, void*)>			 AssignOp;
-	typedef lambda<size_t()>						 SizeOfOp;
+	typedef lambda<void   (Data*)>					Constructor;
+	typedef lambda<void   (Data*)>					Destructor;
+	typedef lambda<void   (Data*, void*, idx)>		CopyCtr;
+	typedef lambda<bool   (Data*)>					BooleanOp;
+	typedef lambda<Hash   (Data*)>					HashOp;
+	typedef lambda<int64_t(Data*)>					IntegerOp;
+	typedef lambda<Shared*(Data*, Data*)>			AddOp;
+	typedef lambda<Shared*(Data*, Data*)>			SubOp;
+	typedef lambda<Shared*(Data*)>					StringOp;
+	typedef lambda<bool   (Data*)>					RealOp;
+	typedef lambda<int    (Data*, Data*)>			CompareOp;
+	typedef lambda<void   (Data*, void*)>			AssignOp;
+	typedef lambda<idx()>							SizeOfOp;
+
+
+	/// identifable by id, which can be pointer casts of any type.
+	/// the implementer would know of those.
+	struct Type;
+	struct Ident {
+		size_t id;
+		Ident(size_t id = 0)    : id(    id) { }
+		Ident(const Ident& ref) : id(ref.id) { }
+		operator Type*() const;
+	};
+
+	template <typename T>
+	constexpr bool is_primitive() {
+		     if constexpr (std::is_same_v<T,  cchar_t>) return true;
+		else if constexpr (std::is_same_v<T,   int8_t>) return true;
+		else if constexpr (std::is_same_v<T,  uint8_t>) return true;
+		else if constexpr (std::is_same_v<T,  int16_t>) return true;
+		else if constexpr (std::is_same_v<T, uint16_t>) return true;
+		else if constexpr (std::is_same_v<T,  int32_t>) return true;
+		else if constexpr (std::is_same_v<T, uint32_t>) return true;
+		else if constexpr (std::is_same_v<T,  int64_t>) return true;
+		else if constexpr (std::is_same_v<T, uint64_t>) return true;
+		else return false;
+	}
 
 	template <typename D>
-	struct Ops {
+	struct Ops:Ident {
+		Ops() : Ident() { }
+		Ops(const Ident& ident) : Ident(ident) { }
+
 		template <typename T, const bool L = false>
 		static Constructor *fn_ctr() {
 			if constexpr (std::is_default_constructible<T>() && !L) {
 				static Constructor *cp = new Constructor(
 					[](Data* d) {
 						T* ptr = (T *)d->ptr;
-						for (size_t i = 0, c = d->count; i < c; i++)
-							new (&ptr[i]) T();
+						if constexpr (!is_primitive<T>())
+							for (idx i = 0, c = d->count; i < c; i++)
+								new (&ptr[i]) T();
 					});
 
 				return cp;
@@ -332,7 +418,7 @@ export {
 				/// run the destructor on memory
 				static Destructor *dtr = new Destructor([](Data* d) -> void {
 					T* ptr = (T*)d->ptr;
-					for (size_t i = 0, c = d->count; i < c; i++)
+					for (idx i = 0, c = d->count; i < c; i++)
 						ptr[i]. ~T();
 				});
 				return dtr;
@@ -345,14 +431,15 @@ export {
 			if constexpr (!L) {
 				/// run the copy-constructor on memory
 				static CopyCtr *cpy = new CopyCtr(
-					[](Data* ds, void* sc, size_t c) -> void {
+					[](Data* ds, void* sc, idx c) -> void {
 						T*     p_ds = (T *)ds->ptr;
 						T*     p_sc = (T *)sc;
 
 						// for basic types, check with is_constructable
 						// the construction for each, just one memcpy
-						for (size_t i = 0, c = ds->count; i < c; i++)
-							new (&p_ds[i]) T(p_sc[i]);
+						if constexpr (!is_primitive<T>())
+							for (idx i = 0, c = ds->count; i < c; i++)
+								new (&p_ds[i]) T(p_sc[i]);
 					});
 				return cpy;
 			} else
@@ -364,7 +451,7 @@ export {
 			if constexpr (!L) {
 				static AssignOp *assignv = new AssignOp(
 					[](Data* a, T* b) -> Data* {
-						for (size_t i = 0; i < a->count; i++)
+						for (idx i = 0; i < a->count; i++)
 							*((T*)a->ptr)[i] = b[i];
 					});
 				return assignv;
@@ -418,11 +505,12 @@ export {
 				return null;
 		}
 
+		// compares must be evald in funct form like the others.
 		// never leave the success state.
 		template <typename T, const bool L = false>
 		static CompareOp* fn_compare(T *ph = null) {
 			// must have compare, and must return int. not just a bool.
-			if constexpr (!is_std_vec<T>() && has_compare<T>::value) {
+			if constexpr (!is_std_vec<T>() && compares<T>::value) {
 				/// compare memory; if there is a compare method call it, otherwise require the equal_to
 				static CompareOp *compare = new CompareOp(
 					[](Data* a, Data* b) -> int {
@@ -430,14 +518,14 @@ export {
 							return 0;
 				
 						assert(a->count == b->count);
-						assert(a->count == size_t(1));
+						assert(a->count == idx(1));
 
 						T*      ap = (T *)a->ptr;
 						T*      bp = (T *)b->ptr;
-						size_t  c  = a->count;
+						idx     c  = a->count;
 
-						if constexpr (has_compare<T>::value) { //
-							for (size_t i = 0; i < c; i++)
+						if constexpr (compares<T>::value) { //
+							for (idx i = 0; i < c; i++)
 								return ap[i] == bp[i]; // need enums
 						}
 						return 0;
@@ -448,24 +536,12 @@ export {
 		}
 
 		template <typename T, const bool L = false>
-		static SizeOfOp *fn_type_size() {
-			if constexpr (!L) {
-				/// compare memory; if there is a compare method call it, otherwise require the equal_to
-				static SizeOfOp *type_size = new SizeOfOp(
-					[]() -> size_t { return sizeof(T); }
-				);
-				return type_size;
-			} else
-				return null;
-		}
-
-		template <typename T, const bool L = false>
 		static BooleanOp *fn_boolean() {
 			if constexpr (!L && has_operator<T, bool>::value) {
 				static BooleanOp *bC  = new BooleanOp(
 					[](Data* a) -> bool {
 						bool r  = false;
-						for (size_t i  = 0; i < a->count; i++) {
+						for (idx i  = 0; i < a->count; i++) {
 									r &= bool(((T *)a->ptr)[i]);
 							   if (!r) break;
 						}
@@ -481,23 +557,18 @@ export {
 		}
 	};
 
-
-
-
-
-
 	struct Type:Ops<Data> {
 	public:
 	/// primitives, make const.
-	static const Type 
-		Undefined, i8, ui8, i16, ui16,
-		i32, ui32, i64, ui64,
-		f32, f64, Bool, Str,
-		Map, Array, Ref, Arb,
-		Node, Lambda, Member,
-		Any, Meta;
+	static const Ident
+		Undefined, i8,  u8,
+		i16,       u16, i32,  u32,
+		i64,       u64, f32,  f64,
+		Bool,      Str, Map,  Array,
+		Ref,       Arb, Node, Lambda,
+		Member,    Any, Meta;
 
-		size_t          id  = 0;
+		idx				sz;
 		std::string     name;
 		std::mutex      mx;
 
@@ -509,30 +580,24 @@ export {
 		static const Type** primitives;
 
 		template <typename T>
-		static Type bootstrap(Decl& decl) {
-			Type& t = ident<T>();
-			t.id = decl.id; // set id from decl
-			return t;
-		}
+		static Ident bootstrap(Decl& decl) { return Ident(size_t(ident<T, false, true>())); }
 
-		enum IMode { Default };
+		Type() { }
 
-		Type(IMode im) { }
-		Type()		   { }
+		template <typename T>
+		bool       inherits() const { return this == Id<T>(); }
+		bool     is_integer() const { return id >= ident<int8_t>()->id && id <= ident<uint64_t>()->id; }
+		bool     is_float  () const { return id == ident<float >()->id;   }
+		bool     is_double () const { return id == ident<double>()->id;   }
+		bool     is_real   () const { return is_float() || is_double();   }
+		bool     is_array  ()       { return traits[Trait::TArray];       }
+		bool     is_struct () const { return Ident::id > Type::Meta.id;   }
 
-		bool     is_integer() { return id >= ident<int8_t>  ().id && 
-									   id <= ident<uint64_t>().id; }
-		bool     is_float  () { return id == ident<float >().id;   }
-		bool     is_double () { return id == ident<double>().id;   }
-		bool     is_real   () { return is_float() || is_double();  }
-		bool     is_array  () { return traits[Trait::TArray];      }
-		operator size_t    () { return id;   }
-
-		Type(const Type& ref) : id(ref.id) { }
+		Type(const Type& ref) : Ops<Data>((Ident &)ref) { }
 
 		Type& operator=(const Type &ref)     {
 			if (this != &ref)
-				id = size_t(ref.id);
+				id = ref.id;
 			return *this;
 		}
 
@@ -545,7 +610,7 @@ export {
 		BooleanOp      *boolean;
 		CompareOp      *compare;
 		SizeOfOp	   *type_size;
-		//AddOp		   *add; # use case isnt panning out
+		//AddOp		   *add; # use case isnt panning out; generally speaking for ops thats higher up
 		//SubOp		   *sub;
 		AssignOp       *assign;
 
@@ -558,73 +623,49 @@ export {
 		struct var;
 		struct str;
 
-		/// static allocation of referenced types; obtains string name, ctr, dtr and cpy-ctr, compare and boolean ops in vector interface
-		template <typename _ZZion, const bool _isFunctor = false>
-		static Type &ident() {
-			static Type type = Type(IMode::Default); /// just an ugly way of saying Type(), which is protected from newness
+		/// static allocation of referenced types;
+		/// obtains string name, ctr, dtr and cpy-ctr, compare and boolean ops in vector interface
+		template <typename _ZZion, const bool _isFunctor = false, const bool _isInit = false>
+		static Type *ident() {
+			static Type type;
 			static bool init;
 
 			if (!init) {
 				init  = true;
 
-				size_t       b, l;
+				size_t b, l;
 				std::string    cn = __PRETTY_FUNCTION__;
 				std::string     s = "_ZZion =";
 				const size_t blen = s.length();
 
-				const Type* p = &type;
-				if      (p == &Undefined) type.id = 0;
-				else if (p == &i8)        type.id = 1;
-				else if (p == &ui8)       type.id = 2;
-				else if (p == &i16)       type.id = 3;
-				else if (p == &ui16)      type.id = 4;
-				else if (p == &i32)       type.id = 5;
-				else if (p == &ui32)      type.id = 6;
-				else if (p == &i64)       type.id = 7;
-				else if (p == &ui64)      type.id = 8;
-				else if (p == &f32)       type.id = 9;
-				else if (p == &f64)       type.id = 10;
-				else if (p == &Bool)      type.id = 11;
-				else if (p == &Str)       type.id = 12;
-				else if (p == &Map)       type.id = 13;
-				else if (p == &Array)     type.id = 14;
-				else if (p == &Ref)       type.id = 15;
-				else if (p == &Arb)       type.id = 16;
-				else if (p == &Node)      type.id = 17;
-				else if (p == &Lambda)    type.id = 18;
-				else if (p == &Member)    type.id = 19;
-				else if (p == &Any)       type.id = 20;
-				else if (p == &Meta)      type.id = 21;
-				else					  type.id = size_t(&type); // for resolving purpose
+				if constexpr (!_isInit)
+					type.id = size_t(&type);
 
 				b = cn.find(s) + blen;   // b = start of name
 				l = cn.find("]", b) - b; // l = length of name
 
-				type.name			= cn.substr(b, l);
+				type.name = cn.substr(b, l);
 
 				if constexpr (!std::is_same_v<_ZZion, void>) {
 					// populate pointers to the various functors
 					type.ctr = fn_ctr <_ZZion, _isFunctor>();
 					type.dtr = fn_dtr <_ZZion, _isFunctor>();
 					type.cpy = fn_cpy <_ZZion, _isFunctor>();
+					type.sz  = sizeof(_ZZion);
 
 					if constexpr (!_isFunctor && !is_lambda<_ZZion>()) {
 						type.integer     = fn_integer    <_ZZion, _isFunctor>();
 						type.real        = fn_real       <_ZZion, _isFunctor>();
 						type.string      = fn_string     <_ZZion, _isFunctor>();
 						type.compare     = fn_compare    <_ZZion, _isFunctor>();
-						type.type_size   = fn_type_size  <_ZZion, _isFunctor>();
 						type.boolean     = fn_boolean    <_ZZion, _isFunctor>();
-						//type.add       = fn_add        <_ZZion, _isFunctor>();
-						//type.sub       = fn_sub        <_ZZion, _isFunctor>();
 					}
-
-					// its possible to decentralize trait-bound method registration. oracle just told me
+					
 					if constexpr (::is_array<_ZZion>()) type.traits += TArray;
 					if constexpr (::is_map  <_ZZion>()) type.traits += TMap;
 				}
 			}
-			return type;
+			return &type;
 		}
 
 		bool operator==(Type* b) const { return  b && id == b->id; }
@@ -641,49 +682,50 @@ export {
 		bool operator> (Type& b) const { return id >  b.id; }
 		bool operator< (Type& b) const { return id <  b.id; }
 
-		     operator             size_t() const { return     id;              }
-		     operator                int() const { return int(id);             }
-		     operator               bool() const { return     id > 0;          }
+		     operator             size_t() const { return     id; }
+		     operator                int() const { return int(id); }
+		     operator               bool() const { return     id > 0; }
 
 		// grab/drop operations are mutex locked based on the type
-		inline void				    lock()       { mx.lock();                  }
-		inline void				  unlock()       { mx.unlock();                }
-		
-		//
-		inline size_t				  sz() const { return (*type_size)(); }
+		inline void				    lock()       { mx.lock(); }
+		inline void				  unlock()       { mx.unlock(); }
 	};
 
 	/// holds pointers to these so one can enumerate through
 	const Type** Type::primitives;
 
 	/// type objects (const)
-	const Type Type::Undefined;
-	const Type Type::  i8;
-	const Type Type:: ui8;
-	const Type Type:: i16;
-	const Type Type::ui16;
-	const Type Type:: i32;
-	const Type Type::ui32;
-	const Type Type:: i64;
-	const Type Type::ui64;
-	const Type Type:: f32;
-	const Type Type:: f64;
-	const Type Type::Bool;
-	const Type Type::Str;
-	const Type Type::Map;
-	const Type Type::Array;
-	const Type Type::Ref;
-	const Type Type::Arb;
-	const Type Type::Node;
-	const Type Type::Lambda;
-	const Type Type::Member;
-	const Type Type::Any;
-	const Type Type::Meta;
+	const Ident Type::Undefined;
+	const Ident Type:: i8;
+	const Ident Type:: u8;
+	const Ident Type::i16;
+	const Ident Type::u16;
+	const Ident Type::i32;
+	const Ident Type::u32;
+	const Ident Type::i64;
+	const Ident Type::u64;
+	const Ident Type::f32;
+	const Ident Type::f64;
+	const Ident Type::Bool;
+	const Ident Type::Str;
+	const Ident Type::Map;
+	const Ident Type::Array;
+	const Ident Type::Ref;
+	const Ident Type::Arb;
+	const Ident Type::Node;
+	const Ident Type::Lambda;
+	const Ident Type::Member;
+	const Ident Type::Any;
+	const Ident Type::Meta;
+
+	/// tie the whole room together. that is what reflection is, in C++..
+	/// it is the rug that makes the language work for you
+	Ident::operator Type* () const { return id >= 22 ? (Type*)id : (Type*)Type::primitives[id]; }
 
 	namespace fs = std::filesystem;
 
 	template <typename T>
-	inline Type* Id() { return &Type::ident<T>(); }
+	inline Type* Id() { return Type::ident<T>(); }
 
 	namespace std { template<> struct hash<Type> { size_t operator()(Type const& id) const { return id; } }; }
 
@@ -720,135 +762,90 @@ export {
 			return null;
 		}
 
-		inline bool boolean()			 { return (*data.type.boolean)(&data); }
-		inline int  compare(Memory* rhs) { return (*data.type.compare)(&data, &rhs->data); }
+		inline bool boolean()			 { return (*data.type->boolean)(&data); }
+		inline int  compare(Memory* rhs) { return (*data.type->compare)(&data, &rhs->data); }
 
-		template <typename T>
-		static Memory*  arb(T* ptr, size_t count, Type *origin = null) {
-			static Type* type = Id<T>();
-			Memory* mem       = (Memory*)calloc(1, sizeof(Memory));
+		static size_t padded_sz(size_t sz, size_t al) { return sz & ~(al - 1) | al; }
 
-			/// run constructor on Memory
-			new (mem) Memory {
-				.data = Data { ptr, count, *type, *(origin ? origin : type), Data::AllocType::Arb},
-				.refs = int(1)
-			};
+		/// theres a few checks here but its central allocation of Memory
+		static Memory* alloc(Alloc& args) {
+			idx    reserve = std::max(args.reserve, args.count);
+			size_t		sz = padded_sz(sizeof(Memory) + args.type->sz * reserve, 32);
+			Memory*    mem = (Memory*)calloc(1, sz);
+
+			Alloc alloc = Alloc(&mem[1], args.count, reserve, args.type, args.flags, args.alloc);
+			new (mem) Memory(alloc);
+
+			if (args.alloc != Data::Arb) {
+				if (args.type->is_struct()) {
+					if (args.ptr)
+						(*mem->data.type->cpy)(&mem->data, &args, args.count);
+					else
+						(*args.type->ctr)(&mem->data);
+				}
+				else if (args.ptr)
+					memcpy(mem->data.ptr, args.ptr, args.type->sz * args.count);
+			}
+
 			return mem;
 		}
 
-		template <typename T> static Memory* lambda(T* src, size_t count, Type* origin = null) {
+		Memory(const Alloc& alloc) {
+			data = (Data &)alloc;
+			refs = 1;
+		}
+		
+		template <typename T>
+		static Memory*  arb(T* ptr, size_t count) {
+			size_t		   sz = padded_sz(sizeof(Memory), 32);
+			Memory*       mem = (Memory*)calloc(1, sz);
+			Alloc        spec = Alloc((void*)&ptr, count, 0, Id<T>(), 0, Alloc::AllocType::Arb);
+			return alloc(spec);
+		}
+
+		template <typename T> static Memory* lambda(T* src) {
 			static Type *type = Type::ident<T, true>();
-			Memory* mem = (Memory*)calloc(1, sizeof(Memory) + sizeof(T) * count);
-
-			new (mem) Memory{
-				.data = Data { &mem[1], count, type, Data::AllocType::Manage },
-				.refs = int(1)
-			};
-
-			/// run constructor on Type
-			for (size_t i = 0, c = size_t(count); i < c; i++) {
-				T*     ds = &((T*)mem->data.ptr)[i];
-				T*     sc = &src[i];
-				new (ds) T(*sc);
-			}
-			return mem;
+			size_t	   	   sz = sizeof(Memory) + type->sz;
+			Alloc        spec = Alloc((void*)src, 1, 0, type, 0, Alloc::AllocType::Manage);
+			return alloc(spec);
 		}
 
-        template <typename T> static Memory* manage(T* src, size_t count, Type* origin = null) {
-			static Type *type = Id<T>();
-			Memory* mem       = (Memory*)calloc(1, sizeof(Memory) + sizeof(T) * count);
-
-			/// run constructor on Memory
-			new (mem) Memory {
-				.data = Data {
-					.ptr    =  &mem[1],
-					.count  =   count,
-					.type   = *(type),
-					.origin = *(origin ? origin : type),
-					.alloc  =   Data::AllocType::Manage
-				},
-				.refs = int(1)
-			};
-
-			/// run constructor on Type
-			for (size_t i = 0, c = size_t(count); i < c; i++) {
-				T* ds = &((T *)mem->data.ptr)[i];
-				T* sc = &src[i];
-				new (ds) T(*sc);
-			}
-			return mem;
-        }
-
-		/// two vallocs enter. 
-		template <typename T> static Memory* valloc(size_t count, bool construct = true, Type* origin = null) {
-			Memory*       mem = (Memory*)calloc(1, sizeof(Memory) + sizeof(T) * count);
-			T*             ds =  (T *)mem->data.ptr;
-			static Type* type =  Id<T>();
-
-			new (mem) Memory {
-				.data = Data {
-					.ptr    =  &mem[1],
-					.count  =   count,
-					.type   = *(type),
-					.origin = *(origin ? origin : type),
-					.alloc  =   Data::AllocType::Manage
-				},
-				.refs = int(1)
-			};
-
-			// type constructable could be stored if needed
-			if constexpr (std::is_default_constructible<T>())
-				for (size_t i = 0, c = count; construct && i < c; i++)
-					new (&ds[i]) T();
-
-			return mem;
+		static Memory* manage(std::string s, idx rs = 0) {
+			Alloc spec = Alloc((void*)s.c_str(), s.length(), rs, Id<char>(), 0, Alloc::AllocType::Manage);
+			return alloc(spec);
 		}
 
-		/// one without template (Type and count, and you get a Memory vector allocation of that)
-		static Memory* valloc(Type *type, size_t count, Type *origin = null) {
-			Memory* mem = (Memory*)calloc(1, sizeof(Memory) + (*type->type_size)() * count);
-			new    (mem)   Memory {
-				.data = Data {
-					.ptr    = &mem[1],
-					.count  =  count,
-					.type   = *type,
-					.origin =  origin ? *origin : *type,
-					.alloc  =  Data::AllocType::Manage
-				},
-				.refs = int(1)
-			};
-			(*type->ctr)(&mem->data); // vector construction happens inside (where best karate lay)
-			return mem;
+		static Memory* manage(idx count, idx rs, Type* type) {
+			Alloc spec = Alloc(null, count, rs, type, 0, Alloc::AllocType::Manage);
+			return alloc(spec);
 		}
-
-		template <typename T> inline bool is_diff(T *p) { return data.ptr != p; }
 
 		template <typename T>
-		static Memory* copy(T& r, Type* origin) { return Memory::manage(&r, 1, origin); }
-
-		/// copy vector of types, this is accepted by Shared receivers for implicit fun and love
-		static Memory* copy(Memory* mem, Type* origin) {
-			/// this is banging good, i think.
-			/// origins are just a total good for debugging. everybody loves an origin, and their own.
-			Memory* dst = (Memory*)calloc(1, sizeof(Memory) + mem->data.type.sz() * mem->data.count);
-			
-			new (dst) Memory {
-				.data = Data {
-					.ptr    = &dst[1],
-					.count  =  mem->data.count,
-					.type   =  mem->data.type,
-					.origin =  *(origin ? origin : &mem->data.origin),
-					.alloc  =  Data::AllocType::Manage
-				},
-				.refs = int(1)
-			};
-
-			// vector construction happens inside
-			(*mem->data.type.cpy)(&dst->data, mem->data.ptr, mem->data.count); 
-			return dst;
+		static Memory* manage(idx count, idx rs = 0) {
+			return manage(Id<T>(), count, rs);
 		}
 
-		Memory* copy(Type *origin) { return copy(this, origin); }
+		template <typename T> inline bool is_diff(T *p) {
+			return data.ptr != p;
+		}
+
+		template <typename T>
+		static Memory* manage(void* ptr, Type *type, idx count = 1, idx reserve = 0) {
+			Alloc spec = Alloc(ptr, count, reserve, type, 0, Alloc::AllocType::Manage);
+			return alloc(spec);
+		}
+
+		template <typename T>
+		static Memory* manage(T *r, idx count = 1, idx reserve = 0) {
+			Alloc spec = Alloc(&r, count, reserve, Id<T>(), 0, Alloc::AllocType::Manage);
+			return alloc(spec);
+		}
+
+		/// copies get reserve from param (their original reserve lost)
+		Memory* copy(size_t rs) {
+			Alloc   spec = Alloc(data.ptr, data.count, rs, data.type, 0, Data::AllocType::Manage);
+			return alloc(spec);
+		}
 
 		// attach memory to memory; this is a non-common case but useful for variable dependency of data
 		void attach(Attachment &a) {
@@ -865,57 +862,115 @@ export {
 	struct Shared {
 		Memory* mem;
 
-		Shared(nullptr_t n = null) : mem(null) { }
-	    Shared(Memory* mem)		   : mem(mem)  { }
-		Shared(cchar_t* cstr) { // too much to test but it could be used symbolically as const char * if certain linting can be done
-			size_t ln    = strlen(cstr);
-			mem		     = Memory::valloc<uint8_t>(ln + 1);
-			char*    dst = (char*)(uint8_t*)pointer();
-			memcpy((void*)dst, (void*)cstr, ln);
-			dst[ln]      = 0;
+		Shared()			: mem(null) { }
+		Shared(nullptr_t n) : mem(null) { }
+	    Shared(Memory* mem) : mem(mem)  { }
+
+		Shared(float    v) : mem(Memory::manage(&v)) { }
+		Shared(double   v) : mem(Memory::manage(&v)) { }
+		Shared( int64_t v) : mem(Memory::manage(&v)) { } // for C++ these are not so ambiguous
+		Shared(uint64_t v) : mem(Memory::manage(&v)) { }
+
+		template <typename T> T& rise() const { return *(T*)this; }
+		template <typename T>
+		struct iter {
+			T*   start;
+			size_t     inc;
+			
+			void operator++() { inc++; }
+			void operator--() { inc--; }
+
+			operator    T* () { return &start[inc]; }
+			operator    T& () { return  start[inc]; }
+
+			//bool operator==(const iter<T> &b) {
+			//	return start == b.start && inc == b.inc;
+			//}
+		};
+		
+		template <typename T>
+		Shared(T* sc, size_t count = 0, size_t reserve = 0)
+		{
+			static Type*   type = Id<cchar_t> ();
+			static Type* s_type = Id<Shared>  ();
+
+			if constexpr (std::is_same_v<T, cchar_t>) {
+				static std::unordered_map<cchar_t*, Memory*> smem;
+
+				/// live the const life
+				if (smem.count(sc) == 0) {
+					size_t ln    = strlen(sc);
+					Alloc spec = Alloc((void*)sc, ln + 1, 0, type, null, Alloc::AllocType::Manage);
+					mem = smem[sc] = Memory::alloc(spec);
+
+					/// this simple trick never lets memory expire
+					mem->refs++; 
+				} else
+					mem = smem[sc];
+
+			} else if constexpr (std::is_same_v<T, char>) {
+				Alloc spec = Alloc(sc, strlen(sc) + 1, 0, type, 0, Alloc::AllocType::Manage);
+				mem = Memory::alloc(spec);
+			} else {
+				Alloc spec = Alloc(sc, count, 0, type, 0, Alloc::AllocType::Manage);
+				mem = Memory::alloc(spec);
+			}
 		}
+
 	   ~Shared()							 { drop(mem); }
 		Shared(const Shared& r) : mem(r.mem) { grab(mem); }
 
-		/// cannot 'hold onto nothing.', and why alter mem in-house, thats terrible manners.
-		void attach(Attachment &a) { assert(mem); mem->attach(a); }
-
-		void*          raw() const { return mem ? mem->data.ptr : null; }
-
-		operator  bool() { return mem != null; }
-		bool operator!() { return mem == null; }
-		///
-		template <typename T>
-		T*         pointer();
-		Data*         data() const { return mem ? &mem->data : null; }
+		void        attach(Attachment &a) { assert(mem); mem->attach(a);          }
+		void*                 raw() const { return mem ? mem->data.ptr : null;    }
+		operator                   bool() { return mem != null;                   }
+		bool                  operator!() { return mem == null;                   }
 		
-		///
+		template <typename T> T* pointer();
+
+		size_t              count()       const { return  mem ?  mem->data.count     : size_t(0);  }
+		Memory*             ident()       const { return  mem;                                     }
+		void*             pointer()       const { return  mem ?  mem->data.ptr       : null;       }
+		Type*	             type()       const { return  mem ?  mem->data.type      : null;       }
+
 		template <typename T>
-		T&           value()             { return *(T*)pointer(); }
+		bool       inherits()			  const { return type() == Id<T>(); }
 
-		/// generic integer conversion
-		/// based on type traits this can just be 0
-		template <typename I>
-		I          integer()             { return I((*type()->integer)(data())); }
+		Shared            quantum()		  const { return (mem->refs == 1) ? *this    : copy();     }
+		idx 			  reserve()		  const { return  mem ?  mem->data.reserve   : 0;          }
+		Data*				 data()		  const { return  mem ? &mem->data : null;                 }
+		template <typename T> T&        value() { return *(T*)pointer();				           }
+		template <typename I> I integer_value() { return I((*type()->integer)(data())); }
+		template <typename R> R    real_value() { return R((*type()->real)   (data())); }
+		Shared  *string()				        { return   (*type()->string) (data());  }
+		bool operator==(Type& t)		  const { return     type() == &t; } // no need here.
+		bool operator==(Type* t)		  const { return     type() ==  t; }
+		bool operator==(Shared& d)		  const { return (!mem && !d.mem) || (mem && d.mem && 
+								        (*mem->data.type->compare)(&mem->data, &d.mem->data) == 0); }
+		bool operator!=(Type*   b)        const { return !(operator==(b)); }
+		bool operator!=(Type&   b)        const { return !(operator==(b)); } // no need here.
+		bool operator!=(Shared& b)        const { return !(operator==(b)); }
 
-		/// real value
-		template <typename R>
-		R             real()             { return R((*type()->real)(data())); }
+		Shared copy(size_t rs = 0)		  const { return  mem ? mem->copy(rs) : null; }
 
-		/// string value
-		Shared     *string()             { return (*type()->string)(data()); }
+		/// output up to 8 bytes into the output of hash, directly from memory
+		operator Hash() const {
+			if (mem->data.flags & Data::Symbolic)
+				return {{ .ptr = mem->data.ptr }};
+			else {
+			}
 
-		bool operator==(Type& t)   const { return type() == &t; }
+			size_t  sz = mem ? (mem->data.count * mem->data.type->sz) : 0;
+			uint64_t u = 0;
+			if (sz >= sizeof(uint64_t))
+				u = *(uint64_t*)mem->data.ptr;
+			else {
+				char* d = (char *)&u;
+				for (size_t i = 0; i < sz; i++, d++)
+					*d = ((uint8_t*)mem->data.ptr)[i];
+			}
+			return {{ .u64 = u }};
+		}
 
-		bool operator==(Shared& d) const { return (!mem && !d.mem) || (mem && d.mem && (*mem->data.type.compare)(&mem->data, &d.mem->data) == 0); }
-		
-		operator Hash()			   const { return {{ .u64 = uint64_t((*type()->integer)(data())) }}; }
-
-		/// common for shared objects
-		/// case, an array<int> is 
-		///
-		/// i need something to give a window into either var or array.
-		/// 
 		template <typename T>
 		T &reorient(FlagsOf<Trait> require) {
 			Type*  s = type();
@@ -952,7 +1007,7 @@ export {
 			static Type *id = Id<T>();
 			if (mem && !(id == mem->data.type)) {
 				std::string& a = id->name;
-				std::string& b = mem->data.type.name;
+				std::string& b = mem->data.type->name;
 				///
 				if (a != "void" && b != "void") {
 					printf("type cast mismatch on Shared %s != %s\n", a.c_str(), b.c_str());
@@ -972,12 +1027,6 @@ export {
 
 		template <typename T>
 		T                  *cast() const { return  (T *) (mem ? mem->data.ptr : null);      }
-		size_t             count() const { return  mem ?  mem->data.count     : size_t(0);  }
-		Memory*            ident() const { return  mem;                                     }
-		void*            pointer() const { return  mem ?  mem->data.ptr       : null;       }
-		Type*	            type() const { return  mem ? &mem->data.type      : null;       }
-		Shared	copy(Type *origin) const { return  mem ?  mem->copy(origin)   : null;       }
-		Shared           quantum() const { return (mem->refs == 1) ? *this    : copy(null); }
 
 		template <typename T>
 		inline Shared  &assign(T& value) {
@@ -990,16 +1039,13 @@ export {
 			}
 			return *this;
 		}
-
-		bool operator==(Type*   t) const { return type() == t; }
-		bool operator!=(Shared& b) const { return !(operator==(b)); }
 	};
 
 	/// for shared objects, the std hash use-case is using its integer functor call (int64_t operator)
 	/// this should be reasonable for now, but it could be preferred to hash differently
 	namespace std {
 		template <> struct hash<Shared> {
-			size_t operator()(Shared &s) const { return size_t(s.integer<int64_t>()); }
+			size_t operator()(Shared &s) const { return Hash(s).v.sz; }
 		};
 	}
 
@@ -1007,13 +1053,13 @@ export {
 	/// i want to use these more broadly as well, definite a good basis delegate for tensor.
 	template <typename T>
 	struct vec:Shared {
-		static T& def() { static T d; return d; }
-		
-		vec() :Shared() { }
+		/// idx allows us to use nullptr_t, otherwise ambiguous alongside size_t
+		vec(nullptr_t n = null) : Shared() { }
 
+		/// you cant default the funct, but you can get that funk.
 		template <typename F>
-		vec(size_t sz, F fn) {
-			Shared::mem = Memory::valloc<T>(sz);
+		vec(idx sz, F fn) {
+			Shared::mem = Memory::manage<T>(sz);
 			if constexpr (std::is_same_v<F, T>)
 				for (size_t i = 0; i < sz; i++)
 					((T*)Shared::mem->data.ptr)[i] = fn;
@@ -1022,82 +1068,110 @@ export {
 					((T*)Shared::mem->data.ptr)[i] = fn(i);
 		}
 
-		vec(vec<T> &b)			  { Shared::mem = Memory::copy(b.mem, &Type::ident<T>()); }
-
-		vec(T x)				  {						     Shared::mem = Memory::manage<T>(&x,    1); }
-		vec(T x, T y)             {
-			T v[2] = { x, y };
-			Shared::mem = Memory::manage<T>(&v[0], 2);
-		}
+		vec(idx sz)			      { Shared::mem = Memory::manage<T>(sz);    }
+		vec(vec<T> &b, size_t rs) { Shared::mem = b.mem->copy(rs);          }
+		vec(vec<T> &b)			  { Shared::mem = b.mem->copy(0);           }
+		vec(T x)				  { Shared::mem = Memory::manage<T>(&x, 1); }
+		vec(T x, T y)             { T v[2] = { x, y       }; Shared::mem = Memory::manage<T>(&v[0], 2); }
 		vec(T x, T y, T z)        { T v[3] = { x, y, z    }; Shared::mem = Memory::manage<T>(&v[0], 3); }
 		vec(T x, T y, T z, T w)   { T v[4] = { x, y, z, w }; Shared::mem = Memory::manage<T>(&v[0], 4); }
 		
-		size_t  type_size() const { return sizeof(T); }
-		size_t       size() const { return count();   }
-		size_t size(vec& b) const {
+		idx  type_size() const { return sizeof(T); }
+		idx       size() const { return count();   }
+		idx size(vec& b) const {
 			size_t sz = size();
 			assert(b.size() == sz);
 			return sz;
 		}
 
-		T&   operator[](size_t i)     { return cast<T>()[i]; }
+		T& first() const { return *((T*)mem->data.ptr)[0]; }
+		T&  last() const { return *((T*)mem->data.ptr)[mem->data.count - 1]; }
+
+		/// silver:
+		/// everything is just a ref from the caller, also args are read-only
+		/// 
+		vec& push(T v) {
+			idx  rs = reserve();
+			idx  cn = count();
+			if (cn == rs) {
+				Memory* p = mem;
+				mem = mem->copy(::max(idx(8), rs << 1));
+				((T*)mem->data.ptr)[rs] = v;
+				drop(p);
+			} else {
+				assert(cn < rs);
+				((T*)mem->data.ptr)[cn] = v;
+				mem->data.count++;
+			}
+			return *this;
+		}
+
+		T&   operator[](idx i) { return cast<T>()[i]; }
 
 		vec&  operator=(const vec& b) {
 			if (this != &b)
-				mem = Memory::copy(b.mem, Type::ident<T>());
+				mem = b.mem->copy(0);
 			return *this;
 		}
 
 		vec operator+(vec b) const {
-			vec<T>& a = (vec<T> &)*this;
-			size_t sa = size();
-			size_t sb = size(b);
-			///
-			if (sa == sb) {
-				vec c = vec(sa, T(0));
+
+			if constexpr (adds<T>()) {
+				vec<T>& a = (vec<T> &) * this;
+				idx    sa = size();
+				idx    sb = size(b);
+				/// only if implemented by T; otherwise it faults
+
+				if (sa == sb) {
+					vec c = vec(sa, T());
+					T* va = (T*)a,
+						* vb = (T*)b,
+						* vc = (T*)c;
+					for (idx i = 0; i < sa; i++)
+						vc[i] = va[i] + vb[i];
+					return c;
+				}
+				else if (sa > sb) {
+					vec c = vec(a);
+					T* vb = (T*)b,
+						* vc = (T*)c;
+					for (idx i = 0; i < sb; i++)
+						vc[i] += vb[i];
+					return c;
+				}
+				vec c = vec(b);
 				T* va = (T*)a,
-				 * vb = (T*)b,
-				 * vc = (T*)c;
-				for (size_t i = 0; i < sa; i++)
-					vc[i] = va[i] + vb[i];
+					* vc = (T*)c;
+				for (idx i = 0; i < sa; i++)
+					vc[i] += va[i];
 				return c;
-			} else if (sa > sb) {
-				vec c = vec(a);
-				T* vb = (T*)b,
-				 * vc = (T*)c;
-				for (size_t i = 0; i < sb; i++)
-					vc[i] += vb[i];
-				return c;
+			} else {
+				assert(false);
+				return vec();
 			}
-			vec c = vec(b);
-			T* va = (T*)a,
-			 * vc = (T*)c;
-			for (size_t i = 0; i < sa; i++)
-				vc[i] += va[i];
-			return c;
 		}
 
 		vec operator-(vec b) const {
 			vec&    a = *this;
-			size_t sa = size(a);
-			size_t sb = size(b);
+			idx    sa = size(a);
+			idx    sb = size(b);
 			///
 			if (sa == sb) {
 				vec c = vec(sa, T(0));
 				T* va = (T*)a, *vb = (T*)b, *vc = (T*)c;
-				for (size_t i = 0; i < sa; i++)
+				for (idx i = 0; i < sa; i++)
 					vc[i] = va[i] - vb[i];
 				return c;
 			} else if (sa > sb) {
 				vec c = vec(a);
 				T* vb = (T*)b, *vc = (T*)c;
-				for (size_t i = 0; i < sb; i++)
+				for (idx i = 0; i < sb; i++)
 					vc[i] -= vb[i];
 				return c;
 			}
 			vec c = vec(b);
 			T* va = (T*)a, vc = (T*)c;
-			for (size_t i = 0; i < sa; i++)
+			for (idx i = 0; i < sa; i++)
 				vc[i] -= va[i];
 			return c;
 		}
@@ -1106,7 +1180,7 @@ export {
 			vec& a = *this;
 			vec  c = vec(size(a), T(0));
 			T*  va = (T*)a, vc = (T*)c;
-			for (size_t i = 0, sz = size(); i < sz; i++)
+			for (idx i = 0, sz = size(); i < sz; i++)
 				vc[i] = va[i] * b;
 			return c;
 		}
@@ -1115,28 +1189,27 @@ export {
 			vec& a = *this;
 			vec  c = vec(size(a), T(0));
 			T*  va = (T*)a, vc = (T*)c;
-			for (size_t i = 0, sz = size(); i < sz; i++)
+			for (idx i = 0, sz = size(); i < sz; i++)
 				vc[i] = va[i] / b;
 			return c;
 		}
 
-		vec& operator+=(vec b) const { return (*this = *this + b); }
-		vec& operator-=(vec b) const { return (*this = *this - b); }
+		vec& operator+=(vec b) { return (*this = *this + b); }
+		vec& operator-=(vec b) { return (*this = *this - b); }
+		vec& operator*=(vec b) { return (*this = *this * b); }
+		vec& operator/=(vec b) { return (*this = *this / b); }
+		vec& operator*=(T   b) { return (*this = *this * b); }
+		vec& operator/=(T   b) { return (*this = *this / b); }
 
-		vec& operator*=(vec b) const { return (*this = *this * b); }
-		vec& operator/=(vec b) const { return (*this = *this / b); }
-		vec& operator*=(T   b) const { return (*this = *this * b); }
-		vec& operator/=(T   b) const { return (*this = *this / b); }
-
-		// i am in favor of a C++-like language with reflection, and 1/4th the keywords,
-		// with far more implicit facility and better succinctness!
+		Shared::iter<T> begin() const { return Shared::iter<T> { *this, 0 }; }
+		Shared::iter<T>   end() const { return Shared::iter<T> { *this, size_t(size()) }; }
 
 		operator Hash() const {
 			vec& a = *this;
 			T	ac = 0.0;
 			int  m = 1234;
 			///
-			for (size_t i = 0, sz = size(); i < sz; i++) {
+			for (idx i = 0, sz = size(); i < sz; i++) {
 				ac += a[i] * m;
 				m  *= 11;
 			}
@@ -1148,35 +1221,35 @@ export {
 		explicit operator T() const {
 			vec& a = *this;
 			T	ac = 0.0;
-			for (size_t i = 0, sz = size(); i < sz; i++)
+			for (idx i = 0, sz = size(); i < sz; i++)
 				ac = (i == 0) ? a[i] : (ac * a[i]);
 			return ac;
 		}
 
 		/// value, point, coord, homogenous
-		static void aabb(vec<T> *a, size_t sz, vec<T>& mn, vec<T>& mx) {
+		static void aabb(vec<T> *a, idx sz, vec<T>& mn, vec<T>& mx) {
 			mn = a[0];
 			mx = a[0];
-			for (size_t i = 1; i < sz; i++) {
+			for (idx i = 1; i < sz; i++) {
 				auto& v = a[i];
 				mn      = mn.min(v);
 				mx      = mx.max(v);
 			}
 		}
 
-		inline vec<T>    sqr() { return { *this, [](T v, size_t i) { return v * v;			 }}; }
-		inline vec<T>    abs() { return { *this, [](T v, size_t i) { return std::abs   (v); }}; }
-		inline vec<T>  floor() { return { *this, [](T v, size_t i) { return std::floor (v); }}; }
-		inline vec<T>   ceil() { return { *this, [](T v, size_t i) { return std::ceil  (v); }}; }
+		inline vec<T>    sqr() { return { *this, [](T v, idx i) { return v * v;			 }}; }
+		inline vec<T>    abs() { return { *this, [](T v, idx i) { return std::abs   (v); }}; }
+		inline vec<T>  floor() { return { *this, [](T v, idx i) { return std::floor (v); }}; }
+		inline vec<T>   ceil() { return { *this, [](T v, idx i) { return std::ceil  (v); }}; }
 
 		inline vec<T>  clamp( vec<T> mn, vec<T> mx )  {
-			return { *this, [&](T& v, size_t i) { return std::clamp(v, mn[i], mx[i]); }};
+			return { *this, [&](T& v, idx i) { return std::clamp(v, mn[i], mx[i]); }};
 		}
 
 		friend auto operator<<(std::ostream& os, vec<T> const& m) -> std::ostream& {
 			vec& a = *this;
 			os    << "[";
-			for (size_t i = 0, sz = size(); i < sz; i++) {
+			for (idx i = 0, sz = size(); i < sz; i++) {
 				os << decimal(a[i], 4);
 				if (i != 0) os << ",";
 			}
@@ -1187,23 +1260,25 @@ export {
 		inline     T  max()          const {
 			vec& a = *this;
 			T mx = a[0];
-			for (size_t i = 1, sz = size(); i < sz; i++)
+			for (idx i = 1, sz = size(); i < sz; i++)
 				mx = std::max(mx, a[i]);
 			return mx;
 		}
+
 		inline     T  min()          const {
 			vec& a = *this;
 			T mn = a[0];
-			for (size_t i = 1, sz = size(); i < sz; i++)
+			for (idx i = 1, sz = size(); i < sz; i++)
 				mn = std::min(mn, a[i]);
 			return mn;
 		}
-		inline vec<T> min(    T  mn) const { return { *this, [](T v, size_t i) { return std::min(v, mn);    }}; }
-		inline vec<T> max(    T  mx) const { return { *this, [](T v, size_t i) { return std::max(v, mx);    }}; }
-		inline vec<T> min(vec<T> mn) const { return { *this, [](T v, size_t i) { return std::min(v, mn[i]); }}; }
-		inline vec<T> max(vec<T> mx) const { return { *this, [](T v, size_t i) { return std::max(v, mx[i]); }}; }
 
-		static double area(vec<T> *p, size_t sz) {
+		inline vec<T> min(    T  mn) const { return { *this, [](T v, idx i) { return std::min(v, mn);    }}; }
+		inline vec<T> max(    T  mx) const { return { *this, [](T v, idx i) { return std::max(v, mx);    }}; }
+		inline vec<T> min(vec<T> mn) const { return { *this, [](T v, idx i) { return std::min(v, mn[i]); }}; }
+		inline vec<T> max(vec<T> mx) const { return { *this, [](T v, idx i) { return std::max(v, mx[i]); }}; }
+
+		static double area(vec<T> *p, idx sz) {
 			double area = 0.0;
 			const int n = int(p.size());
 			int       j = n - 1;
@@ -1222,15 +1297,16 @@ export {
 
 		T len_sqr() const {
 			vec&    a = *this;
-			size_t sz = size();
+			idx    sz = size();
 			T	   sq = 0;
-			for (size_t i = 0; i < sz; i++)
+			for (idx i = 0; i < sz; i++)
 				sq   += a[i] * a[i];
 			return sq;
 		}
 
 		T             len() const { return sqrt(len_sqr()); }
 		vec<T>  normalize() const { return *this / len(); }
+		T*			 data() const { return (T*)(mem ? mem->data.ptr : null); }
 	};
 
 	// we must get this in working order.
@@ -1296,8 +1372,9 @@ export {
 	struct sh:Shared {
 		sh() { }
 		sh(const sh<T>& a)       : Shared(a.mem) { }
+		/// alloc needs to check for primtive type, we need an api for that
 		sh(T& ref)			     : Shared(Memory::manage(&ref, 1)) { }
-		sh(T* ptr, size_t c = 1) : Shared(Memory::manage( ptr, c)) { assert(c); }
+		sh(T* ptr, idx c = 1)    : Shared(Memory::manage( ptr, c)) { assert(c); }
 	  //sh(size_t c, lambda<void(T*)> fn) : Shared(Memory::manage(malloc(sz), c, Type::lookup<T>())) { }
 		///
 		sh<T>& operator=(sh<T>& ref) {
@@ -1309,13 +1386,23 @@ export {
 			return *this;
 		}
 
-		static Shared valloc(size_t sz) { return Memory::valloc<T>(sz); }
+		sh<T>& operator=(T ref) {
+			drop(mem);
+			if constexpr (!std::is_same_v<T, nullptr_t>) {
+				mem = Memory::manage<T>(new T(ref), 1);
+				grab(mem);
+			} else
+				mem = null;
+			return *this;
+		}
+
+		static Shared manage(idx sz) { return Memory::manage<T>(sz); }
 
 		///
 		sh<T>& operator=(T* ptr) {
 			if (!mem || mem->is_diff(ptr)) {
 				drop(mem);
-				mem = ptr ? Memory::manage(ptr, 1, Id<T>()) : null;
+				mem = ptr ? Memory::manage(ptr, 1) : null;
 			}
 			return *this;
 		}
@@ -1338,19 +1425,19 @@ export {
 
 	///
 	void grab(Memory *m) {
-		Type &type = m->data.type;
-		type.lock();
+		Type *type = m->data.type;
+		type->lock();
 		m->refs++;
-		type.unlock();
+		type->unlock();
 	}
 
 	///
 	void drop(Memory* m) {
-		Type& type = m->data.type;
-		type.lock();
+		Type* type = m->data.type;
+		type->lock();
 		if (--m->refs == 0) {
 			// Destructor.
-			(*m->data.type.dtr)(&m->data);
+			(*m->data.type->dtr)(&m->data);
 			if (m->att) {
 				for (auto &att:*m->att)
 					if (att.closure)
@@ -1358,21 +1445,20 @@ export {
 					else
 						drop(att.mem);
 			}
-			type.unlock();
+			type->unlock();
 			delete m;
 		} else
-			type.unlock();
+			type->unlock();
 	}
 
+	// outside resources should be the only 'Arb' in
 					   struct Arb     : Shared { Arb (void* p, size_t c = 1) { mem = Memory::arb   (p, c); }};
 	template <class T> struct Persist : Shared { Persist(T* p, size_t c = 1) { mem = Memory::arb   (p, c); }};
 	template <class T> struct Manage  : Shared { Manage (T* p, size_t c = 1) { mem = Memory::manage(p, c); }};
 	template <class T> struct VAlloc  : Shared { VAlloc (      size_t c = 1) { mem = Memory::valloc(   c); }};
 
 	template <typename T>
-	T fabs(T x) {
-		return x < 0 ? -x : x;
-	}
+	T fabs(T x) { return x < 0 ? -x : x; }
 	
     /// reference sine function.
     template <typename T>
@@ -1393,9 +1479,8 @@ export {
 	template <typename T>
 	Shared& Shared::operator=(T* ptr) {
 		if (!mem || mem->data.ptr != ptr) {
-			Type* origin = mem ? &mem->data.origin : null;
 			drop(mem);
-			mem = ptr ? Memory::manage(ptr, 1, origin) : null;
+			mem = ptr ? Memory::manage(ptr, 1) : null;
 		}
 		return *this;
 	}
@@ -1473,59 +1558,53 @@ export {
 	};
 //}
 
-// shared could use a realloc, and then array could be much simpler; sh<T> template can have a data window when in debug
 //export module arr
 //export {
-	typedef std::filesystem::path path_t;
 
 	template <typename T>
-	struct array { // sh can possibly maintain a debug window to the data, not important now though but useful.  refactor this to depend on vec<T*>
-	public:
-		typedef sh<std::vector<T>> vshared;
-	protected:
-		vshared  a;
-		vshared &realloc(size_t res) {
-			a = new std::vector<T>();
-			if (res)
-				a->reserve(size_t(res));
-			return a;
+	struct iter {
+		const T*   start;
+		size_t     inc;
+
+		void operator++() { inc++; }
+		void operator--() { inc--; }
+
+		operator    T* () { return &start[inc]; }
+		operator    T& () { return  start[inc]; }
+
+		bool operator==(const iter<T> &b) {
+			return start == b.start && inc == b.inc;
 		}
-		// 
-		std::vector<T>& ref(size_t res = 0) { return *(a ? a : realloc(res)); }
+	};
+
+	template <typename T>
+	struct array { 
+	protected:
+		vec<Shared>  a;
+
+		/// here we be preventing the code bloat. ar.
+		vec<Shared>& valloc(size_t   sz) { a = vec<Shared>(a, sz); return a; }
+
+		vec<Shared>& ref(size_t res = 0) { return a ? a : valloc(res); }
 
 	public:
-		inline Type *element_type() { return ident<T>(); }
-		typedef T value_type;
-    
-	/* ~array() { }
-		array &operator=(array<T> &ref) {
-			if (this != &ref)
-				a = ref.a;
-			return *this;
-		}
-		array(array<T> &ref) : a(ref.a) { } */
-		array()                           { }
-		array(std::initializer_list<T> v) { realloc(v.size()); for (auto &i: v) a->push_back(i); }
-		array(const T* d, size_t sz) {
-			assert (d);
-			realloc(sz);
-			sz.each(d, [](T& value, auto index) {
-				a->push_back(value);
-			});
-		}
-		array(size_t sz, T v)                {   realloc(sz); for (size_t i = 0; i < size_t(sz); i++) a->push_back(v);     }
-		array(int  sz, lambda<T(size_t)> fn) {   realloc(sz); for (size_t i = 0; i < size_t(sz); i++) a->push_back(fn(i)); }
-		array(std::nullptr_t n)              { }
-		array(size_t sz)                     { realloc(sz); }
-    
-		/// quick-sort raw impl
+		typedef lambda<Shared(size_t)> SharedIFn;
+
+		array()								   { }
+		array(std::initializer_list<Shared> v) { valloc(v.size()); for (auto &i: v) a += i; }
+		array(size_t sz, Shared v)             { valloc(sz); for (size_t i = 0; i < size_t(sz); i++) a += v.copy(); }
+		array(int  sz, SharedIFn fn)		   { valloc(sz); for (size_t i = 0; i < size_t(sz); i++) a += fn(i);    }
+		array(std::nullptr_t n)                { }
+		array(size_t        sz)                { valloc(sz); }
+		
+		/// quick-sort
 		array<T> sort(lambda<int(T &a, T &b)> cmp) {
 			auto      &self = ref();
 			/// initialize list of identical size with elements of pointer type, pointing to the respective index
-			array<T *> refs = { size(), [&](size_t i) { return &self[i]; }};
+			vec<Shared *> refs = { size(), [&](size_t i) { return &self[i]; }};
 
-			lambda <void(int,   int)> qk;
-				qk =       [&](int s, int e) {
+			lambda <void(int, int)> qk;
+				qk = [&](int s, int e) {
 				
 				/// sanitize
 				if (s >= e)
@@ -1537,11 +1616,11 @@ export {
 				///
 				while (i < j) {
 					/// standard search pattern
-					while (cmp(refs[i], refs[pv]) <= 0 && i < e)
+					while (cmp((*refs[i]).value<T>(), (*refs[pv]).value<T>()) <= 0 && i < e)
 						i++;
                 
-					/// and over there too ever forget your tail? we all have
-					while (cmp(refs[j], refs[pv]) > 0)
+					/// order earl grey and have data do something on his screen
+					while (cmp((*refs[j]).value<T>(), (*refs[pv]).value<T>()) > 0)
 						j--;
                 
 					/// send away team of red shirts
@@ -1561,42 +1640,38 @@ export {
 			/// lift off.
 			qk(0, size() - 1);
 			
-			/// resolve refs
+			/// resolve refs, returning sorted.
 			return { size(), [&](size_t i) { return *refs[i]; }};
 		}
     
-		T                   &back()              { return ref().back();                }
-		T                  &front()              { return ref().front();               }
-		int                   isz()        const { return a ?     int(a->size()) : 0;  }
-		size_t                 sz()		   const { return a ? a->size() : 0; }
-		size_t               size()		   const { return a ? a->size() : 0; }
-		size_t           capacity()        const { return a ? a->capacity() : 0;       }
-	
-		std::vector<T>    &vector()              { return ref();                       }
-		std::vector<T>::iterator         begin() { return ref().begin();               }
-		std::vector<T>::iterator           end() { return ref().end();                 }
-		T                   *data()        const { return (T *)(a ? a->data() : null); }
-		void      operator    += (T v)           { ref().push_back(v);                 }
-		void      operator    -= (int i)         { return erase(i);                    }
-				  operator   bool()        const { return a && a->size() > 0;          }
+		Shared              &back()              { return ref().back();                }
+		Shared			   &front()              { return ref().front();               }
+		int                   isz()        const { return a ? int(a->size())    : 0;   }
+		size_t                 sz()		   const { return a ?     a->size()     : 0;   }
+		size_t               size()		   const { return a.size();                    }
+		size_t           capacity()        const { return a.capacity();                }
+		vec<Shared>	      &vector()              { return ref();                       }
+		T& operator    [](size_t i)				 { return ref()[i];					   }
+
+		Shared::iter<T> begin() { return Shared::iter<T> { a, 0 }; }
+		Shared::iter<T>   end() { return Shared::iter<T> { a, size_t(a.size()) }; } // rid the size_t here too
+
+		inline void operator    += (Shared v)    { ref().push(v);					   }
+		inline void operator    -= (int i)       { erase(i);						   }
+				  operator   bool()        const { return a && a.size() > 0;           }
 		bool      operator      !()        const { return !(operator bool());          }
-		T&        operator     [](size_t i)      { return ref()[i];                    }
 		bool      operator!=     (array<T> b)    { return  (operator==(b));            }
 		bool      operator==     (array<T> b)    {
-			if (!a && !b.a)
-				return true;
-			size_t sz = size();
-			bool sz_equal = sz == b.size();
-			if ( sz_equal && sz ) {
-				T *a_v = (T *)a->data();
-				T *b_v = (T *)b.data();
-				for (size_t i = 0; i < size(); i++) {
-					bool eq = a_v[i] == b_v[i];
-					if (!eq)
-						return false;
-				}
+			idx  sz = size();
+			bool eq = sz == b.size();
+			if (eq && sz) {
+				for (idx i = 0; i < sz; i++)
+					if ((Shared&)a[i] != (Shared&)b[i]) {
+						eq = false;
+						break;
+					}
 			}
-			return sz_equal;
+			return eq;
 		}
 		
 		///
@@ -1606,35 +1681,17 @@ export {
 			return *this;
 		}
 
-		///
-		void   expand(size_t sz, T f) {
-			// todo: check use-cases and check against std for expand; use expand if it exists
-			// todo: curious to see what this release compiles to.
-			sz.each([&](ssize_t i) { a->push_back(f); });
-
-			// proposed 1 line lambda: sz.each([&](ssize_t i) <- a->push_back(f));
+		/// now we have clash between size nad index.
+		/// if not idx then what.. what is sizable and index and not Size.
+		void expand(idx sz, T f) {
+			for (idx i = 0; i < sz; i++)
+				a->push_back(f);
 		}
 
 		void   erase(int index)             { if (index >= 0) a->erase(a->begin() + size_t(index)); }
 		void   reserve(size_t sz)           { ref().reserve(sz); }
 		void   clear(size_t sz = 0)         { ref().clear(); if (sz) reserve(sz); }
 		void   resize(size_t sz, T v = T()) { ref().resize(sz, v); }
-		
-		/// deprecate usage, possibly remove now
-		static array<T> import(std::vector<T> v) {
-			array<T> a(v.size());
-			for (auto &i: v)
-				a += i;
-			return a;
-		}
-    
-		template <typename R>
-		array<R> convert() {
-			array<R> out(a->size());
-			if (a) for (auto &i: *a)
-				out += i;
-			return out;
-		}
     
 		int count(T v) const {
 			int r = 0;
@@ -1644,6 +1701,7 @@ export {
 			return r;
 		}
     
+		// historically these mutate the data
 		void shuffle() {
 			std::vector<std::reference_wrapper<const T>> v(a->begin(), a->end());
 			std::shuffle(v.begin(), v.end(), Rand::global_engine());
@@ -1664,15 +1722,18 @@ export {
 
 		/// todo: all, all delim use int, all. not a single, single one use size_t.
 		int index_of(T v) const { 
-			int index = 0;
-			if (a) for (auto &i: *a) {
-				if (i == v)
+			int index  = 0;
+			Shared& vs = v;
+			for (Shared &i: a) {
+				if (i.mem == vs.mem)
 					return index;
 				index++;
 			}
 			return -1;
 		}
 	};
+
+	typedef array<Shared> Array;
 
 	template<typename T>
 	struct is_vec<array<T>>  : std::true_type  {};
@@ -1687,15 +1748,15 @@ export {
 	template <const Stride S>
 	struct Shape {
 		struct Data {
-			array<ssize_t> shape;
-			Stride		   stride;
+			array<idx> shape;
+			Stride     stride;
 		};
 		sh<Data> data;
 
 		int      dims() const { return int(data->shape.size()); } // sh can have accessors for a type vec
-		size_t   size() const {
-			ssize_t r     = 0;
-			bool    first = true;
+		idx      size() const {
+			idx   r     = 0;
+			bool  first = true;
 			///
 			if (data)
 				for (auto s:data->shape)
@@ -1711,14 +1772,14 @@ export {
 		/// Shapes can have negatives in their dimension as a declaration spec
 		/// i dont think referencing a mere half value of 64bit in positive and negative is exactly a hinderance either
 		/// ssize_t is prefererred as a result
-		ssize_t operator [] (size_t i) { return data->shape[i]; }
+		idx operator [] (idx i) { return data->shape[i]; }
 
 		///
 		Shape(array<int> sz)                  : data(sz) { }
-		Shape(int d0, int d1, int d2, int d3) : data(new Data {{ d0, d1, d2, d3 }, S }) { }
-		Shape(int d0, int d1, int d2)         : data(new Data {{ d0, d1, d2 },     S }) { }
-		Shape(int d0, int d1)                 : data(new Data {{ d0, d1 },		   S }) { }
-		Shape(int d0)                         : data(new Data {{ d0 },			   S }) { }
+		Shape(idx d0, idx d1, idx d2, idx d3) : data(new Data {{ d0, d1, d2, d3 }, S }) { }
+		Shape(idx d0, idx d1, idx d2)         : data(new Data {{ d0, d1, d2 },     S }) { }
+		Shape(idx d0, idx d1)                 : data(new Data {{ d0, d1 },		   S }) { }
+		Shape(idx d0)                         : data(new Data {{ d0 },			   S }) { }
 		Shape() { }
 
 		Shape(const Shape<S> &ref)            : data(ref.data) { }
@@ -1730,8 +1791,8 @@ export {
 			return { h, 4, w }; /// decision needed on this
 		};
 		///
-		std::vector<ssize_t>::iterator begin() { return data->shape.begin(); }
-		std::vector<ssize_t>::iterator end()   { return data->shape.end(); }
+		std::vector<idx>::iterator begin() { return data->shape.begin(); }
+		std::vector<idx>::iterator end()   { return data->shape.end(); }
 	};
 	//}
 ///}
@@ -1739,21 +1800,21 @@ export {
 	template <typename T>
 	struct Vec2:vec<T> {
 		T &x, &y;
-		Vec2(std::nullptr_t n = null) : vec<T>(), x(vec<T>::def()), y(vec<T>::def()) { }
+		Vec2(std::nullptr_t n = null) : vec<T>(), x(default_of<T>()), y(default_of<T>()) { }
 		Vec2(T x, T y) : vec<T>(x, y), x((*this)[0]), y((*this)[1]) { }
 	};
 
 	template <typename T>
 	struct Vec3:vec<T> {
 		T &x, &y, &z;
-		Vec3(std::nullptr_t n = null) : vec(), x(vec<T>::def()), y(vec<T>::def()), z(vec<T>::def()) { }
+		Vec3(std::nullptr_t n = null) : vec(), x(default_of<T>()), y(default_of<T>()), z(default_of<T>()) { }
 		Vec3(T x, T y, T z) : vec<T>(x, y, z), x((*this)[0]), y((*this)[1]), z((*this)[2]) { }
 	};
 
 	template <typename T>
 	struct Vec4:vec<T> {
 		T &x, &y, &z, &w;
-		Vec4(std::nullptr_t n = null) : vec(), x(vec<T>::def()), y(vec<T>::def()), z(vec<T>::def()), w(vec<T>::def()) { }
+		Vec4(std::nullptr_t n = null) : vec(), x(default_of<T>()), y(default_of<T>()), z(default_of<T>()), w(default_of<T>()) { }
 		Vec4(T x, T y, T z, T w) : vec<T>(x, y, z, w), x((*this)[0]), y((*this)[1]), z((*this)[2]), w((*this)[3]) { }
 	};
 
@@ -1801,8 +1862,8 @@ export {
 	struct Rect: vec<T> {
 		T &x, &y, &sx, &sy;
 
-		Rect(std::nullptr_t n = null) : vec(), x(vec<T>::def()),  y(vec<T>::def()),
-											  sx(vec<T>::def()), sy(vec<T>::def()) { }
+		Rect(std::nullptr_t n = null) : vec(), x(default_of<T>()),  y(default_of<T>()),
+											  sx(default_of<T>()), sy(default_of<T>()) { }
 		Rect(T x, T y, T sx, T sy)	  : vec(x, y, sx, sy), x(x), y(y), sx(sx), sy(sy) { }
 		
 		Rect(vec<T> pos, vec<T> sz, bool ctr) {
@@ -1861,7 +1922,7 @@ export {
 			const Rect<T> &clip = *this;
 			array<Vec2<T>>    p = poly;
 			array<Vec2<T>>    e = clip.edges();
-			for (int i = 0; i < e.size(); i++) {
+			for (idx i = 0; i < e.size(); i++) {
 				Vec2<T>  &e0 = e[i];
 				Vec2<T>  &e1 = e[(i + 1) % e.size()];
 				Edge<T> edge = { e0, e1 };
@@ -1899,19 +1960,88 @@ export {
 	};
 
 
-
-
-
 //export module str;
 //export {
 	typedef int ichar;
 
-	struct str {
-	protected:
-		typedef sh<std::string> shared;
-		shared sh;
+	// ----------------------------------------------------------
+	// UTF8 :: Bjoern Hoehrmann <bjoern@hoehrmann.de>
+	// https://bjoern.hoehrmann.de/utf-8/decoder/dfa/
+	// ----------------------------------------------------------
 
-	public:
+	struct utf {
+		static int decode(uint8_t* cstr, lambda<void(uint32_t)> fn = {}) {
+			if (!cstr) return 0;
+
+			static const uint8_t utable[] = {
+				0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 00..1f
+				0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 20..3f
+				0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 40..5f
+				0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 60..7f
+				1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9, // 80..9f
+				7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, // a0..bf
+				8,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // c0..df
+				0xa,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x4,0x3,0x3, // e0..ef
+				0xb,0x6,0x6,0x6,0x5,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8, // f0..ff
+				0x0,0x1,0x2,0x3,0x5,0x8,0x7,0x1,0x1,0x1,0x4,0x6,0x1,0x1,0x1,0x1, // s0..s0
+				1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,1, // s1..s2
+				1,2,1,1,1,1,1,2,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1, // s3..s4
+				1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1,3,1,1,1,1,1,1, // s5..s6
+				1,3,1,1,1,1,1,3,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // s7..s8
+			};
+
+			uint32_t code;
+			uint32_t state = 0;
+			size_t   ln    = 0;
+
+			auto dc = [&](uint32_t input) {
+				uint32_t u = utable[input];
+				code	   = (state != 1) ? (input & 0x3fu) | (code << 6) : (0xff >> u) & input;
+				state	   = utable[256 + state * 16 + u];
+				return state;
+			};
+
+			for (uint8_t *cs = cstr; *cs; ++cs)
+				if (!dc(*cs)) {
+					if (fn) fn(code);
+					ln++;
+				}
+
+			return (state != 1) ? -1 : int(ln);
+		}
+
+		static int len(uint8_t* cstr) {
+			return decode(cstr, null);
+		}
+	};
+
+	/// seems still somewhat fit for 'var' space.
+	/// however the main thing here is to abstract string or number
+	/// this abstracts array and map, args are very app specific but specifically for apps. some args are arrow and some are not.
+	struct Args:Shared {
+		Shared& operator[](Shared lookup);
+	};
+
+	struct str:Shared {
+		
+		// shared iterator can potentially
+		// do a bit more, same interface though.
+
+		template <typename T>
+		struct iter {
+			const T*   start;
+			idx        inc;
+
+			void operator++() { inc++; }
+			void operator--() { inc--; }
+
+			operator    T* () const { return (T*)&start[inc]; }
+			operator    T& () const { return (T&) start[inc]; }
+
+			bool operator==(const iter<T> b) { return start == b.start && inc == b.inc; }
+			operator size_t()				 { return inc; }
+		};
+
 		enum MatchType {
 			Alpha,
 			Numeric,
@@ -1921,190 +2051,193 @@ export {
 			CIString
 		};
 
-		std::string& ref() const { return *sh; }
 
-		/// best way to serialize a string is to return the Shared
-		/// Shared just hides many dependency quirks, so do this with all of the types.
-		/// shared has access to hashing functor
-		operator Shared() { return sh; }
-    
-		// constructors
-		str(shared &sh)				: sh(sh) { }
-		str()                        : sh(new std::string()) { }
-		str(nullptr_t n)             : sh(new std::string()) { }
-		str(cchar_t* cstr)           : sh(cstr ? new std::string(cstr)      : new std::string()) { }
-		str(cchar_t* cstr, size_t len)  : sh(cstr ? new std::string(cstr, len) : new std::string()) {
-			if (!cstr && len) sh->reserve(len);
+		str expr(lambda<str(str)> fn) {
+			char*  a  = data();
+			auto   be = [&](int i) -> bool { return a[i] == '{' && a[i + 1] != '{'; };
+			auto   en = [&](int i) -> bool { return a[i] == '}'; };
+			bool   in = be(0);
+			int    fr = 0;
+			size_t ln = byte_len();
+			str    rs = str(ln * 4);
+
+			for (int i = 0; i <= ln; i++)
+				if (i == ln || be(i) || en(i)) {
+					int cr = int(i - fr);
+					if (cr > 0)
+						rs += in ? str(&a[fr + 1], cr - 2) : str(&a[fr], cr);
+					fr = i;
+					in = be(i);
+				}
+
+			return rs;
 		}
-	  //str(const char      ch)      : sh(new std::string(&ch, 1))              { }
-		str(size_t          sz)      : sh(new std::string())                    { sh->reserve(sz); }
-		str(int32_t        i32)      : sh(new std::string(std::to_string(i32))) { }
-		str(int64_t        i64)      : sh(new std::string(std::to_string(i64))) { }
-		str(double         f64)      : sh(new std::string(std::to_string(f64))) { }
-		str(std::string    str)      : sh(new std::string(str))                 { }
-		str(const str&s)             : sh(s.sh)                                 { }
-	   ~str() { }
-	    
-	    static int utf8(int code, uint8_t *res) {
-			int n = 0;
+
+		str format(Array args) { return expr([&](str e) -> str { return args[e]; }); }
+
+		str(Shared &sh)	   : Shared(sh)   { }
+		str()              : Shared()     { }
+		str(cchar_t* cstr) : Shared(cstr) { }
+		str(char* s, idx ln, idx rs = 32) : Shared(s, ln + 1, max(rs, ln << 1)) { }
+
+	    str(char            ch) : Shared(Memory::manage(&ch, 1, 32))     { } // remove all refs for this thing
+		str(size_t          sz) : Shared(Memory::manage(Id<char>(), sz))	   { }
+		str(int32_t        i32) : Shared(Memory::manage(std::to_string(i32)))  { }
+		str(int64_t        i64) : Shared(Memory::manage(std::to_string(i64)))  { }
+		str(double         f64) : Shared(Memory::manage(std::to_string(f64)))  { }
+		str(std::string    str) : Shared(Memory::manage(std::string(str)))     { }
+		str(const str       &s) : Shared(s.mem)								   { }
+
+		/// Shared can possibly do a bit of validation
+		iter<char> begin() { return { data(), 0 }; }
+		iter<char>   end() { return { data(), mem ? mem->data.count : 0 }; }
+
+		// calling a string can format it.
+		// str a = str("{2} is {0} but {1}")(1, 2, 3.0)
+		// "3.0 is 2 but 1"
+		
+		str operator+ (const str b) const {
+			const str& a = *this;
+			char*     ap = a.data();
+			char*     bp = b.data();
 			///
-			lambda<void(uint8_t)> append = [&](uint8_t c) { res[n++] = c; };
-			if (code <= 127)
-				append(uint8_t(code));
-			else {
-				/// todo.
-				assert(false);
+			if (!ap) return b.copy();
+			if (!bp) return a.copy();
+			///
+			str      c  = a.copy(a.reserve());
+			char*    cp = c.data();
+
+			size_t   ac = a.mem->data.count;
+			size_t   bc = b.mem->data.count;
+			memcpy(&((uint8_t *)cp)[ac - 1], bp, bc);
+			c.mem->data.count = ac + bc - 1;
+			return c;
+		}
+
+		str operator+ (const char* s) const { return *this + str(s); }
+
+		char*		data()                 const { return (char *)(mem ? mem->data.ptr   : null); }
+		idx         byte_len()             const { return (size_t)(mem ? mem->data.count :    0); }
+		bool        contains(array<str> a) const { return index_of_first(a, null) >= 0;           }
+
+		// size_t converts ambiguously to pointer
+		// which limits the interface you can provide.
+		// signed int64 is the better option
+		idx         size()						     const { return mem ? mem->data.count : 0;      }
+		str         operator() (int   s,  int     l) const { return substr(s, l);                   }
+		str         operator() (int				  s) const { return substr(s);                      }
+		bool        operator<  (const str         b) const { return strcmp(data(), b.data()) <  0;  }
+		bool        operator>  (const str         b) const { return strcmp(data(), b.data()) >  0;  }
+		bool        operator<  (const char       *b) const { return strcmp(data(), b)		 <  0;  }
+		bool        operator>  (const char       *b) const { return strcmp(data(), b)		 >  0;  }
+		bool        operator<= (const str         b) const { return strcmp(data(), b.data()) <= 0;  }
+		bool        operator>= (const str         b) const { return strcmp(data(), b.data()) >= 0;  }
+		bool        operator<= (const char       *b) const { return strcmp(data(), b)		 <= 0;  }
+		bool        operator>= (const char       *b) const { return strcmp(data(), b)		 >= 0;  }
+	  //bool        operator== (std::string       b) const { return strcmp(data(), b.c_str()) == 0; }
+	  //bool        operator!= (std::string       b) const { return strcmp(data(), b.c_str()) != 0; }
+		bool        operator== (const str         b) const { return strcmp(data(), b.data())  == 0; }
+		bool        operator== (const char       *b) const { return strcmp(data(), b)		  == 0; }
+		bool        operator!= (const char       *b) const { return strcmp(data(), b)		  != 0; }
+		char&		operator[] (size_t            i) const { return ((char *)mem->data.ptr)[i];     }
+		int         operator[] (str               b) const { return index_of(b); }
+		void        operator+= (str               b)       {
+			if (mem->data.reserve > (mem->data.count + b.mem->data.count)) {
+				char*  ap = (char*)  mem->data.ptr;
+				char*  bp = (char*)b.mem->data.ptr;
+				idx&   ac =   mem->data.count;
+				idx&   bc = b.mem->data.count;
+				ac		 += bc;
+				memcpy(ap, bp, bc);
+			} else
+				*this     = *this + b;
+		}
+		void operator+= (const char  b) { operator+=(str(b)); }
+		void operator+= (const char *b) { operator+=(str(b)); }
+		
+			 operator     bool()  const { return mem && mem->data.count > 1; }
+		bool operator!()          const { return !(operator bool());         }
+			 operator  int64_t()  const { return integer_value();            }
+			 operator     real()  const { return real_value();               }
+
+		str &operator= (const str &s) {
+			if (this != &s) {
+				drop(mem);
+				mem = s.mem;
+				grab(mem);
 			}
-			return n;
-	    }
-
-		/// methods
-		const char *cstr()                           const { return ref().c_str();                  }
-		bool        contains(array<str>   a)      const { return index_of_first(a, null) >= 0;   }
-		size_t      size()                           const { return ref().length();                 }
-    
-		/// operators
-		str      operator+  (const str&s)         const { return ref() + s.ref();                }
-		str      operator+  (const char      *s)  const { return ref() + s;                      }
-		str      operator() (int s, int l)        const { return substr(s, l);                   }
-		str      operator() (int s)               const { return substr(s);                      }
-		bool        operator<  (const str&  rhs)  const { return ref() < rhs.ref();              }
-		bool        operator>  (const str&  rhs)  const { return ref() > rhs.ref();              }
-		bool        operator== (const str&    b)  const {
-			bool bb = sh == ((str&)b).sh;
-			return sh == b.sh || ref() == b.ref();
-		}
-		bool        operator!= (const char   *cstr)  const { return !operator==(cstr);              }
-		bool        operator== (std::string    str)  const { return str == ref();                   }
-		bool        operator!= (std::string    str)  const { return str != ref();                   }
-		int         operator[] (str              s)  const { return index_of(s.cstr());             }
-		void        operator+= (str              s)        { ref() += s.ref();                      }
-		void        operator+= (const char   *cstr)        { ref() += cstr;                         }
-		void		operator+= (ichar           ic)        {
-			uint8_t buf[16];
-			utf8(ic, buf);
-			ref() += (const char *)buf;
-		}
-
-		void        operator+= (const char      ch)        { ref().push_back(ch);                   }
-		const char &operator[] (size_t       index)  const { return ref()[index];                   }
-					operator std::filesystem::path() const { return ref();                          }
-					operator         std::string &() const { return ref();                          }
-					operator                  bool() const { return  sh && *sh != "";               }
-		bool        operator!()						 const { return !(operator bool());             }
-					operator               int64_t() const { return integer();                      }
-					operator                  real() const { return real();                         }
-		str        &operator= (const str &s) {
-			if (this != &s)
-				sh = ((str &)s).sh;
 			return *this;
 		}
 
-		bool        operator==(const char* cstr) const {
-			auto& s = ref();
-			if (!cstr)
-				return s.length() == 0;
-			///
-			const char* s0 = s.c_str();
-			if (cstr == s0) return 0;
-			///
-			for (size_t i = 0; ; i++)
-				if (s0[i] != cstr[i])
-					return false;
-				else if (s0[i] == 0 || cstr[i] == 0)
-					break;
-			///
-			return true;
+		friend std::ostream &operator<< (std::ostream& os, str const& s) {
+			return os << std::string((const char *)s.data());
 		}
 
-		friend std::ostream &operator<< (std::ostream& os, str const& m) { return os << m.ref(); }
-
-		///
-		static str fill(size_t n, lambda<int(size_t &)> fn) {
+		static str fill(idx n, lambda<int(idx)> fn) {
 			auto ret = str(n);
-			for (size_t i = 0; i < size_t(n); i++)
+			for (idx i = 0; i < n; i++)
 				ret += fn(i);
 			return ret;
 		}
 
-		///
-		static str read_file(fs::path f) {
-			if (!fs::is_regular_file(f))
-				return null;
-			std::ifstream fs;
-			fs.open(f);
-			std::ostringstream sstr;
-			sstr << fs.rdbuf();
-			fs.close();
-			return str(sstr.str());
-		}
-
-		/// a str of lambda results
-		static str of(int count, lambda<char(size_t)> fn) {
-			str s;
-			std::string &str = s.ref();
-			for (size_t i = 0; i < count; i++)
-				str += fn(i);
-			return s;
-		}
-
-		int index_of_first(array<str> &a, int *a_index) const {
-			int less  = -1;
-			int index = -1;
-			for (str &ai:a) {
-				  ++index;
-				int i = index_of(ai);
+		int index_of_first(array<str> elements, int *str_index) const {
+			int  less  = -1;
+			int  index = -1;
+			for (str &find:elements) {
+				++index;
+				int i = index_of(find);
 				if (i >= 0 && (less == -1 || i < less)) {
 					less = i;
-					if (a_index)
-					   *a_index = index;
+					if (str_index)
+					   *str_index = index;
 				}
 			}
-			if  (a_index)
-				*a_index = -1;
+			if (less == -1 && str_index) *str_index = -1;
 			return less;
 		}
 
-		///
-		bool starts_with(const char *cstr) const {
-			size_t l0 = strlen(cstr);
-			size_t l1 = size();
+		bool starts_with(const char *s) const {
+			size_t l0 = strlen(s);
+			size_t l1 = len();
 			if (l1 < l0)
 				return false;
-			return memcmp(cstr, sh->c_str(), l0) == 0;
+			return memcmp(s, data(), l0) == 0;
 		}
 
-		///
-		bool ends_with(const char *cstr) const {
-			size_t l0 = strlen(cstr);
-			size_t l1 = size();
+		idx len() const { return utf::len(mem ? (uint8_t*)mem->data.ptr : (uint8_t*)null); }
+
+		bool ends_with(const char *s) const {
+			size_t l0 = strlen(s);
+			size_t l1 = len();
 			if (l1 < l0)
 				return false;
-			const char *end = &(sh->c_str())[l1 - l0];
-			return memcmp(cstr, end, l0) == 0;
+			char *e = &data()[l1 - l0];
+			return memcmp(s, e, l0) == 0;
 		}
 
-		///
 		static str read_file(std::ifstream& in) {
-			str s;
-			std::ostringstream sstr;
-			sstr << in.rdbuf();
-			s = sstr.str();
-			return s;
+			std::ostringstream st; st << in.rdbuf();
+			return st.str();
+		}
+
+		static str read_file(std::filesystem::path path) {
+			std::ifstream in(path);
+			return read_file(in);
 		}
     
-		///
-		str to_lower() const {
-			std::string c = ref();
-			std::transform(c.begin(), c.end(), c.begin(), ::tolower); // transform and this style of api is more C than C++
-			return c;
+		str lowercase() const {
+			str&   r  = copy();
+			char*  rp = r.data();
+			size_t rc = r.byte_len();
+			for (size_t i = 0; i < rc; i++) {
+				char c = rp[i];
+				rp[i]  = (c >= 'A' && c <= 'Z') ? ('a' + (c - 'A')) : c;
+			}
+			return r;
 		}
 
-		///
-		str to_upper() const {
-			std::string c = ref();
-			std::transform(c.begin(), c.end(), c.begin(), ::toupper);
-			return c;
+		str uppercase() const {
+			return copy();
 		}
     
 		static int nib_value(cchar_t c) {
@@ -2119,59 +2252,76 @@ export {
 			return (nv0 == -1 || nv1 == -1) ? ' ' : ((nv0 * 16) + nv1);
 		}
 
-		str replace(str sfrom, str sto, bool all = true) const {
-			size_t start_pos = 0;
-			std::string  str = *sh;
-			std::string  &fr = *sfrom.sh;
-			std::string  &to = *sto.sh;
-			while((start_pos = str.find(fr, start_pos)) != std::string::npos) {
-				str.replace(start_pos, fr.length(), to);
-				start_pos += to.length();
-				if (!all)
-					break;
-			}
-			return str;
-		}
 
-		str substr(int start, size_t len) const {
-			std::string &s = ref();
-			return start >= 0 ? s.substr(size_t(start), len) :
-				   s.substr(size_t(std::max(0, int(s.length()) + start)), len);
-		}
+		str replace(str fr, str to, bool all = true) const {
+			str&   sc   = (str&)*this;
+			char*  sc_p = sc.data();
+			char*  fr_p = fr.data();
+			char*  to_p = to.data();
+			int    sc_c = std::max(0, int(sc.byte_len()) - 1);
+			int    fr_c = std::max(0, int(fr.byte_len()) - 1);
+			int    to_c = std::max(0, int(to.byte_len()) - 1);
+			int    diff = std::max(0, int(to_c) - int(fr_c));
+			str    res  = str(size_t(sc_c + diff * (sc_c / fr_c + 1)));
+			char*  rp   = res.data();
+			idx    w    = 0;
+			bool   once = true;
 
-		str substr(int start) const {
-			std::string &s = ref();
-			return start >= 0 ? s.substr(size_t(start)) :
-				   s.substr(size_t(std::max(0, int(s.length()) + start)));
-		}
-
-		array<str> split(str delim) const {
-			array<str>    result;
-			size_t        start = 0, end, delim_len = delim.size();
-			std::string  &s     = ref();
-			std::string  &ds    = delim.ref();
-			///
-			if (s.length() > 0) {
-				while ((end = s.find(ds, start)) != std::string::npos) {
-					std::string token = s.substr(start, end - start);
-					start = end + delim_len;
-					result += token;
+			/// iterate over string, check strncmp() at each index
+			for (size_t i = 0; i < sc_c; ) {
+				if ((all || once) && strncmp(&sc_p[i], fr_p, fr_c) == 0) {
+					/// write the 'to' string, incrementing count to to_c
+					memcpy (&rp[w], to_p, to_c);
+					i   += to_c;
+					w   += to_c;
+					once = false;
+				} else {
+					/// write single char
+					rp[w++] = sc_p[i++];
 				}
-				auto token = s.substr(start);
-				result += token;
+			}
+
+			/// end string, set count (count includes null char in our data)
+			rp[w++] = 0;
+			res.mem->data.count = w;
+
+			/// do i know what im doing?
+			assert(w <= res.mem->data.reserve);
+			return res;
+		}
+
+		// risky business.
+		str substr(int start, size_t len) const { return str(&data()[start], len); }
+		str substr(int start)			  const { return str(&data()[start]);      }
+
+		array<str> split(str delim)       const {
+			array<str>  result;
+			int  start     = 0;
+			int  end       = 0;
+			int  delim_len = int(delim.byte_len());
+			str &a         = (str&)*this;
+			///
+			if (a.len() > 0) {
+				while ((end   = a.index_of(delim, start)) != -1) {
+					result   += a.substr(start, end - start);
+					start     = end + delim_len;
+				}
+				result       += a.substr(start);
 			} else
-				result += std::string("");
+				result       += str();
+			///
 			return result;
 		}
 
-		array<str> split(const char *delim) const {
-			return split(str(delim));
-		}
-    
-		array<str> split() const {
+		array<str> split(const char *delim) const { return split(str(delim)); }
+		
+		// color we like: "#45a3dd"
+
+		array<str> split() {
 			array<str> result;
-			str chars = "";
-			for (const char &c: ref()) {
+			str        chars;
+			///
+			for (char &c: *this) {
 				bool is_ws = isspace(c) || c == ',';
 				if (is_ws) {
 					if (chars) {
@@ -2181,18 +2331,40 @@ export {
 				} else
 					chars += c;
 			}
+			///
 			if (chars || !result)
 				result += chars;
+			///
 			return result;
 		}
 
-		int index_of(const char *f) const {
-			std::string::size_type loc = ref().find(f, 0);
-			return (loc != std::string::npos) ? int(loc) : -1;
-		}
-    
-		int index_of(str s)     const { return index_of(s.cstr()); }
+		int index_of(str b, bool rev = false) const {
+			if (!b.mem || b.mem->data.count <= 1) return  0; /// empty string permiates. its true.
+			if (!  mem ||   mem->data.count <= 1) return -1;
 
+			char*  ap =   data();
+			char*  bp = b.data();
+			int    ac = int(  mem->data.count);
+			int    bc = int(b.mem->data.count);
+			
+			/// dont even try if b is larger
+			if (bc > ac) return -1;
+
+			/// search for b, reverse or forward dir
+			if (rev) {
+				for (int index = ac - bc; index >= 0; index--) {
+					if (strncmp(&ap[index], bp, bc) == 0)
+						return index;
+				}
+			} else {
+				for (int index = 0; index <= bc - ac; index++)
+					if (strncmp(&ap[index], bp, bc) == 0)
+						return index;
+			}
+			
+			/// we aint found ****. [/combs]
+			return -1;
+		}
 
 		int index_of(MatchType ct, const char *mp = null) const {
 			typedef lambda<bool(const char &)> Fn;
@@ -2203,23 +2375,27 @@ export {
 			if (ct == CIString) {
 				size_t sz = size();
 				mp0       = new char[sz + 1];
-				memcpy(mp0, cstr(), sz);
+				memcpy(mp0, data(), sz);
 				mp0[sz]   = 0;
 			}
 			auto   test = [&](const char& c) -> bool { return  false; };
 			auto f_test = lambda<bool(const char&)>(test);
 
-			/*auto m = Map{
+			/*
+				
+			auto m = Map{
 				{ Alpha,     [&](const char &c) -> bool { return  isalpha (c);            }},
 				{ Numeric,   [&](const char &c) -> bool { return  isdigit (c);            }},
 				{ WS,        [&](const char &c) -> bool { return  isspace (c);            }}, // lambda must used copy-constructed syntax
 				{ Printable, [&](const char &c) -> bool { return !isspace (c);            }},
 				{ String,    [&](const char &c) -> bool { return  strcmp  (&c, mp0) == 0; }},
 				{ CIString,  [&](const char &c) -> bool { return  strcmp  (&c, mp0) == 0; }}
-			};*/
+			};
+
+			*/
 			Fn zz;
 			Fn& fn = zz;// m[ct];
-			for (const char c:ref()) {
+			for (char &c:(str&)*this) {
 				if (fn(c))
 					return index;
 				index++;
@@ -2230,75 +2406,71 @@ export {
 			return -1;
 		}
 
-
-		int index_icase(const char* f) const {
-			const std::string fs = f;
-			auto& s = ref();
-			auto it = std::search(s.begin(), s.end(), fs.begin(), fs.end(),
-				[](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); });
-			return int((it == s.end()) ? -1 : it - s.begin());
-		}
-
-		int64_t integer() const {
-			auto &s = ref();
-			const char *c = s.c_str();
+		int64_t integer_value() const {
+			const char *c = data();
 			while (isalpha(*c))
 				c++;
-			return s.length() ? int64_t(strtol(c, null, 10)) : int64_t(0);
+			return len() ? int64_t(strtol(c, null, 10)) : int64_t(0);
 		}
 
-		real real() const {
-			auto &s = ref();
-			const char *c = s.c_str();
-			while (isalpha(*c))
+		real real_value() const {
+			char *c = data();
+			while (isalpha((const char)*c))
 				c++;
 			return strtod(c, null);
 		}
 
 		bool has_prefix(str i) const {
-			auto    &s = ref();
-			size_t isz = i.size();
-			size_t  sz =   size();
-			return sz >= isz ? strncmp(s.c_str(), i.cstr(), isz) == 0 : false;
+			char    *s = data();
+			size_t isz = i.byte_len();
+			size_t  sz =   byte_len();
+			return  sz >= isz ? strncmp(s, i.data(), isz) == 0 : false;
 		}
 
 		bool numeric() const {
-			auto &s = ref();
-			return s != "" && (s[0] == '-' || isdigit(s[0]));
+			char *a = data();
+			return a != "" && (a[0] == '-' || isdigit(*a));
 		}
     
 		/// wildcard match
-		bool matches(str pattern) const {
-			auto &s = ref();
-			lambda<bool(char *, char *)> s_cmp; // well this doesnt work AT toll. i will try
-			///
-			s_cmp = [&](char *str, char *pat) -> bool {
-				if (!*pat)
-					return true;
-				if (*pat == '*')
-					return (*str && s_cmp(str + 1, pat)) ? true : s_cmp(str, pat + 1);
-				return (*pat == *str) ? s_cmp(str + 1, pat + 1) : false;
+		bool matches(str patt) const {
+			lambda<bool(char*, char*)> fn;
+			str&  a = (str &)*this;
+			str&  b = patt;
+			     fn = [&](char* s, char* p) -> bool {
+				 return (p && *p == '*') ? ((*s && fn(&s[1], &p[0])) || fn(&s[0], &p[1])) :
+										    (!p || (*p == *s         && fn(&s[1], &p[1])));
 			};
-			///
-			for (char *str = (char *)s.c_str(), *pat = (char *)pattern.cstr(); *str != 0; str++)
-				if (s_cmp(str, pat))
+			
+			for (char *ap = a.data(), *bp = b.data(); *ap != 0; ap++)
+				if (fn(ap, bp))
 					return true;
-			///
+
 			return false;
 		}
 
 		str trim() const {
-			auto       &s = ref();
-			auto   start  = s.begin();
-			while (start != s.end() && std::isspace(*start))
-				   start++;
-			auto end = s.end();
-			do { end--; } while (std::distance(start, end) > 0 && std::isspace(*end));
-			return std::string(start, end + 1);
+			char*  s = data();
+			size_t c = byte_len();
+			size_t h = 0;
+			size_t t = 0;
+
+			/// trim head
+			while (isspace(s[h]))
+				h++;
+
+			/// trim tail
+			while (isspace(s[c - 1 - t]) && (c - t) > h)
+				t++;
+
+			/// leave body
+			return str(&s[h], c - (h + t));
 		}
 	};
 
-	static inline str operator+(const char *cstr, str rhs) { return str(cstr) + rhs; }
+	inline str operator+(const char *cstr, str rhs) {
+		return str(cstr) + rhs;
+	}
 
 	// ref std::string in a Memory -> str resolution down here.
 
@@ -2318,19 +2490,6 @@ export {
 
 	typedef array<Symbol> Symbols;
 	typedef array<str>    Strings;
-
-	// it would be useful to put this in the Meta
-	namespace std {
-		template<> struct hash<str> {
-			size_t operator()(str const& s) const { return hash<std::string>()(std::string(s)); }
-		};
-	}
-
-	namespace std {
-		template<> struct hash<path_t> {
-			size_t operator()(path_t const& p) const { return hash<std::string>()(p.string()); }
-		};
-	}
 //};
 
 //export module map;
@@ -2350,8 +2509,7 @@ export {
 	
 //export module map;
 //export {
-	// no io inheritence; phasing it out. the M structs can do the rest.
-	// this is a reasonable reduction of map to be simplified by access to shared type- hash functor
+
 	template <typename K, typename V>
 	struct pairs {
 		typedef std::vector<pair<K,V>> vpairs;
@@ -2445,21 +2603,17 @@ export {
 		}
 	};
 
-
 	template <typename>
 	struct is_map_wat : std::false_type {};
 
 	template <typename K, typename V>
 	struct is_map_wat<pairs<K, V>> : std::true_type {};
 
-
-
 	template <typename V> using map = pairs<Shared, V>;
-
-	//template <typename V>			  struct is_map   <map     <V>> : std::true_type { };
-	
-	
+  //template <typename V>			  struct is_map   <map     <V>> : std::true_type { };
 	template <typename V>			  struct is_array <array   <V>> : std::true_type { };
+
+	typedef   map<Shared>       Map;
 ///}
 
 /// ---------------------------------------------------------------------------
@@ -2478,8 +2632,10 @@ export {
 		~dir() { chdir(prev.string().c_str()); }
 	};
 
-	/// var doesnt use path, better to define that one first.
 	struct Path {
+	protected:
+		Path(std::filesystem::path p) : p(p) { }
+	public:
 		typedef lambda<void(Path)> Fn;
 
 		enum Flags {
@@ -2489,88 +2645,113 @@ export {
 			UseGitIgnores
 		};
 
-		path_t p;
+		sh<fs::path> p;
 
-		str               stem() const { return p.stem().string(); }
-		static Path        cwd()       { return fs::current_path(); }
-		bool operator==(Path& b) const { return p == b.p; }
-		bool operator!=(Path& b) const { return p != b.p; }
-
-		Path(fs::directory_entry ent) : p(ent.path()) { }
+		str               stem() const { return p ? str(p->stem().string()) : str(null); }
+		static Path        cwd()       { return str(fs::current_path().string()); }
+		bool operator==(Path& b) const { return (!p && !b.p) || (p && p == b.p); }
+		bool operator!=(Path& b) const { return !(operator==(b)); }
 
 		Path(std::nullptr_t n = null) { }
-		Path(cchar_t*       p) : p(p) { }
-		Path(path_t         p) : p(p) { }
-		Path(str            s) : p(s) { }
+		Path(cchar_t*			  cs) { p = fs::path(str(cs)); }
+		Path(str				   s) { fs::path fp = s; p = fp; }
+		Path(fs::directory_entry ent) { p = ent.path(); }
 
-		cchar_t*  cstr()  const { return    (cchar_t*)p.c_str(); }
-		str        ext()        { return p.extension().string(); }
-		Path      file()        { return fs::is_regular_file(p) ? Path(p) : Path(null); }
+		Path &operator=(str s) {
+			p = std::filesystem::path(std::string(s));
+			return *this;
+		}
+
+		Path& operator=(std::filesystem::path path) {
+			p = path;
+			return *this;
+		}
+
+		str read_file() {
+			if (!p || !fs::is_regular_file(*p))
+				return null;
+
+			fs::path& f = *p;
+			std::ifstream fs;
+			fs.open(f);
+
+			std::ostringstream sstr;
+			sstr << fs.rdbuf();
+			fs.close();
+
+			return str(sstr.str());
+		}
+
+		cchar_t*  cstr() const { return (cchar_t*)(p ? p->c_str() : null); }
+		str        ext()       { return p->extension().string(); }
+		Path      file()       { return (p && fs::is_regular_file(*p)) ? Path(p) : Path(null); }
 
 		bool       copy(Path to) const {
+			assert(p);
 			/// no recursive implementation at this point
 			assert(is_file() && exists());
 			if (!to.exists())
 				(to.has_filename() ? to.remove_filename() : to).make_dir();
 			std::error_code ec;
-			fs::copy(p, to.is_dir() ? to / p.filename() : to, ec);
+
+			/// this silly conversion only happens here hopefully
+			fs::copy(*p, *(to.is_dir() ? to / Path(str(p->filename().string())) : to).p, ec);
 			return ec.value() == 0;
 		}
 
 		Path link(Path alias) const {
+			if (!p || !alias.p)
+				return null;
+
 			std::error_code ec;
-			fs::create_symlink(p, alias, ec);
+			if (is_dir()) {
+				fs::create_directory_symlink(p, alias.p);
+			} else {
+				fs::create_symlink(p, alias.p, ec);
+			}
 			return alias.exists() ? alias : null;
 		}
 
 		bool make_dir() const {
 			std::error_code ec;
-			return fs::create_directories(p, ec);
+			return p ? fs::create_directories(*p, ec) : false;
 		}
 
-		/// no mutants allowed here.
-		Path remove_filename()       { return p.remove_filename(); }
-		bool    has_filename() const { return p.has_filename(); }
-		Path            link() const { return fs::is_symlink(p) ? Path(p) : Path(null); }
-		operator        bool() const { return p.string().length() > 0; }
-		operator      path_t() const { return p; }
-		operator         str() const { return p.string(); }
+		/// no mutants allowed
+		Path remove_filename()       { return  p ? Path(p->remove_filename()) : null;      }
+		bool    has_filename() const { return  p ? p->has_filename()    : false;		   }
+		Path            link() const { return (p && fs::is_symlink(*p)) ? Path(*p) : null; }
+		operator        bool() const { return (p && p->string().length() > 0);			   }
+		operator         str() const { return (p ? str(p->string()) : str(null));	       }
 
-		static Path uid(Path base) {
-			auto rand = lambda<str(size_t)>( [](size_t i) { return Rand::uniform('a', 'z'); } );
-			Path path = null;
-			do {
-				path  = str::fill(6, rand);
-			}
-			while ((base / path).exists());
-			return path;
+		static Path uid(Path b) {
+			auto rand = lambda<str(idx)>([](idx i) -> str { return Rand::uniform('a', 'z'); });
+			Path    p = null;
+			do    { p = Path(str::fill(6, rand)); }
+			while ((b / p).exists());
+			return  p;
 		}
 
-		bool remove_all() const { std::error_code ec;
-			return fs::remove_all(p, ec);
-		}
-
-		bool     remove() const { std::error_code ec;
-			return fs::remove(p,     ec);
-		}
-
+		bool remove_all() const { std::error_code ec; return fs::remove_all(p, ec); }
+		bool     remove() const { std::error_code ec; return fs::remove    (p, ec); }
 		bool  is_hidden() const {
-			std::string st = p.stem().string();
+			std::string st = p->stem().string();
 			return st.length() > 0 && st[0] == '.';
 		}
 
-		bool  exists()                    const { return  fs::         exists(p); }
-		bool  is_dir()                    const { return  fs::   is_directory(p); }
-		bool is_file()                    const { return !fs::   is_directory(p) && 
-														  fs::is_regular_file(p); }
-		Path operator / (cchar_t*      s) const { return Path(p / s); }
-		Path operator / (const path_t& s) const { return Path(p / s); }
-	  //Path operator / (const stsr    &s)       { return Path(p / path_t(s));   }
-		Path relative(Path from)				{ return fs::relative(p, from.p); }
+		bool  exists() const { return  fs::      exists(*p); }
+		bool  is_dir() const { return  fs::is_directory(*p); }
+		bool is_file() const { return !fs::is_directory(*p) && fs::is_regular_file(*p); }
+
+		Path operator / (cchar_t*   s) const { return Path(p / Path(str(s)));   }
+		Path operator / (const str& s) const { return Path(p / Path(std::filesystem::path(s))); }
+		Path operator / (Path       s) const { return Path(p / s); }
+
+		Path relative(Path from)			 { return fs::relative(*p, *from.p); }
 
 		int64_t modified_at() const {
 			using namespace std::chrono_literals;
-			std::string ps = p.string();
+			std::string ps = p->string();
 			auto        wt = fs::last_write_time(p);
 			const auto  ms = wt.time_since_epoch().count(); // need a defined offset. 
 			return int64_t(ms);
@@ -2578,67 +2759,71 @@ export {
 
 		bool read(size_t bs, lambda<void(const char*, size_t)> fn) {
 			try {
-				/// this should be independent of any io caching; it should work down to a second
 				std::error_code ec;
 				size_t rsize = fs::file_size(p, ec);
 				/// no exceptions
 				if (!ec)
 					return false;
-				///
-				std::ifstream f(p);
+				std::ifstream f(*p);
 				char* buf = new char[bs];
 				for (size_t i = 0, n = (rsize / bs) + (rsize % bs != 0); i < n; i++) {
 					size_t sz = i == (n - 1) ? rsize - (rsize / bs * bs) : bs;
 					fn((const char*)buf, sz);
 				}
 				delete[] buf;
-			}
-			catch (std::ofstream::failure e) {
-				std::cerr << "read failure on resource: " << p.string();
+
+			} catch (std::ofstream::failure e) {
+				std::cerr << "read failure: " << p->string();
 			}
 			return true;
 		}
 
-		bool write(array<uint8_t> bytes) {
+		bool write(vec<uint8_t> bytes) {
 			try {
 				size_t        sz = bytes.size();
-				std::ofstream f(p, std::ios::out | std::ios::binary);
+				std::ofstream f(*p, std::ios::out | std::ios::binary);
+				if (sz)
+					f.write((const char*)bytes.data(), sz);
+
+			} catch (std::ofstream::failure e) {
+				std::cerr << "read failure on resource: " << p->string() << std::endl;
+			}
+			return true;
+		}
+
+		bool append(vec<uint8_t> bytes) {
+			try {
+				size_t        sz = bytes.size();
+				std::ofstream f(*p, std::ios::out | std::ios::binary | std::ios::app);
 				if (sz)
 					f.write((const char*)bytes.data(), sz);
 			}
 			catch (std::ofstream::failure e) {
-				std::cerr << "read failure on resource: " << p.string() << std::endl;
+				std::cerr << "read failure on resource: " << p->string() << std::endl;
 			}
 			return true;
 		}
 
-		bool append(array<uint8_t> bytes) {
-			try {
-				size_t        sz = bytes.size();
-				std::ofstream f(p, std::ios::out | std::ios::binary | std::ios::app);
-				if (sz)
-					f.write((const char*)bytes.data(), sz);
-			}
-			catch (std::ofstream::failure e) {
-				std::cerr << "read failure on resource: " << p.string() << std::endl;
-			}
-			return true;
-		}
-
-		bool same_as(Path b) const { std::error_code ec; return fs::equivalent(p, b, ec); }
+		bool same_as(Path b) const { std::error_code ec; return fs::equivalent(p, b.p, ec); }
 
 		void resources(array<str> exts, FlagsOf<Flags> flags, Fn fn) {
 			bool use_gitignore	= flags[UseGitIgnores];
 			bool recursive		= flags[Recursion];
 			bool no_hidden		= flags[NoHidden];
-			auto ignore			= flags[UseGitIgnores] ? str::read_file(p / ".gitignore").split("\n") : array<str>();
+
+			auto aa = str::read_file(p / ".gitignore").split("\n");
+
+			auto ignore			= flags[UseGitIgnores] ?
+				aa : array<str>();
 
 			lambda<void(Path)> res;
 			
 			pairs<Path, bool> fetched_dir; // this is temp and map needs a hash table pronto
-			path_t parent		= p; /// parent relative to the git-ignore index; there may be multiple of these things.
+			fs::path parent		= *p; /// parent relative to the git-ignore index; there may be multiple of these things.
+			fs::path& fsp		= *p;
+			
 			///
-			res = [&](Path p) {
+			res = [&](Path path) {
 				auto fn_filter = [&](Path p) -> bool {
 					str      ext = p.ext();
 					bool proceed = false;
@@ -2652,10 +2837,10 @@ export {
 					/// proceed if proceeding, and either not using git ignore,
 					/// or the file passes the git ignore collection of patterns
 					if (proceed && use_gitignore) {
-						Path      rel = p.relative(parent);
-						str      srel = rel;
+						Path   rel = p.relative(parent); // original parent, not resource parent
+						str   srel = rel;
 						///
-						for (auto& i : ignore)
+						for (auto& i: ignore)
 							if (i && srel.has_prefix(i)) {
 								proceed = false;
 								break;
@@ -2673,14 +2858,15 @@ export {
 					}
 					return false;
 				};
-				///
-				if (p.is_dir()) {
-					if (!no_hidden || !p.is_hidden())
-						for (Path p : fs::directory_iterator(p)) {
-							Path link = p.link();
-							if (link)
+
+				/// directory of resources
+				if (path.is_dir()) {
+					if (!no_hidden || !path.is_hidden())
+						for (Path p: fs::directory_iterator(path.p)) {
+							Path li = p.link();
+							if (li)
 								continue;
-							Path pp = link ? link : p;
+							Path pp = li ? li : p;
 							if (recursive && pp.is_dir()) {
 								if (fetched_dir.count(pp) > 0)
 									return;
@@ -2691,16 +2877,16 @@ export {
 							if (pp.is_file())
 								fn_filter(pp);
 						}
-				}
-				else if (p.exists())
-					fn_filter(p);
+				} /// single resource
+				else if (path.exists())
+					fn_filter(path);
 			};
 			return res(p);
 		}
 
-		array<Path> matching(array<str> exts) {
+		array<Path> matching(vec<str> exts) {
 			auto ret = array<Path>();
-			resources(exts, {}, [&](Path p) { ret += p; });
+			resources(exts, { }, [&](Path p) { ret += p; });
 			return ret;
 		}
 	};
@@ -2724,12 +2910,11 @@ export {
 
 		///
 		Temp(Path  base = Path("/tmp")) {
-			path_t p_base = base;
 			assert(base.exists());
 			///
 			Path   rand = Path::uid(base);
 			path        = base / rand;
-			fs::create_directory(path);
+			assert(path.make_dir()); // should return false if it cannot make it
 		}
 
 		///
@@ -2738,15 +2923,14 @@ export {
 		///
 		inline void operator += (SymLink sym) {
 			if (sym.path.is_dir())
-				fs::create_directory_symlink(sym.path, sym.alias);
+				sym.path.link(sym.alias);
 			else if (sym.path.exists())
 				assert(false);
 		}
 
 		///
 		Path operator / (cchar_t*      s) { return path / s; }
-		Path operator / (const path_t& s) { return path / s; }
-		Path operator / (const str&    s) { return path / path_t(s); }
+		Path operator / (const str&    s) { return path / Path(s); }
 	};
 //};
 
@@ -2785,7 +2969,7 @@ export {
 		static sh<uint8_t> encode(cchar_t* data, size_t len) {
 			auto        m = b64_encoder();
 			size_t  p_len = ((len + 2) / 3) * 4;
-			auto  encoded = sh<uint8_t>::valloc(p_len + 1);
+			auto  encoded = sh<uint8_t>::manage(p_len + 1);
 			uint8_t*    e = encoded.pointer<uint8_t>();
 			size_t      b = 0;
 			for (size_t i = 0; i < len; i += 3) {
@@ -2806,7 +2990,7 @@ export {
 			/// --------------------------------------
 			auto          m = base64::b64_decoder();
 			*alloc_sz       = b64_len / 4 * 3;
-			sh<uint8_t> out = sh<uint8_t>::valloc(*alloc_sz + 1);
+			sh<uint8_t> out = sh<uint8_t>::manage(*alloc_sz + 1);
 			uint8_t*      o = out.pointer<uint8_t>();
 			size_t        n = 0;
 			size_t        e = 0;
@@ -2860,7 +3044,7 @@ export {
 		str     s; // attach!
 
 		var(nullptr_t n = null) { }
-		var(Type *t) : d(Memory::valloc(t, 1)) { }
+		var(Type *t) : d(Memory::manage(t, 1)) { }
 
 		template <typename T>
 		var(T v = null) {
@@ -2875,8 +3059,10 @@ export {
 				// null / default case
 				d = null;
 			} else if constexpr(is_array<T>()) {
+				// is_array<T>
 				d = v.a;
 			} else if constexpr(is_map<T>()) {
+				// is_map<T> .. if its a map it should have a method to return the array as a shared object?
 				d = v.arr;
 			} else {
 				// set to data case
@@ -2911,15 +3097,15 @@ export {
 		}
 
 		var &operator[](str name) {
-			if (d.type() == Type::Map) {
+			if (d.inherits<Map>()) {
 				auto re = d.reorient<map<var>>({ Trait::TMap });
 				return re[name];
 			}
 			return vconst_for(0);
 		}
 
-		var &operator[](size_t index) {
-			if (d.type() == Type::Array) {
+		var &operator[](idx index) {
+			if (d.inherits<Array>()) {
 				/// trait-enabled re-orientation
 				//array<var> &c = d.reorient<array<var>>({ Trait::TArray });
 				//return c[index];
@@ -2927,42 +3113,28 @@ export {
 			return vconst_for(0);
 		}
 
-		/// 
-		static        str format(str t, array<var> &p) {
-			for (size_t k = 0; k < p.size(); k++) {
-				// needs a lambda handle for prefix processing, iterate through string finding these { expr }
-				// this is terrible currently, theres no protocol its just a simple replacer.
-				str  p0 = str("{") + str(std::to_string(k)) + str("}");
-				str  p1 = str(p[k]);
-				t = t.replace(p0, p1);
-			}
-			return t;
-		}
-
-		int operator==(var& v) { return 0; }
-		int operator!=(var& v)  { return 0; }
-		operator       float () { return d.real   <  float >(); }
-		operator      double () { return d.real   < double >(); }
-		operator      int8_t () { return d.integer<  int8_t>(); }
-		operator     uint8_t () { return d.integer< uint8_t>(); }
-		operator     int16_t () { return d.integer< int16_t>(); }
-		operator    uint16_t () { return d.integer<uint16_t>(); }
-		operator     int32_t () { return d.integer< int32_t>(); }
-		operator    uint32_t () { return d.integer<uint32_t>(); }
-		operator     int64_t () { return d.integer< int64_t>(); }
-		operator    uint64_t () { return d.integer<uint64_t>(); }
-		operator         str () { Type*  t = d.type(); return (t == Type::Str) ? str(*d.string()) : str(*(*t->string)(d)); }
+		int operator==(var&  v) { return 0; }
+		int operator!=(var&  v) { return 0; }
+		operator       float () { return d.real_value   <  float >(); }
+		operator      double () { return d.real_value   < double >(); }
+		operator      int8_t () { return d.integer_value<  int8_t>(); }
+		operator     uint8_t () { return d.integer_value< uint8_t>(); }
+		operator     int16_t () { return d.integer_value< int16_t>(); }
+		operator    uint16_t () { return d.integer_value<uint16_t>(); }
+		operator     int32_t () { return d.integer_value< int32_t>(); }
+		operator    uint32_t () { return d.integer_value<uint32_t>(); }
+		operator     int64_t () { return d.integer_value< int64_t>(); }
+		operator    uint64_t () { return d.integer_value<uint64_t>(); }
+		operator         str () { return d.inherits<str>() ? str(*d.string()) : str(*(*d.type()->string)(d)); }
 		operator      Shared&() { return d; }
 	};
 
 	void test() {
-		
 		map<var> m = {};
 		m.size();
 		//m["test"] = null;
 		map<var>& cc91 = (map<var>  &) * (map<var>*)0;
 		cc91.size();
-
 	}
 
 	///
@@ -3007,26 +3179,6 @@ export {
 		}
 	};
 
-	/// 
-	struct Event {
-		Shared result; // value & type
-		Period period;
-		///
-		Event(nullptr_t     n = null) { }
-		Event(bool success, Period p) : result(Memory::copy(success, Id<Event>())), period(p) { }
-		Event(const         Event& r) : result(r.result), period(r.period) { }
-		///
-		Event &operator=(const Event& r) {
-			if (this != &r) {
-				result = r.result;
-				period = r.period;
-			}
-			return *this;
-		}
-		///
-		operator bool() const { return result; }
-	};
-
 	/// better json/bin interface first.
 	struct json {
 		// load
@@ -3034,7 +3186,7 @@ export {
 			return null;
 		};
 
-		static Event save() {
+		static bool save() {
 			return {};
 		};
 	};
@@ -3055,8 +3207,8 @@ export {
 		Logger(FnPrint printer = null) : printer(printer) { }
 		///
 	protected:
-		void intern(str& t, array<var>& a, bool err) {
-			t = var::format(t, a);
+		void intern(str& t, Array& a, bool err) { /// be nice to support additional params enclosed
+			t = t.format(a);
 			if (printer != null)
 				printer(t);
 			else {
@@ -3068,33 +3220,33 @@ export {
 	public:
 
 		/// print always prints
-		inline void print(str t, array<var> a = {}) { intern(t, a, false); }
+		inline void print(str t, Array a = {}) { intern(t, a, false); }
 
 		/// log categorically as error; do not quit
-		inline void error(str t, array<var> a = {}) { intern(t, a, true); }
+		inline void error(str t, Array a = {}) { intern(t, a, true); }
 
 		/// log when debugging or LogType:Always, or we are adapting our own logger
-		inline void log(str t, array<var> a = {}) {
+		inline void log(str t, Array a = {}) {
 			if (L == Always || printer || is_debug())
 				intern(t, a, false);
 		}
 
 		/// assertion test with log out upon error
-		inline void assertion(bool a0, str t, array<var> a = {}) {
+		inline void assertion(bool a0, str t, Array a = {}) {
 			if (!a0) {
 				intern(t, a, false); /// todo: ion:dx environment
 				assert(a0);
 			}
 		}
 
-		void _print(str t, array<var>& a, bool error) {
-			t = var::format(t, a);
+		void _print(str t, Array& a, bool error) {
+			t = t.format(a);
 			auto& out = error ? std::cout : std::cerr;
 			out << str(t) << std::endl << std::flush;
 		}
 
 		/// log error, and quit
-		inline void fault(str t, array<var> a = {}) {
+		inline void fault(str t, Array a = {}) {
 			_print(t, a, true);
 			assert(false);
 			exit(1);
@@ -3102,7 +3254,7 @@ export {
 
 		/// prompt for any type of data
 		template <typename T>
-		inline T prompt(str t, array<var> a = {}) {
+		inline T prompt(str t, Array a = {}) {
 			_print(t, a, false);
 			return input<T>();
 		}
@@ -3174,6 +3326,8 @@ export {
 	typedef map<var>  Schema;
 	typedef map<var>  SMap;
 	typedef array<var> Table;
+	
+	/// vars present high level control for data binding usage
 	typedef map<var>   ModelMap;
 
 	int abc() {
@@ -3210,10 +3364,6 @@ export {
 		}
 	};
 
-	struct Ident   : Remote {
-		   Ident() : Remote(null) { }
-	};
-
 	struct node;
 	struct Raw {
 		std::vector<std::string> fields;
@@ -3247,9 +3397,12 @@ export {
 
 //}
 
+	Shared& Args::operator[](Shared lookup) {
+		Map& m = rise<Map>();
+		Shared& sh = m[lookup];
 
-
-
+		return lookup.inherits<char>() ? rise<Map>()[lookup] : rise<Array>()[int64_t(lookup)];
+	}
 
 
 
@@ -3292,6 +3445,18 @@ export {
 			return null;
 		}
 	};
+
+	/*
+	// define a good one, but dont over-polish.
+	struct Test :M<Test> {
+		// yeah none... i dunno how to debug either LOL.
+		Test(var &args) : members({
+			{ "member",   int64_t(1) },
+			{ "member2",      str(1.02) },
+			{  }
+		})
+	};*/
+
 
 	template <typename T>
 	const T nan() { return std::numeric_limits<T>::quiet_NaN(); };
@@ -3342,15 +3507,15 @@ export {
 			int  a = s.index_of(str::Alpha);
 			if (i >= 0 || a >= 0) {
 				if (a == -1) {
-					value = s.substr(i).trim().real();
+					value = s.substr(i).trim().real_value();
 				} else {
 					if (a > i) {
 						if (i >= 0)
-							value = s.substr(0, a).trim().real();
-						type  = s.substr(a).trim().to_lower();
+							value = s.substr(0, a).trim().real_value();
+						type  = s.substr(a).trim().lowercase();
 					} else {
-						type  = s.substr(0, a).trim().to_lower();
-						value = s.substr(a).trim().real();
+						type  = s.substr(0, a).trim().lowercase();
+						value = s.substr(a).trim().real_value();
 					}
 				}
 			}
@@ -3464,29 +3629,22 @@ struct Member {
 
 	lambda<void(Member*, Member*)> copy_fn;
 
-	var& nil() {
-		static var n = var(null);
-		return n;
-	}
+	var& nil() { return default_of<var>(); }
 
-	///
 	var*     serialized = null;
-	Type     type       = Type::Undefined;
+	Type    *type       =  Type::Undefined;
 	MType    member     = MType::Undefined;
 	str      name       = null;
 	Shared   shared;    /// having a shared arg might be useful too.
 	Shared   arg;       /// simply a node * pass-through for the NMember case
-
-	///
 	size_t   cache      = 0;
 	size_t   peer_cache = 0xffffffff;
 	Member*  bound_to   = null;
 
 	virtual ~Member() { }
 
-	///
 	virtual void*            ptr() { return null; }
-	virtual Shared& shared_value() { static Shared s_null; return s_null; }
+	virtual Shared& shared_value() { return default_of<Shared>(); }
 	virtual bool      state_bool() {
 		assert(false);
 		return bool(false);
@@ -3503,11 +3661,14 @@ struct Member {
 
 	static std::unordered_map<Type, Lambdas> lambdas_map;
 
-	///
 	virtual void operator= (const str& s) {
-		var v = (str&)s;
 		if (lambdas && lambdas->var_set)
-			lambdas->var_set(*this, v);
+			lambdas->var_set((Shared &)*this, s.rise<var>());
+		
+		// todo: overridde in str, checks to make sure the
+		// type handles string types generally, and
+		// that might mean utf8 handling, not just
+		// that its a char model; so its checking traits
 	}
 	void         operator= (Member& v);
 	virtual bool operator==(Member& m) { return bound_to == &m && peer_cache == m.peer_cache; }
@@ -3631,8 +3792,8 @@ struct Member {
 
 //export import ex;
 //export {
-	/// basic enums type needs to be enumerable by enum keyword, serializable, and introspectable
-	struct EnumData:io {
+	/// basic enums type needs to be enumerable by enum keyword
+	struct EnumData {
 		Type        type;
 		int         kind;
 		EnumData(Type type, int kind): type(type), kind(kind) { }
@@ -3699,13 +3860,13 @@ INITIALIZER(initialize) {
 	{
 		{ 0,  "undefined" },
 		{ 1,  "i8"        },
-		{ 2,  "ui8"       },
+		{ 2,  "u8"       },
 		{ 3,  "i16"       },
 		{ 4,  "ui16"      },
 		{ 5,  "i32"       },
-		{ 6,  "ui32"      },
+		{ 6,  "u32"      },
 		{ 7,  "i64"       },
-		{ 8,  "ui64"      },
+		{ 8,  "u64"      },
 		{ 9,  "f32"		  },
 		{ 10, "f64"       },
 		{ 11, "Bool"      },
@@ -3720,37 +3881,38 @@ INITIALIZER(initialize) {
 		{ 20, "Any"       },
 		{ 21, "Meta"      }
 	};
-
+	
 	/// initialize type primitives
 	size_t p                   = 0;
 	const size_t p_count	   = sizeof(decls) / sizeof(Type::Decl);
 	Type::primitives		   = (const Type **)calloc(sizeof(Type), p_count);
 
 	/// initialize all of the consts, set the pointer to each in primitives.
-	*(Type *)&Type::Undefined  = Type::bootstrap<void>        (decls[0]);  Type::primitives[p++] = &Type::Undefined;
-	*(Type *)&Type::  i8       = Type::bootstrap<int8_t>      (decls[1]);  Type::primitives[p++] = &Type::i8;
-	*(Type *)&Type:: ui8	   = Type::bootstrap<uint8_t>     (decls[2]);  Type::primitives[p++] = &Type::ui8;
-	*(Type *)&Type:: i16       = Type::bootstrap<int16_t>     (decls[3]);  Type::primitives[p++] = &Type::i16;
-	*(Type *)&Type::ui16       = Type::bootstrap<uint16_t>    (decls[4]);  Type::primitives[p++] = &Type::ui16;
-	*(Type *)&Type:: i32       = Type::bootstrap<int32_t>     (decls[5]);  Type::primitives[p++] = &Type::i32;
-	*(Type *)&Type::ui32       = Type::bootstrap<uint32_t>    (decls[6]);  Type::primitives[p++] = &Type::ui32;
-	*(Type *)&Type:: i64       = Type::bootstrap<int64_t>     (decls[7]);  Type::primitives[p++] = &Type::i64;
-	*(Type *)&Type::ui64       = Type::bootstrap<uint64_t>    (decls[8]);  Type::primitives[p++] = &Type::ui64;
-	*(Type *)&Type:: f32       = Type::bootstrap<float  >     (decls[9]);  Type::primitives[p++] = &Type::f32;
-	*(Type *)&Type:: f64       = Type::bootstrap<double >     (decls[10]); Type::primitives[p++] = &Type::f64;
-	*(Type *)&Type::Bool	   = Type::bootstrap<Bool>        (decls[11]); Type::primitives[p++] = &Type::Bool;
-	*(Type *)&Type::Str		   = Type::bootstrap<str>         (decls[12]); Type::primitives[p++] = &Type::Str;
-	*(Type *)&Type::Map        = Type::bootstrap<array<var>>  (decls[13]); Type::primitives[p++] = &Type::Array;
-	*(Type *)&Type::Array	   = Type::bootstrap<map<var>>    (decls[14]); Type::primitives[p++] = &Type::Map;
-	*(Type *)&Type::Ref	       = Type::bootstrap<Ref>		  (decls[15]); Type::primitives[p++] = &Type::Ref;
-	*(Type *)&Type::Arb        = Type::bootstrap<Arb>         (decls[16]); Type::primitives[p++] = &Type::Arb;
-	*(Type *)&Type::Node	   = Type::bootstrap<Node>		  (decls[17]); Type::primitives[p++] = &Type::Node;
+	*(Ident *)&Type::Undefined  = Type::bootstrap<void>        (decls[0]);  Type::primitives[p++] = (Type *)Type::Undefined;
+	*(Ident *)&Type:: i8        = Type::bootstrap<int8_t>      (decls[1]);  Type::primitives[p++] = (Type*)Type::i8;
+	*(Ident *)&Type:: u8	    = Type::bootstrap<uint8_t>     (decls[2]);  Type::primitives[p++] = (Type*)Type::u8;
+	*(Ident *)&Type::i16        = Type::bootstrap<int16_t>     (decls[3]);  Type::primitives[p++] = (Type*)Type::i16;
+	*(Ident *)&Type::u16        = Type::bootstrap<uint16_t>    (decls[4]);  Type::primitives[p++] = (Type*)Type::u16;
+	*(Ident *)&Type::i32        = Type::bootstrap<int32_t>     (decls[5]);  Type::primitives[p++] = (Type*)Type::i32;
+	*(Ident *)&Type::u32        = Type::bootstrap<uint32_t>    (decls[6]);  Type::primitives[p++] = (Type*)Type::u32;
+	*(Ident *)&Type::i64        = Type::bootstrap<int64_t>     (decls[7]);  Type::primitives[p++] = (Type*)Type::i64;
+	*(Ident *)&Type::u64        = Type::bootstrap<uint64_t>    (decls[8]);  Type::primitives[p++] = (Type*)Type::u64;
+	*(Ident *)&Type::f32        = Type::bootstrap<float  >     (decls[9]);  Type::primitives[p++] = (Type*)Type::f32;
+	*(Ident *)&Type::f64        = Type::bootstrap<double >     (decls[10]); Type::primitives[p++] = (Type*)Type::f64;
+	*(Ident *)&Type::Bool	    = Type::bootstrap<bool>        (decls[11]); Type::primitives[p++] = (Type*)Type::Bool;
+	*(Ident *)&Type::Str	    = Type::bootstrap<str>         (decls[12]); Type::primitives[p++] = (Type*)Type::Str;
+	*(Ident *)&Type::Map        = Type::bootstrap<map<var>>    (decls[13]); Type::primitives[p++] = (Type*)Type::Map;
+	*(Ident *)&Type::Array	    = Type::bootstrap<array<var>>  (decls[14]); Type::primitives[p++] = (Type*)Type::Array;
+	*(Ident *)&Type::Ref	    = Type::bootstrap<Ref>		   (decls[15]); Type::primitives[p++] = (Type*)Type::Ref;
+	*(Ident *)&Type::Arb        = Type::bootstrap<Arb>         (decls[16]); Type::primitives[p++] = (Type*)Type::Arb;
+	*(Ident *)&Type::Node	    = Type::bootstrap<Node>		   (decls[17]); Type::primitives[p++] = (Type*)Type::Node;
 
-	*(Type*)&Type::Lambda      = Type::bootstrap<lambda<var(var&)>> (decls[18]); Type::primitives[p++] = &Type::Str;
+	/// re-eval.  should probably be just Shared. tis all.
+	*(Ident*)&Type::Lambda      = Type::bootstrap<lambda<var(var&)>> (decls[18]); Type::primitives[p++] = (Type*)Type::Lambda;
 
-	*(Type*)&Type::Member	   = Type::bootstrap<Member>	  (decls[19]); Type::primitives[p++] = &Type::Member;
-	*(Type*)&Type::Any		   = Type::bootstrap<Any>		  (decls[20]); Type::primitives[p++] = &Type::Any;
-	*(Type*)&Type::Meta		   = Type::bootstrap<Meta>		  (decls[21]); Type::primitives[p++] = &Type::Meta;
+	*(Ident*)&Type::Member	    = Type::bootstrap<Member>	  (decls[19]); Type::primitives[p++] = (Type*)Type::Member;
+	*(Ident*)&Type::Any		    = Type::bootstrap<Any>		  (decls[20]); Type::primitives[p++] = (Type*)Type::Any;
+	*(Ident*)&Type::Meta	    = Type::bootstrap<Meta>		  (decls[21]); Type::primitives[p++] = (Type*)Type::Meta;
 
 	assert(p == p_count); /// 22
 
@@ -3763,11 +3925,12 @@ INITIALIZER(initialize) {
 	vec2f      c = a + b + b;
 	vec2f      d = { 3, 4 };
 
-	map<bool> abc; // i think its better to have shared hashing management
+	map<bool> abc; // i think its better to have shared hash management
 
 	Shared sh = a;
 	
 	str  s = a; //
+
 	// we wanted quick access to hash compute, because map stores by Hash 
 	abc[s] = true;
 
