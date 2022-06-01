@@ -1203,15 +1203,15 @@ export {
 
 		/// 
 		operator Hash() const {
-			vec& a = *this;
-			idx	ac = 0;
-			int  m = 1234;
+			vec&  a = *this;
+			idx	acc = 0;
+			int  mp = 1234;
 			const bool ish = inherits <T, Shared>;
 			for (idx i = 0, sz = size(); i < sz; i++) {
-				ac += (ish ? Hash(a[i]).v.u64 : idx(a[i])) * m; // operate on data
-				m  *= 11;
+				acc += (ish ? Hash(a[i]).v.u64 : idx(a[i])) * mp; // operate on data (recall on Shared case)
+				mp  *= 11;
 			}
-			return {{ .f64 = ac }};
+			return {{ .f64 = acc }};
 		}
 
 		/// this is just the product of the components; it was performed in size_t prior and i dont like that.
