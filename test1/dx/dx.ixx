@@ -66,9 +66,9 @@ export {
 	template <typename> struct is_map       : std::false_type { };
 	template <typename> struct is_array     : std::false_type { };
 
-	// needs to go in 'Build', but i'm not so sure about the conversion macros
-	// 
-	//namespace env {
+	/// needs to go in 'Build', but i'm not so sure about the conversion macros
+	/// 
+	///namespace env {
 
 		///
 		struct is_apple :
@@ -99,6 +99,14 @@ export {
 
 		///
 		struct is_gpu : std::true_type { };
+
+		/// the ol' swaperoo
+		template <typename T>
+		void swap(T &a, T &b) {
+			T c = a;
+			  a = b;
+			  b = c;
+		}
 
 		///
 		struct is_debug :
@@ -162,22 +170,29 @@ export {
 		struct subs : implement_subs<T, C>::type { };
 
 	//};
-	
 
 	/// define assert fn because the macro ones are super lame
-	inline void assert(const bool b) {
+	/// -------------------------------------------------
+	inline void assert_fn(bool b, const char *location) {
 #ifndef NDEBUG
-		if (!b)
+		if (!b) {
+			printf("assertion failed at %s\n", location);
 			exit(1);
+		}
 #endif
 	}
 
+	/// -------------------------------------------------
+	#define assert(b) assert_fn(b, (const char *)__FILE__)
+
+	/// -------------------------------------------------
 #if defined(_WIN32) || defined(_WIN64)
 	#define sprintf(b, v, ...) sprintf_s(b, sizeof(b), v, __VA_ARGS__)
 #else
 	#define sprintf(v, b, ...) snprintf (v, sizeof(b), v, __VA_ARGS__)
 #endif
 
+	/// -------------------------------------------------
 	typedef int8_t	        i8;
 	typedef int16_t	        i16;
 	typedef int32_t	        i32;
@@ -192,26 +207,48 @@ export {
 	typedef const char		cchar_t; /// cchar_t replaces const char, not the pointer type but the type
 	typedef int64_t		    idx;     /// idx is just an indexing integer of 64bit. operator[] ambiguity, supporting negative npy-like syntax
 	typedef std::nullptr_t  null_t;  /// null has nothing to do with pointer
-
+	/// -------------------------------------------------
 	null_t					null = nullptr;
 	real					PI   = 3.141592653589793238462643383279502884L;
 
-	/// the rest of the int types are i or u for signed or unsigned, with their bit count.
+	/// Type-Conduit use-case; so we can express ourselves in Schema
+	struct Higgs   { };
+	struct Conduit { Higgs* boson; };
 
+	union Primitive {
+		i8	    v_i8;
+		i16     v_i16;
+		i32     v_i32;
+		i64     v_i64;
+		u8      v_u8;
+		u16     v_u16;
+		u32     v_u32;
+		u64     v_u64;
+		r32     v_r32;
+		r64     v_r64;
+		idx     v_idx;
+		Conduit v_dx;
+	};
+
+	/// the rest of the int types are i or u for signed or unsigned, with their bit count.
+	/// -------------------------------------------------
 	struct TypeOps;
 	struct Memory;
 	struct Type;
 
+	/// -------------------------------------------------
 	template <typename T>
 	inline T clamp(T va, T mn, T mx) { return va < mn ? mn : va > mx ? mx : va; }
 
+	/// -------------------------------------------------
 	template <typename T>
 	inline T min(T a, T b) { return a < b ? a : b; }
 
+	/// -------------------------------------------------
 	template <typename T>
 	inline T max(T a, T b) { return a > b ? a : b; }
 
-	/// by moving hash case to size_t we make it size_t more sizey.
+	/// by moving hash case to size_t we make it size_t more size-like.
 	struct Hash {
 		union u_value {
 			size_t   sz;  /// we're a level of abstraction in, so we can still have ye
@@ -223,42 +260,49 @@ export {
 		u_value v;
 	};
 
+	/// -------------------------------------------------
 	template <typename F>
 	using      lambda = std::function<F>; // you win again, gravity [lambdas not working atm]
-
+	
+	/// -------------------------------------------------
 	template <typename T>
 	using     initial = std::initializer_list<T>;
 
-	/// look mom, no value.  magic alias
+	/// -------------------------------------------------
 	template <typename C, typename B>
 	using     inherits = std::is_base_of<C, B>::value;
-	
 
+	/// -------------------------------------------------
 	enum Stride { Major, Minor };
 
+	/// -------------------------------------------------
 	template <typename K, typename V>
 	struct pair {
 		K key;
 		V value;
 	};
 
+	/// -------------------------------------------------
 	template <typename T>
-	struct FlagsOf {
+	struct Flags {
 		uint64_t flags = 0;
 		///
-		FlagsOf(null_t = null)      { }
-		FlagsOf(initial <T> l) {
+		Flags(null_t = null)      { }
+		Flags(initial <T> l) {
 			for (auto v : l)
 				flags |= flag_for(v);
 		}
-	  //FlagsOf(T f) : flags  (uint64_t(f)) { } // i dont think this should be used here.
-		FlagsOf(const FlagsOf<T>& ref) : flags(ref.flags) { }
+
+	    Flags(T f)				   : flags(uint64_t(f)) { } // i dont think this should be used here.
+		Flags(const Flags<T>& ref) : flags(ref.flags)   { }
 		
-		FlagsOf<T>& operator=(const FlagsOf<T>& ref) {
+		Flags<T>& operator=(const Flags<T>& ref) {
 			if (this != &ref)
 				flags = ref.flags;
 			return *this;
 		}
+		//Flags<T>(int      f) : flags(f) { }
+		//Flags<T>(uint64_t f) : flags(f) { }
 
 		uint32_t flag_for(T v) { return 1 << v;         }
 		operator        bool() { return flags != 0;     }
@@ -271,8 +315,9 @@ export {
 		// used for get
 		bool operator[]  (T v) { uint32_t f = flag_for(v); return (flags & f) == f; }
 
-		bool contain   (FlagsOf<T>& f) const { return (flags & f.flags) == f.flags; }
-		bool operator&&(FlagsOf<T>& f) const { return contain(f); }
+		bool         contain (Flags<T>& f) const { return (flags & f.flags) == f.flags; }
+		Flags<T>   operator| (Flags<T>& f) const { return (flags | f.flags); }
+		bool       operator&&(Flags<T>& f) const { return contain(f); }
 	};
 
 	void grab(Memory* m);
@@ -292,21 +337,25 @@ export {
 	struct dx;
 	struct Type;
 
-	template <typename T> T& default_of() {
+	template <typename T> T& def() {
 		static T d_value;
-		return   d_value; // useful for null token in ref context, and other uses.
+		return   d_value; /// useful for null instance in ref context, and other uses where refs are returned errors; huge asterick though and must not write to this memory, unless to make it even more nullified
 	}
 
 	struct Alloc {
 		enum AllocType { None, Arb, Manage };
-		enum Attr      { ReadOnly, Symbolic };
+		enum Attr      { ReadOnly, Symbolic, CopyOnWrite };
 
-		void*				ptr;
-		idx					count;
-		idx					reserve;
-		Type			   *type;
-		FlagsOf<Attr>		flags;
-		AllocType			alloc;
+		/// quite like this lexical pattern, in 95% cases [confirmed made up out of thin air; also good pattern]
+		typedef Flags<Attr> Flags;
+
+		void*		ptr;
+		size_t		id;	 /// field (const char* or enum) id associated to Type-bound allocation, once per dx-type
+		idx			count;
+		idx			reserve;
+		Type	   *type;
+		Flags		flags;
+		AllocType	alloc;
 
 		Alloc() : ptr(null), count(0), reserve(0), type(null), flags(null), alloc(None) { }
 
@@ -334,7 +383,7 @@ export {
 			  idx			count,
 			  idx			reserve,
 			  Type*			type,
-			  FlagsOf<Attr> flags,
+			  Flags			flags,
 			  AllocType     alloc) :
 				  ptr(ptr),
 				  count(count),
@@ -342,6 +391,9 @@ export {
 				  type(type),
 				  flags(flags),
 				  alloc(alloc) { }
+
+		template <typename T> inline T& ref(idx i) { return *((T*)ptr)[i]; }
+		template <typename T> inline T& ref()      { return * (T*)ptr;     }
 	};
 
 	/// data is based on this allocation, 
@@ -357,15 +409,13 @@ export {
 	typedef lambda<bool   (Data*)>					BooleanOp;
 	typedef lambda<Hash   (Data*)>					HashOp;
 	typedef lambda<int64_t(Data*)>					IntegerOp;
-	typedef lambda<dx*(Data*, Data*)>			AddOp;
-	typedef lambda<dx*(Data*, Data*)>			SubOp;
-	typedef lambda<dx*(Data*)>					StringOp;
+	typedef lambda<dx*    (Data*, Data*)>			AddOp;
+	typedef lambda<dx*    (Data*, Data*)>			SubOp;
+	typedef lambda<dx*    (Data*)>					StringOp;
 	typedef lambda<bool   (Data*)>					RealOp;
 	typedef lambda<int    (Data*, Data*)>			CompareOp;
 	typedef lambda<void   (Data*, void*)>			AssignOp;
   //typedef lambda<idx()>							SizeOfOp;
-
-
 
 	/// identifable by id, which can be pointer casts of any type.
 	/// the implementer would know of those.
@@ -550,20 +600,361 @@ export {
 		}
 	};
 
+	/// members on dx: user-define a static callback routine for return a Member vector in Memory form (once)
+	struct  Memory;
+	
+
+
+	/// no Memory dependency here, this is just a [optional] block-allocated list
+	
+	template <typename T>
+	struct list {
+		struct IX {
+			int    refs;
+			IX*    next;
+			IX*    prev;
+			size_t id;
+			T      data;
+		};
+
+		struct ldata {
+			IX*    ifirst;
+			IX*    ilast;
+			idx    count;
+			int    refs;
+			idx    c_pre;
+			IX*    p_pre;
+		} *d;
+
+		ldata& ref() const { return d; }
+
+		void init(size_t pre_count) {
+			size_t sz = sizeof(ldata) + pre_count * sizeof(ldata);
+			d         = (ldata*)calloc(sz, 1);
+			if (pre_count) {
+				d->c_pre  = pre_count;
+				d->p_pre  = (IX*)&d[1];
+			}
+		}
+
+		list() : d(null) { }
+		list(T v) {
+			init(0);
+			push(v);
+		}
+
+		list& operator=(const list& r) {
+			d = r.d;
+			if (d)
+				d->refs++;
+			return *this;
+		}
+
+		operator  bool() const { return d != null && d->count; }
+		bool operator!() const { return d == null || d->count == 0; }
+
+		/// compare with another list of equal size
+		bool compare(list& b, lambda<bool(T& a, T& b)> fn) const {
+			ldata&   da = ref();
+			ldata&   db = b.ref();
+			bool  match = (da.count == db.count);
+			for (IX* ai = da.ifirst, *an = null,
+				*bi     = db.ifirst, *bn = null; match && ai && bi; ai = an, bi = bn) {
+				 an     = ai->next;
+				 bn     = bi->next;
+				 match &= fn(ai->data, bi->data);
+			}
+			return match;
+		}
+
+		inline T&   first() const { return ref().ifirst->data;      }
+		inline T&    last() const { return ref().ilast->data;       }
+		inline IX* ifirst() const { return d ? ref().ifirst : null; }
+		inline IX*  ilast() const { return d ? ref().ilast  : null; }
+		inline idx  count() const { return d ? ref().count  : 0;    }
+
+		~list() {
+			ldata& d = ref();
+			while (d.ifirst) {
+				IX* n = d.ifirst->next;
+				if (--d.ifirst->refs == 0) // use atomic (later)
+					delete d.ifirst;
+				d.ifirst = n;
+			}
+		}
+
+		/// populate faster than army of super virile men
+		T& push(T& data, size_t id = 0) {
+			IX*    i;
+			ldata& d = ref();
+
+			if (d.c_pre) {
+				i       = &d.p_pre[--d.c_pre];
+				i->refs = 2;
+				i->next = null;
+				i->prev = d.ilast;
+				i->id   = id;
+				///
+				if constexpr (is_primitive<T>())
+					i->data = data;
+				else
+					new (&i->data) T(data);
+			} else
+				i = new IX{ 1, null, d.ilast, id, data };
+
+			if (d.ilast)
+				d.ilast->next = i;
+			else
+				d.ifirst = i;
+
+			d.ilast = i;
+			d.count ++;
+			return i->data;
+		}
+
+		IX* find(idx f) {
+			IX* i = null;
+			ldata& d = ref();
+			if (f < 0) {
+				i = d.ilast;
+				while (++f < 0) { i = i->prev; }
+			}
+			else {
+				i = d.ifirst;
+				while (--f > 0) { i = i->next; }
+			}
+			return i;
+		}
+
+		/// find by index (f) and call lambda (fn)
+		bool process(idx f, lambda<void(IX*)> fn) {
+			IX* i = find(f);
+			if (i) {
+				fn(i);
+				return true;
+			}
+			return false;
+		}
+
+		/// call lambda for each (fn)
+		void each(lambda<void(IX*)> fn) {
+			IX* n = null;
+			ldata& d = ref();
+
+			for (IX* i = d.ifirst; i; i = n) {
+				n = i->next;
+				fn(i);
+			}
+		}
+
+		void unlink(IX* i) {
+			ldata& d = ref();
+			if (i.prev)
+				i.prev->next = i.next;
+			else
+				d.ifirst = i.next;
+
+			if (i.next)
+				i.next->prev = i.prev;
+			else
+				d.ilast = i.prev;
+
+			if (--i->refs == 0)
+				delete i;
+
+			d.count--;
+		}
+
+		void remove(T& v) {
+			each([&](IX* i) {
+				if (i.data == v)
+					unlink(i);
+				});
+		}
+
+		void remove(idx f) {
+			process(f, [&](IX* i) {
+					unlink(i);
+				});
+		}
+
+		T& operator[](idx find) {
+			idx index = 0;
+			for (IX* i = d ? d->ifirst : null; i; i = i->next)
+				if (find == index++)
+					return i.data;
+			assert(false);
+			return def<T>();
+		}
+
+		idx operator()(T& find) {
+			idx index = 0;
+			for (IX* i = d ? d->ifirst : null; i; i = i->next, index++)
+				if (i.data == find)
+					return index;
+			return -1;
+		}
+
+		inline T&  operator += (T   v) { return   push(v); }
+		inline idx operator -= (idx v) { return remove(v); }
+	};
+
+	template <typename C>
+	using     item = list<C>::IX;
+
+	template <class T>
+	inline T interp(T from, T to, T f) { return from * (T(1) - f) + to * f; }
+
+	template <typename T>
+	inline T* allocate(size_t c, size_t a = 16) {
+		size_t sz = c * sizeof(T);
+		return (T*)aligned_alloc(a, (sz + (a - 1)) & ~(a - 1));
+	}
+
+	template <typename T> inline void memclear(T* d, size_t c = 1, int v = 0) { memset( d, v, c * sizeof(T)); }
+	template <typename T> inline void memclear(T& d, size_t c = 1, int v = 0) { memset(&d, v, c * sizeof(T)); }
+	template <typename T> inline void memcopy (T* d, T*     s,  size_t c = 1) { memcpy( d, s, c * sizeof(T)); }
+
+	typedef pair<char*, Primitive> Att;
+	
+	/// no mx should be needed in this
+	/// this beauty could be called valloc, and it could be used by Memory
+	template <typename T>
+	struct stack {
+		///
+		struct Data {
+			int refs;
+			idx count;
+			idx alloc;
+			T*  items;
+		} *data;
+		///
+		stack(initial<T> a) {
+			idx index = 0;
+			idx count = a.size();
+			///
+			data = new Data {
+				.count = count,
+				.alloc = count,
+				.items = new T[count]
+			};
+			///
+			for (T &i:a)
+				data->items[index++] = i;
+		}
+		///
+		stack()					   : data(null)     { };
+		stack(T *items, idx count) : data(new Data  { .refs = 1, .items=items, .count=count, .alloc=count }) { }
+		stack(stack &ref)		   : data(ref.data) { if (data)   ++data->refs; }
+	   ~stack()  {
+		   if (data && --data->refs == 0) {
+		       delete[] data->items; delete data;
+		   }
+		}
+	    ///
+		void expand() {
+			assert(data->count && data->count == data->alloc);
+			///
+			idx    p = data->alloc;
+			idx    n = p << 1;
+			T* items = new T[n];
+			///
+			for (idx i = 0; i < data->count; i++)
+				items[i] = data->items[i];
+			///
+			data->items = items;
+			data->alloc = n;
+		}
+		///
+		void push(T& v) {
+			assert(data); 
+			if (data->count == data->alloc)
+				expand();
+			data->items[data->count++] = v;
+		}
+		void pop()      {
+			assert(data && data->count);
+			data->count--;
+		}
+		///
+		T &operator[](idx i) { return data->items[i]; }
+		T &operator=(const stack &ref) {
+			if (this != &ref) {
+				data = ref.data;
+				if (data)
+					data->refs++;
+			}
+			return *this;
+		}
+	};
+
+	typedef stack<Att> Attrs;
+
+	/// dx structures use Schema in groups.
+	struct Schema {
+		/// -----------------------------------------------
+		struct Row {			    ///
+			size_t		 id;       /// for symbolic values of id you refer to the const char* typecast
+			size_t		 group;	  /// an integer dimension to the Field
+			Conduit      def;    /// default value stored in another dimension
+			stack<CPair> meta;	/// meta properties
+							   ///
+			Row(cchar_t *name, Conduit d, size_t g, stack<CPair> m) {
+				id     = size_t(name);
+				group  = g;
+				def	   = d;
+				meta   = m;
+			}
+		};
+
+		Schema(Row* table,    idx count, stack<CPair> meta = { })
+			: table(table), count(count),        meta(meta)  { }
+
+		Row*         table;
+		idx          count;
+		stack<CPair> meta;
+
+		/// -----------------------------------------------
+		Row* lookup(size_t id, idx ci = 0) {
+			for (idx i = ci; i < count; i++) if (table[i].id == id) return &table[i];
+			for (idx i = 0;  i < ci;    i++) if (table[i].id == id) return &table[i];
+			assert(false);
+			return null;
+		}
+		/// -----------------------------------------------
+		static Schema* define(initial<Row> &rows) {
+			size_t sz = rows.size();
+			size_t  i = 0;
+			Schema *o = new Schema { new Row[sz], idx(sz) };
+			for (auto &r:rows) {
+				Row* w        = &o->table[i++];
+				     w->def   = grab((Memory *)r.def.boson);
+				     w->id    = r.id;
+				     w->group = r.group;
+			}
+			return o;
+		}
+		/// -----------------------------------------------
+	   ~Schema() { delete[] table; }
+	};
+
+	typedef Schema* (*FnMembers)();
+
 	struct Type:Ops<Data> {
 	public:
-	/// primitives, make const.
-	static const Ident
-		Undefined, i8,  u8,
-		i16,       u16, i32,  u32,
-		i64,       u64, f32,  f64,
-		Bool,      Str, Map,  Array,
-		Ref,       Arb, Node, Lambda,
-		Member,    Any, Meta;
+		/// primitives, make const.
+		static const Ident
+			Undefined, i8,  u8,
+			i16,       u16, i32,  u32,
+			i64,       u64, f32,  f64,
+			Bool,      Str, Map,  Array,
+			Ref,       Arb, Node, Lambda,
+			Member,    Any, Meta;
 
 		idx				sz;
 		std::string     name;
 		std::mutex      mx;
+		Schema*			schema; /* dx-based types, single or member list */
 
 		struct Decl {
 			size_t        id;
@@ -602,11 +993,11 @@ export {
 		StringOp       *string;
 		BooleanOp      *boolean;
 		CompareOp      *compare;
-		//AddOp		   *add; # use case isnt panning out; generally speaking for ops thats higher up
+		//AddOp		   *add; # add later. it makes sense to keep going with this table.
 		//SubOp		   *sub;
 		AssignOp       *assign;
 
-		FlagsOf<Trait>  traits;
+		Flags<Trait>    traits;
 
 #if !defined(__PRETTY_FUNCTION__) && !defined(__GNUC__)
 #define __PRETTY_FUNCTION__ __FUNCSIG__
@@ -731,22 +1122,55 @@ export {
 	};
 
 	struct Type;
-	struct Psuedo { struct Pseudo* data; };
-	struct Field  {
-		Type*    type;
-		size_t   id;
-		Psuedo** ref_p; // the cake is a lie
+
+	/// this is used in initializer_list form internal to dx types.
+	/// just initialization of member data
+	struct Field {
+		///
+		Type*		  type;
+		size_t		  id;
+		idx			  count;
+		idx			  reserve;
+		Alloc::Flags  flags;
+		Memory*       def;
+		int			  group; /// used to categorize fields for different use-cases 
+							 /// (dx basics use 0, node has 0 and 1 used for internal and external)
+		/// 
+		template <typename T>
+		Field(cchar_t *idt, T def, int gr, Alloc::Flags fla = null) :
+			type    (Id<T>()),
+			id      (size_t(idt)),
+			count   (1),
+			reserve (0),
+			flags   (fla),
+			def     (Memory::valloc(Id<T>(), &def, 1, 0, fla)),
+			group   (gr) { }
+
+		/// 
+		template <typename T>
+		Field(size_t idt, T def, int gr, Alloc::Flags fla = null) :
+			type    (Id<T>()),
+			id      (size_t(idt)),
+			count   (1),
+			reserve (0),
+			flags   (fla),
+			def     (Memory::valloc(Id<T>(), &def, 1, 0, fla)),
+			group   (gr) { }
+
 	};
 
+	/// 
     struct Memory {
 		Data			  data;
 		int				  refs;
-        int              *prefs; // achieves multi-user pooled/overlap referencing
-		Attachment       *att;
-		size_t			  id;
+		int*			  prefs; /// overlap referencing
+		Attachment*		  att;	 /// closure attachments with arg
+		/// instances of Memory have identifiers potentially in
+		/// the case of a member node (with id of symbolic field),
+		/// whose data points to a copy on write instance
 
 		/// size_t for things that can be bound to index, or pointer
-		Memory *lookup(size_t id) { 
+		Memory *lookup(size_t id) {
 			for (Attachment* a = att; a; a = a->next) {
 				if (a->id == id)
 					return a->mem;
@@ -754,13 +1178,12 @@ export {
 			assert(false);
 			return null;
 		}
-
+		///
 		template <typename T>
-		inline T*   cast()				 const { return (T *)data.ptr; }
-		inline bool boolean()			 const { return (*data.type->boolean)((Data*)&data); }
-		inline int  compare(Memory* rhs) const { return (*data.type->compare)((Data*)&data, &rhs->data); }
-
-		static idx padded_sz(idx sz, idx al) { return sz & ~(al - 1) | al; }
+		inline T*         cast()            const { return (T *)data.ptr; }
+		inline bool    boolean()            const { return (*data.type->boolean)((Data*)&data); }
+		inline int     compare(Memory* rhs) const { return (*data.type->compare)((Data*)&data, &rhs->data); }
+		static idx   padded_sz(idx sz, idx al)    { return sz & ~(al - 1) | al; }
 
 		/// central allocation of Memory with a preallocation skip & construct
 		/// this is so one can allocate members in stride (atleast at first)
@@ -768,7 +1191,7 @@ export {
 		/// dont need to list the ways in which this is better
 		static Memory* alloc(Alloc& args, Memory *pre = null) {
 			idx    reserve = clamp(args.reserve, idx(0), args.count);
-			idx	     	sz = padded_sz(sizeof(Memory) + args.type->sz * reserve, 32);
+			idx	     	sz = padded_sz(sizeof(Memory) + args.type->sz * max(args.count, reserve), 32); // needs max of count and reserve
 			Memory*    mem = pre ? pre : (Memory*)calloc(1, sz);
 
 			if (!pre) {
@@ -804,9 +1227,11 @@ export {
 			return alloc(spec);
 		}
 
-		static Memory* alloc(Type* type, void* src, idx count, idx res) {
-			idx   	   	   sz = sizeof(Memory) + type->sz;
-			Alloc        spec = Alloc((void*)src, 1, 0, type, 0, Alloc::AllocType::Manage);
+		/// reduced these down a lot, gave them names. tired of all of the manage()'ers so they were shown the door.
+
+		/// valloc with optional src pointer for copy (must also include src count)
+		static Memory* valloc(Type* type, void* src, idx count, idx rs, Alloc::Flags flags = 0) {
+			Alloc        spec = Alloc(src, count, rs, type, flags, Alloc::AllocType::Manage);
 			return alloc(spec);
 		}
 
@@ -814,29 +1239,27 @@ export {
 			return alloc(Type::ident<T,true>(), (void*)src, 1, 0);
 		}
 
-		Memory* part(idx byte_loc, Field& f) {
-			Alloc   spec = Alloc(null, 1, 0, f.type, 0, Alloc::AllocType::Manage);
-
-
-			Memory     *m = alloc(spec, (Memory*)&((char*)data.ptr)[byte_loc]);
-			m->id         = f.id;
-			// 
-			//m->prefs     = (int*)f.ref_p; /// refs are just pointers.
-			//return m;
+		static Memory* field(Field& f, Alloc::Flags af) {
+			Alloc   spec = Alloc(null, f.count, f.reserve, f.type, af | f.flags, Alloc::AllocType::Manage);
+			Memory*    m = alloc(spec);
+			return m;
 		}
 
-		static Memory* manage(std::string s, idx rs = 0) {
+		static Memory* string(std::string s, idx rs = 0) {
 			Alloc spec = Alloc((void*)s.c_str(), s.length(), rs, Id<char>(), 0, Alloc::AllocType::Manage);
 			return alloc(spec);
 		}
 
-		static Memory* manage(idx count, idx rs, Type* type) {
-			Alloc spec = Alloc(null, count, rs, type, 0, Alloc::AllocType::Manage);
+		/// note: its only using bytes because no type is specified
+		static Memory* manage(idx byte_count) {
+			Alloc spec = Alloc(null, byte_count, 0, null, 0, Alloc::AllocType::Manage);
 			return alloc(spec);
 		}
 
-		static Memory* manage(idx byte_count) {
-			Alloc spec = Alloc(null, byte_count, 0, null, 0, Alloc::AllocType::Manage);
+		/// change function names.. (eliminate all managers)
+		template <typename T>
+		static Memory* single(T &v) {
+			Alloc spec = Alloc(&v, 1, 0, Id<T>(), 0, Alloc::AllocType::Manage);
 			return alloc(spec);
 		}
 
@@ -845,203 +1268,125 @@ export {
 			return data.ptr != p;
 		}
 
-		template <typename T>
-		static Memory* manage(T *r, idx count = 1, idx reserve = 0) {
-			Alloc spec = Alloc(r, count, reserve, Id<T>(), 0, Alloc::AllocType::Manage);
-			return alloc(spec);
-		}
-
-		///
-		template <typename T>
-		static Memory* manage(idx count, idx rs = 0) {
-			return manage((T *)null, count, rs);
-		}
-
 		/// copies get reserve from param (their original reserve lost)
 		Memory* copy(idx rs) {
 			Alloc   spec = Alloc(data.ptr, data.count, rs, data.type, 0, Data::AllocType::Manage);
 			return alloc(spec);
 		}
 
-		// attach memory to memory; this is a non-common case but useful for variable dependency of data
+		/// attach memory to memory; this is a non-common case but useful for variable dependency of data
 		void attach(Attachment &a) {
 			auto  att = new Attachment(a);
 			grab(att->mem);
 			///
 			att->next = this->att;
 			this->att = att;
-		} 
+		}
 	};
 
-	/// not using Memory because Memory uses it.
-	template <typename T>
-	struct list {
-		struct IX { int refs; list* origin; IX* next, * prev; T data; };
-		IX* first;
-		IX* last;
-		idx count;
+	/// this is just a pairing of id and Memory
+	/// size_t from Symbol would be needed with dynamic dx; thats up to implementer. (self in future throwing water bottle)
+	typedef pair<size_t, Memory*> Member;
 
-		list() : first(null), last(null), count(0) { }
-		list(T v) { push(v); }
-
-		operator  bool() const { return first != null; }
-		bool operator!() const { return first == null; }
-
-		/// compare with another list of equal size
-		bool compare(list &b, lambda<bool(T &a, T &b)> fn) const {
-			bool match = (count == b.count);
-			for (IX* ai =   first, *an = null,
-					 bi = b.first, *bn = null; match && ai && bi; ai = an, bi = bn) {
-				an	   = ai->next;
-				bn	   = bi->next;
-				match &= fn(ai, bi);
-			}
-			return match;
-		}
-
-		T &head() const { return first->v; }
-
-	   ~list() {
-		   while (first) {
-			   IX* n = first->next;
-			   if (--first->refs == 0)
-				   delete first;
-			   first = n;
-		   }
-		}
-
-		T& push(T &v) {
-			IX* i = new IX { 1, null, last, v }; // copied.
-			if (last)
-				last->next = i;
-			else
-				first = i;
-			last = i;
-			count++;
-			return i.data;
-		}
-
-		IX *find(idx f) {
-			IX* i = null;
-			if (f < 0) {
-				i = last;
-				while (++f < 0) { i = i->prev; }
-			} else {
-				i = first;
-				while (--f > 0) { i = i->next; }
-			}
-			return i;
-		}
-
-		/// find by index (f) and call lambda (fn)
-		bool process(idx f, lambda<void(IX*)> fn) {
-			IX *i = find(f);
-			if (i) {
-				fn(i);
-				return true;
-			}
-			return false;
-		}
-
-		/// call lambda for each (fn)
-		void each(lambda<void(IX*)> fn) {
-				 IX* n = null;
-			for (IX* i = first; i; i = n) {
-				n = i->next;
-				fn(i);
-			}
-		}
-
-		void unlink(IX *i) {
-			if (i.prev)
-				i.prev->next = i.next;
-			else
-				first = i.next;
-
-			if (i.next)
-				i.next->prev = i.prev;
-			else
-				last = i.prev;
-
-			delete i;
-			count--;
-		}
-
-		void remove(T &v) {
-			each([&](IX* i) {
-				if (i.data == v)
-					unlink(i);
-			});
-		}
-
-		void remove(idx f) {
-			process(f, [&](IX* i) {
-				unlink(i);
-			});
-		}
-
-		T& operator[](idx find) {
-			idx index = 0;
-			for (IX *i = first; i; i = i->next)
-				if (find == index++)
-					return i.data;
-			assert(false);
-			return default_of<T>();
-		}
-
-		idx operator()(T& find) {
-			idx index = 0;
-			for (IX* i = first; i; i = i->next, index++)
-				if (i.data == find)
-					return index;
-			return -1;
-		}
-
-		inline T&  operator += (T   v) { return push(v);   }
-		inline idx operator -= (idx v) { return remove(v); }
+	/// todo: getter and setter embedded here when approaching UX port
+	struct Prop {
+		size_t id;  /// see no point of the string in any form here;
+				    /// a const char* is easily separable from an enumerable because we register the symbols
+		Data value; /// value store for this property; if no Field is specified we use the default
+					/// (possibly for the class, but this would be best integrated as 
+				    /// queriable params for use in high-level application prop value selection)
 	};
 
-	template <typename C>
-	using     item = list<C>::IX;
-
-	void drop(list<Memory*>& ml);
-	void grab(list<Memory*>& ml);
-
-	// M struct can override a field[] virtual but members avg about 6
+	/// --------------------------------------
+	/// dx is M is Meta is basically multiple Memory units bound with ids in Member.
+	/// its the switch on the basic type (Array, Object, or single)
+	/// --------------------------------------
 	struct dx {
-		list<Memory*> ml; // our list 'payload' is a memory pointer.  those are not disturbed
-		Memory*       mem;
+		Memory* mem;
 
-		dx()			: ml(null), mem(null) { }
-		dx(nullptr_t n) : ml(null), mem(null) { }
-	    dx(Memory* mem) : ml(mem),  mem(mem)  { }
+		dx(nullptr_t n = null)            { }
+	    dx(Memory*        mem) : mem(mem) { grab(mem); }
+		
+		dx(bool      v) : mem(Memory::single(v)) { }
+		dx(float     v) : mem(Memory::single(v)) { }
+		dx(double    v) : mem(Memory::single(v)) { }
+		dx( int32_t  v) : mem(Memory::single(v)) { }
+		dx(uint32_t  v) : mem(Memory::single(v)) { }
+		dx( int64_t  v) : mem(Memory::single(v)) { }
+		dx(uint64_t  v) : mem(Memory::single(v)) { }
 
-		//template <typename T>
-		//dx(T       *v, idx cn = 1, idx rs = 0) : mem(Memory::manage(&v, cn, rs)) { }
+		// internal/external or member or m, mref, ref
+		// must use lookup
+		template <typename T>
+		T& ref(cchar_t* id) { return *lookup(id)->cast<T>(); }
 
-		dx(float    v) : ml(Memory::manage(&v)) { mem = ml.head(); }
-		dx(double   v) : ml(Memory::manage(&v)) { mem = ml.head(); }
-		dx( int64_t v) : ml(Memory::manage(&v)) { mem = ml.head(); }
-		dx(uint64_t v) : ml(Memory::manage(&v)) { mem = ml.head(); }
+		/// Array use-case, just pass the job to Memory delegate (handle consts as well!)
+		template <typename T>
+		dx(T* data, idx count = 0, idx reserve = 0)
+		{
+			static Type*   type = Id<cchar_t> ();
+			static Type* s_type = Id<dx>  ();
 
-		/// member construction in dx!
-		/// do so by allocating a pool, fill with members.
-		/// each one has pooled references alloc + sizeof(idx) to hold onto the original ;-)
-		dx(initial<Field> fields) {
-			idx sz = 0;
-			// lets allocate a pool for the field set, sum the types sizes
-			for (auto &f: fields)
-				sz     += f.type->sz;
-			Memory   *m = Memory::manage(sz);
-			idx cursor  = 0;
-			for (auto &f: fields) {
-				ml     += m->part(cursor, (Field &)f); // test data.
-				cursor += f.type->sz;
+			/// string-data by form of constant
+			if constexpr (std::is_same_v<T, cchar_t>) {
+				static std::unordered_map<cchar_t*, Memory*> smem;
+
+				/// you can see here, the symbol map; its preferred to  track to a map of allocated constants
+				/// could apply to Any constant with std::is_const_*
+				if (smem.count(data) == 0) {
+					idx ln = strlen(data);
+					Alloc spec = Alloc((void*)data, ln + 1, 0, type, null, Alloc::AllocType::Manage);
+					smem[data] = grab(Memory::alloc(spec));
+				}
+				mem = smem[data];
+			
+			} else if constexpr (std::is_same_v<T, char>) {
+				/// string-data by form of dynamic (copy operation; insertion of null character enforced here)
+				size_t s_count = (count ? count : strlen(data)) + 1;
+				mem = Memory::valloc(Id<T>(), data, s_count, 0);
+
+			} else {
+				/// needs to enforce size at this point; only with strings can one be lazy param-wise
+				assert(count || reserve);
+
+				/// normal case, pass through to Memory valloc
+				mem = Memory::valloc(Id<T>(), data, count, reserve);
 			}
-			mem = ml.head();
 		}
 
-		template <typename T> T& rise() const { return *(T*)this; } // ideal for arrays of phoenix, or phoenai
+		/// Object use-case; here we lazy-load the class-based functor (must be ONE per type no fancy business)
+		/// put all Members in, all external and internals (those are enum classifiers)
+		/// mem = Memory { type:T, flags:Object, count:members.size()
+		/// call it Meta, MX, Fields, Object; thats a Memory layout not a type; its type is the class being used
+		/// 
+		dx(FnMembers members, initial<Field> &fields) {  /// field should only be used in FnMember ? .. no both.
+			Type* t = type();
+			
+			/// init functor only called once
+			if (!t->schema)
+				 t->schema = members();					 /// Memory* of type:T (from Fn, count of total props (Props abstract)
+			
+			Schema* schema = t->schema;				     /// Schema
+			idx      index = 0;
+			
+			/// ideal memory structure for dx class use-case?  to me it seems like you referenec Obj type for names and defaults, and iterate through
+			/// we need to count the total object size; but of course you cannot get it from sizeof(T) correct?
+			/// 
+			/// 
+
+			/// iterate through fields given by user (referenced from higher level constructor)
+			for (Field f: fields) {
+				assert(index < schema->count);
+				Schema::Row *member = schema->lookup(f.id, index); /// optimize with a sequence state, these should be given in the same order as they are defined
+				/// ---------------------------- ///
+				assert(member);					 /// member must exist
+				assert(f.id == member->id);		 /// Field has same identifier as Member
+				/// ---------------------------- ///
+				index++;
+			}
+		}
+
+		template <typename T> T& rise() const { return *(T*)this; }
 		template <typename T>
 		struct iter {
 			T*   start;
@@ -1057,64 +1402,37 @@ export {
 			//	return start == b.start && inc == b.inc;
 			//}
 		};
-		
-		template <typename T>
-		dx(T* sc, idx count = 0, idx reserve = 0)
-		{
-			static Type*   type = Id<cchar_t> ();
-			static Type* s_type = Id<dx>  ();
 
-			if constexpr (std::is_same_v<T, cchar_t>) {
-				static std::unordered_map<cchar_t*, Memory*> smem;
-
-				/// live the const life
-				if (smem.count(sc) == 0) {
-					idx ln = strlen(sc);
-					Alloc spec = Alloc((void*)sc, ln + 1, 0, type, null, Alloc::AllocType::Manage);
-					ml = smem[sc] = Memory::alloc(spec);
-					grab(ml); /// 1 simple trick never lets memory expire
-				} else
-					ml = smem[sc];
-
-			} else if constexpr (std::is_same_v<T, char>) {
-				Alloc spec = Alloc(sc, strlen(sc) + 1, 0, type, 0, Alloc::AllocType::Manage);
-				ml = Memory::alloc(spec);
-			} else {
-				Alloc spec = Alloc(sc, count, 0, type, 0, Alloc::AllocType::Manage);
-				ml = Memory::alloc(spec);
-			}
-		}
-
-	   ~dx() { drop(ml); }
-		dx(const dx& r) : ml(r.ml), mem(r.mem) { grab(ml); }
-
-		void        attach(Attachment &a) { assert(ml); ml.head()->attach(a);        }
-		void*                 raw() const { return  ml ? (void*)ml.head()->data.ptr : (void*)null;  }
-		operator                   bool() { return  ml; }
-		bool                  operator!() { return !ml; }
+	   ~dx()						      { drop(mem); } /// destruct drops
+		dx(const dx& r) : mem(r.mem)      { grab(mem); } /// copy grabs
+		void        attach(Attachment &a) { assert(mem); mem->attach(a); }
+		void*                 raw() const { return  mem ? (void*)mem->data.ptr : (void*)null; }
+		operator                   bool() { return  mem; }
+		bool                  operator!() { return !mem; }
 		
 		template <typename T> T* pointer();
 
-		/// lookup memory by field
+		/// lookup field in memory (using the memory as vector for fields)
 		Memory *lookup(cchar_t *field) {
-			for (auto i = ml.first; i; i = i->next) {
-				Memory *m = i->data;
-				if (m->id == size_t(field))
-					return m;
-			}
+			if (mem)
+				for (size_t i = 0, mc = mem->data.count; i < mc; i++) {
+					Memory &m = mem->data.ref<Memory>(i);
+					if (m.data.id == size_t(field))
+						return &m;
+				}
 			return null;
 		}
 
-		idx                 count()       const { return  ml.count; }
-		Memory*             ident()       const { return  mem ? mem : (Memory*)null; }
-		void*             pointer()       const { return  mem ? mem->data.ptr       : null; }
-		Type*	             type()       const { return  mem ? mem->data.type      : null; }
+		idx                 count()       const { return  mem ? mem->data.count : 0;    }
+		Memory*             ident()       const { return  mem;                          }
+		void*             pointer()       const { return  mem ? mem->data.ptr   : null; }
+		Type*	             type()       const { return  mem ? mem->data.type  : null; }
 
 		template <typename T>
 		bool       inherits()			  const { return type() == Id<T>(); }
 
 		/// come on quantum... hoooold
-		dx                quantum()		  const { return (*mem->prefs == 1) ? *this : copy(); }
+		dx                quantum()		  const { return (mem && *mem->prefs == 1) ? *this : copy(); }
 		idx 			  reserve()		  const { return  mem ?  mem->data.reserve   : 0; }
 		Data*				 data()		  const { return  mem ? &mem->data : null; }
 		template <typename T> T&        value() { return *(T*)pointer(); }
@@ -1124,21 +1442,15 @@ export {
 		bool operator==(Type& t)		  const { return     type() == &t; } // no need here.
 		bool operator==(Type* t)		  const { return     type() ==  t; }
 		bool operator==(dx& d)		      const {
-			bool match = false;
-			if (mem && d.mem) {
-				if (ml.count != d.ml.count) {
-					match = true;
-					match = ml.compare(d.ml, [&](Memory*a, Memory*b) {
-						return a->data.type == b->data.type && 
-							 (*a->data.type->compare)(&a->data, &b->data) == 0;
-					});
-				}	 
-			}
-			const bool both_null = (!mem && !d.mem);
-			return both_null || match;
+			Memory*  a =   mem;
+			Memory*  b = d.mem;
+			return ((a && b) && (a->data.count == b->data.count))
+				? (a->data.type == b->data.type &&
+				 (*a->data.type->compare)(&a->data, &b->data) == 0) : (!a && !b);
+
 		}
-		bool operator!=(Type*   b)        const { return !(operator==(b)); }
-		bool operator!=(Type&   b)        const { return !(operator==(b)); } // no need here.
+		bool operator!=(Type*   b)    const { return !(operator==(b)); }
+		bool operator!=(Type&   b)    const { return !(operator==(b)); } // no need here.
 		bool operator!=(dx& b)        const { return !(operator==(b)); }
 
 		dx copy(idx rs = 0)		      const { return  mem ? mem->copy(rs) : null; }
@@ -1161,7 +1473,7 @@ export {
 		}
 
 		template <typename T>
-		T &reorient(FlagsOf<Trait> require) {
+		T &reorient(Flags<Trait> require) {
 			Type*  s = type();
 			Type*  t = Id<T>();
 			assert(t->traits && require); /// i... declare... type-safety --michael scott
@@ -1172,16 +1484,16 @@ export {
 		/// reference dx instance
 		dx& operator=(dx r) {
 			if (mem != r.mem) {
-				drop(ml);
-				ml = r.ml;
-				grab(ml);
+				drop(mem);
+				mem = r.mem;
+				grab(mem);
 			}
 			return *this;
 		}
 
 		dx& operator=(nullptr_t n) {
-			drop(ml);
-			ml = null;
+			drop(mem);
+			mem = null;
 			return *this;
 		}
 
@@ -1249,9 +1561,10 @@ export {
 
 	/// these are easier to pass around than before.
 	/// i want to use these more broadly as well, definite a good basis delegate for tensor.
+	/// todo: string needs null token in terms of static alloc of 1 byte on string
 	template <typename T>
 	struct vec:dx {
-		vec(Memory* memory) : dx(memory) { }
+		vec(Memory* memory) : dx(memory) { } // vec makes use of the vector and type features in Memory
 
 		/// idx allows us to use nullptr_t, otherwise ambiguous alongside size_t
 		vec(null_t n = null) : dx() { }
@@ -1271,8 +1584,8 @@ export {
 		}
 
 	   ~vec()					{ }
-		vec(idx sz)			    { dx::mem = Memory::manage<T>(sz);    }
-		vec(vec<T> &b, idx rs)  { dx::mem = b.mem->copy(rs);          }
+		vec(idx sz)			    { dx::mem = Memory::valloc(Id<T>(), (T*)null, sz); }
+		vec(vec<T> &b, idx rs)  { dx::mem = b.mem->copy(rs); }
 		vec(const vec<T> &b) {
 			if (b.mem) {
 				grab(b.mem);
@@ -1281,10 +1594,10 @@ export {
 				dx::mem = null;
 		}
 
-		vec(T x)			    { dx::mem = Memory::manage<T>(&x, 1); }
-		vec(T x, T y)           { T v[2] = { x, y       }; dx::mem = Memory::manage<T>(&v[0], 2); }
-		vec(T x, T y, T z)      { T v[3] = { x, y, z    }; dx::mem = Memory::manage<T>(&v[0], 3); }
-		vec(T x, T y, T z, T w) { T v[4] = { x, y, z, w }; dx::mem = Memory::manage<T>(&v[0], 4); }
+		vec(T x)			    { dx::mem = Memory::valloc(Id<T>(), &x, 1); }
+		vec(T x, T y)           { T v[2] = { x, y       }; dx::mem = Memory::valloc(Id<T>(), &v[0], 2); }
+		vec(T x, T y, T z)      { T v[3] = { x, y, z    }; dx::mem = Memory::valloc(Id<T>(), &v[0], 3); }
+		vec(T x, T y, T z, T w) { T v[4] = { x, y, z, w }; dx::mem = Memory::valloc(Id<T>(), &v[0], 4); }
 		
 		idx  type_size() const { return type()->sz; }
 		idx       size() const { return count(); }
@@ -1297,8 +1610,9 @@ export {
 		T& first() const { return *((T*)mem->data.ptr)[0]; }
 		T&  last() const { return *((T*)mem->data.ptr)[mem->data.count - 1]; }
 
+		// push
 		vec& push(T v) {
-			idx  rs = reserve();
+			idx  rs = dx::reserve();
 			idx  cn = count();
 			if (cn == rs) {
 				Memory* p = mem;
@@ -1313,19 +1627,10 @@ export {
 			return *this;
 		}
 
-		// its fine and its right to override the args here
 		void reserve(idx sz) {
 			if (dx::reserve() != sz) {
-				/* destruct the voided ones:
 				idx ssz = (sz < mem->data.count) ? sz : mem->data.count;
-				Type *t = mem->data.type;
-				if (ssz != mem->data.count)
-					for (idx i = ssz; i < mem->data.count; i++) {
-						t->dtr(); ... tbh there needs to be reserve management at Memory lambda
-					}
-				*/
-				idx ssz = (sz < mem->data.count) ? sz : mem->data.count;
-				*this   = Memory::manage(mem->cast<T>(), ssz, sz);
+				*this   = Memory::valloc(Id<T>(), mem->cast<T>(), ssz, sz);
 			}
 		}
 
@@ -1593,44 +1898,40 @@ export {
 	typedef lambda<void(void)>   FnVoid;
 
 	template <typename T>
-	struct sh:dx {
-		sh() { }
-		sh(const sh<T>& a)       : dx(a.mem) { }
-		/// alloc needs to check for primtive type, we need an api for that
-		sh(T& ref)			     : dx(Memory::manage(&ref, 1)) { }
-		sh(T* ptr, idx c = 1)    : dx(Memory::manage( ptr, c)) { assert(c); }
-	  //sh(size_t c, lambda<void(T*)> fn) : dx(Memory::manage(malloc(sz), c, Type::lookup<T>())) { }
+	struct sp:dx {
+		sp() { }
+		sp(Memory    *mem) : dx(mem) { }
+		sp(const sp<T>& a) : dx(a.mem) { }
+		sp(T&         ref) : dx(Memory::valloc(Id<T>(), &ref, 1)) { }
+	    sp(T* ptr,  idx c) : dx(Memory::valloc(Id<T>(),  ptr, c)) { assert(c); }
+
 		///
-		sh<T>& operator=(sh<T>& ref) {
-			if (ml != ref.ml) {
-				drop(ml);
-				ml = ref.ml; // this must perform a quantum fluctuation if it wants to change the list
+		sp<T>& operator=(sp<T>& ref) {
+			if (mem != ref.mem) {
+				drop(mem);
 				mem = ref.mem;
-				grab(ml);
+				grab(mem);
 			}
 			return *this;
 		}
 
-		sh<T>& operator=(T ref) {
+		///
+		sp<T>& operator=(T ref) {
 			drop(mem);
 			if constexpr (!std::is_same_v<T, nullptr_t>) {
-				ml = Memory::manage<T>(new T(ref), 1);
-				mem = ml.head();
+				mem = Memory::valloc(Id<T>(), new T(ref), 1);
 				grab(mem);
 			} else {
-				ml = null;
 				mem = null;
 			}
 			return *this;
 		}
 
-		static dx manage(idx sz) { return Memory::manage(sz, 0, Id<T>()); }
-
 		///
-		sh<T>& operator=(T* ptr) {
+		sp<T>& operator=(T* ptr) {
 			if (!mem || mem->is_diff(ptr)) {
 				drop(mem);
-				mem = ptr ? Memory::manage(ptr, 1) : null;
+				mem = ptr ? Memory::valloc(Id<T>(), ptr, 1) : null;
 			}
 			return *this;
 		}
@@ -1641,8 +1942,9 @@ export {
 		T&                operator  *() const { return *(T*)mem->data.ptr; } /// deref operator
 		T*                operator ->() const { return  (T*)mem->data.ptr; } /// reference memory operator
 		bool                   is_set() const { return      mem != null;   }
-		bool operator==      (sh<T>& b) const { return      mem == b.mem;  }
-		bool operator==(const sh<T>& b) const { return      mem == b.mem;  }
+		bool operator==      (sp<T>& b) const { return      mem == b.mem;  }
+		bool operator==(const sp<T>& b) const { return      mem == b.mem;  }
+
 		T&   operator[]       (idx   i) const {
 			assert(i >= 0 && i < mem->data.count);
 			T*  origin = mem->data.ptr;
@@ -1657,15 +1959,16 @@ export {
 	}
 
 	///
-	void grab(Memory *m) {
+	Memory *grab(Memory *m) {
 		std::mutex& mx = single_mx();
 		mx.lock();
 		(*m->prefs)++;
 		mx.unlock();
+		return m;
 	}
 
 	///
-	void drop(Memory* m) {
+	Memory *drop(Memory* m) {
 		std::mutex& mx = single_mx();
 		mx.lock();
 		if (--m->refs == 0) {
@@ -1679,31 +1982,15 @@ export {
 			delete m;
 		} else
 			mx.unlock();
+		return m;
 	}
 
-	void drop(list<Memory*>& ml) {
-		ml.each(
-			lambda<void(list<Memory*>::IX*)>(
-				[](list<Memory*>::IX* i) -> void {
-					drop(i->data);
-				}
-			)
-		);
-	}
-
-	/// 11mms and gc
-	void grab(list<Memory*>& ml) {
-		ml.each(lambda<void(item<Memory*>*)>(
-			[](item<Memory*>* i) -> void {
-				grab((Memory*)i->data);
-			}));
-	}
-
+	// deprecate VAlloc
 	// outside resources should be the only 'Arb' in
-					   struct Arb     : dx { Arb (void* p, size_t c = 1) { mem = Memory::arb   (p, c); }};
-	template <class T> struct Persist : dx { Persist(T* p, size_t c = 1) { mem = Memory::arb   (p, c); }};
-	template <class T> struct Manage  : dx { Manage (T* p, size_t c = 1) { mem = Memory::manage(p, c); }};
-	template <class T> struct VAlloc  : dx { VAlloc (      size_t c = 1) { mem = Memory::valloc(   c); }};
+					   struct Arb     : dx { Arb (void* p, size_t c = 1) { mem = Memory::arb    (p, c); }};
+	template <class T> struct Persist : dx { Persist(T* p, size_t c = 1) { mem = Memory::arb    (p, c); }};
+	template <class T> struct Manage  : dx { Manage (T* p, size_t c = 1) { mem = Memory::valloc (Id<T>(), p,    c, 0); }};
+	template <class T> struct VAlloc  : dx { VAlloc (      size_t c = 1) { mem = Memory::valloc (Id<T>(), null, c, 0); }};
 
 	template <typename T>
 	T fabs(T x) { return x < 0 ? -x : x; }
@@ -1746,19 +2033,6 @@ export {
 		assert(!mem || mem->data.type == Id<T>());
 		return (T*)raw();
 	}
-
-	template <class T>
-	inline T interp(T from, T to, T f) { return from * (T(1) - f) + to * f; }
-
-	template <typename T>
-	inline T* allocate(size_t c, size_t a = 16) {
-		size_t sz = c * sizeof(T);
-		return (T*)aligned_alloc(a, (sz + (a - 1)) & ~(a - 1));
-	}
-
-	template <typename T> inline void memclear(T* d, size_t c = 1, int v = 0) { memset( d, v, c * sizeof(T)); }
-	template <typename T> inline void memclear(T& d, size_t c = 1, int v = 0) { memset(&d, v, c * sizeof(T)); }
-	template <typename T> inline void memcopy (T* d, T*     s,  size_t c = 1) { memcpy( d, s, c * sizeof(T)); }
 ///}
 
 /// export module rand
@@ -1789,7 +2063,7 @@ export {
 
 		static void seed(int64_t seed) {
 			global = Sequence(seed);
-			global.e.seed(uint32_t(seed)); // todo: msvc only, and find out how to seed with 64b because 32 is lol
+			global.e.seed(uint32_t(seed)); // todo: seed with 64b, doesnt work on windows to be 32b seed
 		}
 
 		static bool coin(Sequence& s = global) {
@@ -1844,15 +2118,16 @@ export {
 			for (auto &i: v)
 				a += i;
 		}
-		array(idx   sz, dx     v)          { valloc(sz); for (idx i = 0; i < sz; i++) a += v.copy(); }
-		array(idx   sz, SharedIFn fn)		   { valloc(sz); for (idx i = 0; i < sz; i++) a +=    fn(i); }
-		array(null_t       n)          { }
-		array(size_t              sz)          { valloc(sz); }
+		array(idx   sz, dx         v) { valloc(sz); for (idx i = 0; i < sz; i++) a += v.copy(); }
+		array(idx   sz, SharedIFn fn) { valloc(sz); for (idx i = 0; i < sz; i++) a +=    fn(i); }
+		array(null_t               n) { }
+		array(size_t              sz) { valloc(sz); }
 		
-		/// quick-sort
+		/// quick-sort, documented best of my ability
 		array<T> sort(lambda<int(T &a, T &b)> cmp) {
 			auto      &self = ref();
-			/// initialize list of identical size with elements of pointer type, pointing to the respective index
+
+			/// create reference list of identical size as given, pointing to the respective index
 			vec<dx *> refs = { size(), [&](size_t i) { return &self[i]; }};
 
 			lambda <void(int, int)> qk;
@@ -2003,7 +2278,7 @@ export {
 			array<idx> shape;
 			Stride     stride;
 		};
-		sh<Data> data;
+		sp<Data> data;
 
 		int      dims() const { return int(data->shape.size()); } // sh can have accessors for a type vec
 		idx      size() const {
@@ -2052,7 +2327,7 @@ export {
 	template <typename T>
 	struct Vec2:vec<T> {
 		T &x, &y;
-		Vec2(null_t n = null)   : vec<T>(),       x(default_of<T>()), y(default_of<T>()) { }
+		Vec2(null_t n = null)   : vec<T>(),       x(def<T>()), y(def<T>()) { }
 		Vec2(T x, T y)	        : vec<T>(x, y),   x((*this)[0]), y((*this)[1]) { }
 		Vec2(const vec<T>& ref) : vec<T>(ref),    x((*this)[0]), y((*this)[1]) { }
 	};
@@ -2060,15 +2335,15 @@ export {
 	template <typename T>
 	struct Vec3:vec<T> {
 		T &x, &y, &z;
-		Vec3(null_t n = null)   : vec(), x(default_of<T>()), y(default_of<T>()), z(default_of<T>()) { }
-		Vec3(T x, T y, T z)     : vec<T>(x, y, z),           x((*this)[0]), y((*this)[1]), z((*this)[2])   { }
-		Vec3(const vec<T>& ref) : vec<T>(ref),		         x((*this)[0]), y((*this)[1]), z((*this)[2])   { }
+		Vec3(null_t n = null)   : vec(), x(def<T>()), y(def<T>()), z(def<T>()) { }
+		Vec3(T x, T y, T z)     : vec<T>(x, y, z), x((*this)[0]), y((*this)[1]), z((*this)[2])   { }
+		Vec3(const vec<T>& ref) : vec<T>(ref),     x((*this)[0]), y((*this)[1]), z((*this)[2])   { }
 	};
 
 	template <typename T>
 	struct Vec4:vec<T> {
 		T &x, &y, &z, &w;
-		Vec4(null_t n = null)    : vec(),			   x(default_of<T>()), y(default_of<T>()), z(default_of<T>()), w(default_of<T>()) { }
+		Vec4(null_t n = null)    : vec(),			   x(def<T>()), y(def<T>()), z(def<T>()), w(def<T>()) { }
 		Vec4(T x, T y, T z, T w) : vec<T>(x, y, z, w), x((*this)[0]), y((*this)[1]), z((*this)[2]), w((*this)[3]) { }
 		Vec4(const vec<T>& ref)  : vec<T>(ref),        x((*this)[0]), y((*this)[1]), z((*this)[2]), w((*this)[3]) { }
 	};
@@ -2117,7 +2392,7 @@ export {
 	struct Rect: vec<T> {
 		T &x, &y, &sx, &sy;
 
-		Rect(null_t n = null) : vec(), x(default_of<T>()),  y(default_of<T>()), sx(default_of<T>()), sy(default_of<T>()) { }
+		Rect(null_t n = null) : vec(), x(def<T>()),  y(def<T>()), sx(def<T>()), sy(def<T>()) { }
 		Rect(T x, T y, T sx, T sy)	  : vec(x, y, sx, sy), x(x), y(y), sx(sx), sy(sy) { }
 		
 		Rect(vec<T> pos, vec<T> sz, bool ctr) {
@@ -2268,9 +2543,6 @@ export {
 	};
 
 	struct str:dx {
-		
-		// shared iterator can potentially
-		// do a bit more, same interface though.
 
 		template <typename T>
 		struct iter {
@@ -2296,7 +2568,6 @@ export {
 			CIString
 		};
 
-
 		str expr(lambda<str(str)> fn) {
 			char*  a  = data();
 			auto   be = [&](int i) -> bool { return a[i] == '{' && a[i + 1] != '{'; };
@@ -2320,18 +2591,19 @@ export {
 
 		str format(Array args) { return expr([&](str e) -> str { return args[e]; }); }
 
-		str(dx &sh)	   : dx(sh)   { }
+		str(dx &sh)	       : dx(sh)   { }
 		str()              : dx()     { }
 		str(cchar_t* cstr) : dx(cstr) { } // symbols potential here, its slightly easy to cross up but thats a real distinguisher, const vs non-const.
-		str(char* s, idx ln, idx rs = 32) : dx(s, ln + 1, clamp(rs, idx(0), ln << 1)) { }
+		str(char* s, idx len, idx rs = 32) : dx(s, len + 1, clamp(rs, idx(0), len << 1)) { }
 
-	    str(char            ch) : dx(Memory::manage(&ch, 1, 32))     { } // remove all refs for this thing
-		str(size_t          sz) : dx(Memory::manage(Id<char>(), sz))	   { }
-		str(int32_t        i32) : dx(Memory::manage(std::to_string(i32)))  { }
-		str(int64_t        i64) : dx(Memory::manage(std::to_string(i64)))  { }
-		str(double         f64) : dx(Memory::manage(std::to_string(f64)))  { }
-		str(std::string    str) : dx(Memory::manage(std::string(str)))     { }
-		str(const str       &s) : dx(s.mem)								   { }
+		/// conversion routines
+	    str(char            ch) : dx(Memory::valloc(Id<char>(), &ch, 1, 32)) { }
+		str(size_t          sz) : dx(Memory::valloc(Id<char>(), null, sz, 0))   { }
+		str(int32_t        i32) : dx(Memory::string(std::to_string(i32)))    { }
+		str(int64_t        i64) : dx(Memory::string(std::to_string(i64)))    { }
+		str(double         f64) : dx(Memory::string(std::to_string(f64)))    { }
+		str(std::string    str) : dx(Memory::string(std::string(str)))       { }
+		str(const str       &s) : dx(s.mem)								     { }
 
 		/// dx can possibly do a bit of validation
 		iter<char> begin() { return { data(), 0 }; }
@@ -2341,6 +2613,10 @@ export {
 		// str a = str("{2} is {0} but {1}")(1, 2, 3.0)
 		// "3.0 is 2 but 1"
 		
+		char*		data()                 const { return (char *)(mem ? mem->data.ptr   : null); }
+		idx         byte_len()             const { return         (mem ? mem->data.count :    0); }
+		bool        contains(array<str> a) const { return index_of_first(a, null) >= 0;           }
+
 		str operator+ (const str b) const {
 			const str& a = *this;
 			char*     ap = a.data();
@@ -2358,32 +2634,23 @@ export {
 			c.mem->data.count = ac + bc - 1;
 			return c;
 		}
-
-		str operator+ (const char* s) const { return *this + str(s); }
-
-		char*		data()                 const { return (char *)(mem ? mem->data.ptr   : null); }
-		idx         byte_len()             const { return         (mem ? mem->data.count :    0); }
-		bool        contains(array<str> a) const { return index_of_first(a, null) >= 0;           }
-
-		// size_t converts ambiguously to pointer
-		// which limits the interface you can provide.
-		// signed int64 is the better option
 		idx         size()						     const { return mem ? mem->data.count : 0;      }
+		str         operator+  (cchar_t* s)          const { return *this + str(s);                 }
 		str         operator() (int   s,  int     l) const { return substr(s, l);                   }
 		str         operator() (int				  s) const { return substr(s);                      }
 		bool        operator<  (const str         b) const { return strcmp(data(), b.data()) <  0;  }
 		bool        operator>  (const str         b) const { return strcmp(data(), b.data()) >  0;  }
-		bool        operator<  (const char       *b) const { return strcmp(data(), b)		 <  0;  }
-		bool        operator>  (const char       *b) const { return strcmp(data(), b)		 >  0;  }
+		bool        operator<  (cchar_t          *b) const { return strcmp(data(), b)		 <  0;  }
+		bool        operator>  (cchar_t          *b) const { return strcmp(data(), b)		 >  0;  }
 		bool        operator<= (const str         b) const { return strcmp(data(), b.data()) <= 0;  }
 		bool        operator>= (const str         b) const { return strcmp(data(), b.data()) >= 0;  }
-		bool        operator<= (const char       *b) const { return strcmp(data(), b)		 <= 0;  }
-		bool        operator>= (const char       *b) const { return strcmp(data(), b)		 >= 0;  }
+		bool        operator<= (cchar_t          *b) const { return strcmp(data(), b)		 <= 0;  }
+		bool        operator>= (cchar_t          *b) const { return strcmp(data(), b)		 >= 0;  }
 	  //bool        operator== (std::string       b) const { return strcmp(data(), b.c_str()) == 0; }
 	  //bool        operator!= (std::string       b) const { return strcmp(data(), b.c_str()) != 0; }
 		bool        operator== (const str         b) const { return strcmp(data(), b.data())  == 0; }
-		bool        operator== (const char       *b) const { return strcmp(data(), b)		  == 0; }
-		bool        operator!= (const char       *b) const { return strcmp(data(), b)		  != 0; }
+		bool        operator== (cchar_t          *b) const { return strcmp(data(), b)		  == 0; }
+		bool        operator!= (cchar_t          *b) const { return strcmp(data(), b)		  != 0; }
 		char&		operator[] (size_t            i) const { return ((char *)mem->data.ptr)[i];     }
 		int         operator[] (str               b) const { return index_of(b); }
 		void        operator+= (str               b)       {
@@ -2397,8 +2664,8 @@ export {
 			} else
 				*this     = *this + b;
 		}
-		void operator+= (const char  b) { operator+=(str(b)); }
-		void operator+= (const char *b) { operator+=(str(b)); }
+		void operator+= (cchar_t     b) { operator+=(str(b)); }
+		void operator+= (cchar_t    *b) { operator+=(str(b)); }
 		
 			 operator     bool()  const { return mem && mem->data.count > 1; }
 		bool operator!()          const { return !(operator bool());         }
@@ -2415,7 +2682,7 @@ export {
 		}
 
 		friend std::ostream &operator<< (std::ostream& os, str const& s) {
-			return os << std::string((const char *)s.data());
+			return os << std::string((cchar_t *)s.data());
 		}
 
 		static str fill(idx n, lambda<int(idx)> fn) {
@@ -2441,7 +2708,7 @@ export {
 			return less;
 		}
 
-		bool starts_with(const char *s) const {
+		bool starts_with(cchar_t *s) const {
 			size_t l0 = strlen(s);
 			size_t l1 = len();
 			if (l1 < l0)
@@ -2451,7 +2718,7 @@ export {
 
 		idx len() const { return utf::len(mem ? (uint8_t*)mem->data.ptr : (uint8_t*)null); }
 
-		bool ends_with(const char *s) const {
+		bool ends_with(cchar_t *s) const {
 			size_t l0 = strlen(s);
 			size_t l1 = len();
 			if (l1 < l0)
@@ -2558,7 +2825,7 @@ export {
 			return result;
 		}
 
-		array<str> split(const char *delim) const { return split(str(delim)); }
+		array<str> split(cchar_t *delim) const { return split(str(delim)); }
 		
 		// color we like: "#45a3dd"
 
@@ -2611,8 +2878,8 @@ export {
 			return -1;
 		}
 
-		int index_of(MatchType ct, const char *mp = null) const {
-			typedef lambda<bool(const char &)> Fn;
+		int index_of(MatchType ct, cchar_t *mp = null) const {
+			typedef lambda<bool(cchar_t &)> Fn;
 			typedef std::unordered_map<MatchType, Fn> Map;
 			///
 			int index = 0;
@@ -2623,18 +2890,18 @@ export {
 				memcpy(mp0, data(), sz);
 				mp0[sz]   = 0;
 			}
-			auto   test = [&](const char& c) -> bool { return  false; };
-			auto f_test = lambda<bool(const char&)>(test);
+			auto   test = [&](cchar_t& c) -> bool { return  false; };
+			auto f_test = lambda<bool(cchar_t&)>(test);
 
 			/*
 				
 			auto m = Map{
-				{ Alpha,     [&](const char &c) -> bool { return  isalpha (c);            }},
-				{ Numeric,   [&](const char &c) -> bool { return  isdigit (c);            }},
-				{ WS,        [&](const char &c) -> bool { return  isspace (c);            }}, // lambda must used copy-constructed syntax
-				{ Printable, [&](const char &c) -> bool { return !isspace (c);            }},
-				{ String,    [&](const char &c) -> bool { return  strcmp  (&c, mp0) == 0; }},
-				{ CIString,  [&](const char &c) -> bool { return  strcmp  (&c, mp0) == 0; }}
+				{ Alpha,     [&](cchar_t    &c) -> bool { return  isalpha (c);            }},
+				{ Numeric,   [&](cchar_t    &c) -> bool { return  isdigit (c);            }},
+				{ WS,        [&](cchar_t    &c) -> bool { return  isspace (c);            }}, // lambda must used copy-constructed syntax
+				{ Printable, [&](cchar_t    &c) -> bool { return !isspace (c);            }},
+				{ String,    [&](cchar_t    &c) -> bool { return  strcmp  (&c, mp0) == 0; }},
+				{ CIString,  [&](cchar_t    &c) -> bool { return  strcmp  (&c, mp0) == 0; }}
 			};
 
 			*/
@@ -2652,7 +2919,7 @@ export {
 		}
 
 		int64_t integer_value() const {
-			const char *c = data();
+			cchar_t    *c = data();
 			while (isalpha(*c))
 				c++;
 			return len() ? int64_t(strtol(c, null, 10)) : int64_t(0);
@@ -2660,7 +2927,7 @@ export {
 
 		real real_value() const {
 			char *c = data();
-			while (isalpha((const char)*c))
+			while (isalpha((cchar_t)*c))
 				c++;
 			return strtod(c, null);
 		}
@@ -2713,7 +2980,7 @@ export {
 		}
 	};
 
-	inline str operator+(const char *cstr, str rhs) {
+	inline str operator+(cchar_t *cstr, str rhs) {
 		return str(cstr) + rhs;
 	}
 
@@ -2740,15 +3007,12 @@ export {
 //export module map;
 //export {
 
-	void grab(list<Memory*>& ml);
-	void drop(list<Memory*>& ml);
-
 	// do me first.
 	template <typename K, typename V>
 	struct hashlist:dx {
 		typedef pair<K,V>  pair;
-		typedef list<pair> alist;
-		typedef alist::IX  IX;
+		typedef list<pair> list;
+		typedef list::IX   IX;
 
 		V& operator[](K key) {
 			// different constexpr ops for dealing with type K
@@ -2760,32 +3024,30 @@ export {
 		// use the Memory* in dx as the fifo sequence
 	};
 
-	// no non-sense map
-	// keep it fifo. thats pro-pattern and not anti-pattern
+	/// no non-sense map
+	/// keep it fifo. thats pro-pattern.
 	template <typename K, typename V>
 	struct map:dx {
 		typedef pair<K, V>      pair;
-		typedef list<pair<K,V>> alist;
-		typedef alist::IX	    IX;
-		alist				   &a;
+		typedef list<pair>::IX  IX;
+		typedef list<pair>      list;
 
-		// initializers of members, how have i not done that? well we do in
-		// talk about turning memory on its side and stacking it to teh sky.  makes sense to do this, though. everything is data, organized.
-		
-		map() : dx({ // lol good.
-			{ a }
-		}) { }
+		list& a;
 
-		//dx::mem = Memory::manage<alist>(&v[0], 2);
+		map()				     : dx({"a", list()}), a(ref<list>("a")) { }
+		map(null_t  n)		     : a(def<list>()) { }
+		map(initial<pair> pairs) : dx({"a", list(pairs.size())}), a(ref<list>("a")) {
+			for (auto &p:pairs)
+				a += p;
+		}
 
-		map(null_t   n = null) : dx(null) { }
-		map(initial <assoc> l) : dx({ for (auto &v: l) a += v; }
-		idx      count() const { return a.count; }
+		idx count() const { return a.count(); }
 
 		IX* find(K &k, idx *pi = null) const {
 			idx index = 0;
-			for (auto ix = a.first; ix; ix = ix->next) {
-				if (k == ix->v.key) {
+			// mx lock needed in list.
+			for (auto ix = a.ifirst(); ix; ix = ix->next) {
+				if (k == ix->data.key) {
 					if (pi)
 					   *pi = index;
 					return ix;
@@ -2797,9 +3059,9 @@ export {
 
 		inline V& operator[](K k) const {
 			auto ix = find(k);
-			if  (ix) return ix->v.value;
+			if  (ix) return ix->data.value;
 			a += { k, V() };
-			return a.end().value;
+			return a.last().value;
 		}
 
 		inline idx  count(K k) const { return  find(k) ? 1 : 0; }
@@ -2846,7 +3108,7 @@ export {
 	public:
 		typedef lambda<void(Path)> Fn;
 
-		enum Flags {
+		enum Arg {
 			Recursion,
 			NoSymLinks,
 			NoHidden,
@@ -2871,15 +3133,8 @@ export {
 			return *this;
 		}
 
-		Path &operator=(str s) {
-			p = fs::path(std::string(s));
-			return *this;
-		}
-
-		Path& operator=(fs::path path) {
-			p = path;
-			return *this;
-		}
+		Path& operator=(str s)         { p = fs::path(std::string(s)); return *this; }
+		Path& operator=(fs::path path) { p = path;                     return *this; }
 
 		str read_file() {
 			if (!fs::is_regular_file(p))
@@ -2975,7 +3230,7 @@ export {
 			return int64_t(ms);
 		}
 
-		bool read(size_t bs, lambda<void(const char*, size_t)> fn) {
+		bool read(size_t bs, lambda<void(cchar_t*, size_t)> fn) {
 			try {
 				std::error_code ec;
 				size_t rsize = fs::file_size(p, ec);
@@ -2986,7 +3241,7 @@ export {
 				char* buf = new char[bs];
 				for (idx i = 0, n = (rsize / bs) + (rsize % bs != 0); i < n; i++) {
 					size_t sz = i == (n - 1) ? rsize - (rsize / bs * bs) : bs;
-					fn((const char*)buf, sz);
+					fn((cchar_t*)buf, sz);
 				}
 				delete[] buf;
 
@@ -3001,7 +3256,7 @@ export {
 				size_t        sz = bytes.size();
 				std::ofstream f(p, std::ios::out | std::ios::binary);
 				if (sz)
-					f.write((const char*)bytes.data(), sz);
+					f.write((cchar_t*)bytes.data(), sz);
 
 			} catch (std::ofstream::failure e) {
 				std::cerr << "read failure on resource: " << p.string() << std::endl;
@@ -3014,7 +3269,7 @@ export {
 				size_t        sz = bytes.size();
 				std::ofstream f(p, std::ios::out | std::ios::binary | std::ios::app);
 				if (sz)
-					f.write((const char*)bytes.data(), sz);
+					f.write((cchar_t*)bytes.data(), sz);
 			}
 			catch (std::ofstream::failure e) {
 				std::cerr << "read failure on resource: " << p.string() << std::endl;
@@ -3024,15 +3279,14 @@ export {
 
 		bool same_as(Path b) const { std::error_code ec; return fs::equivalent(p, b.p, ec); }
 
-		void resources(array<str> exts, FlagsOf<Flags> flags, Fn fn) {
+		void resources(array<str> exts, Flags<Arg> flags, Fn fn) {
 			bool use_gitignore	= flags[ UseGitIgnores ];
 			bool recursive		= flags[ Recursion     ];
 			bool no_hidden		= flags[ NoHidden      ];
+			array<str> ignore;
 
-			auto aa = str::read_file(p / ".gitignore").split("\n");
-
-			auto ignore			= flags[UseGitIgnores] ?
-				aa : array<str>();
+			if (flags[UseGitIgnores])
+				ignore = str::read_file(p / ".gitignore").split("\n");
 
 			lambda<void(Path)> res;
 			
@@ -3161,39 +3415,39 @@ export {
 
 	// 
 	struct base64 {
-		static map<size_t, size_t> b64_encoder() {
-			auto mm = map<size_t, size_t>();
-			/// --------------------------------------------------------
-			for (idx i = 0; i < 26; i++) mm[i]          = idx('A') + idx(i);
-			for (idx i = 0; i < 26; i++) mm[26 + i]     = idx('a') + idx(i);
-			for (idx i = 0; i < 10; i++) mm[26 * 2 + i] = idx('0') + idx(i);
-			/// --------------------------------------------------------
-			mm[26 * 2 + 10 + 0] = idx('+');
-			mm[26 * 2 + 10 + 1] = idx('/');
-			/// --------------------------------------------------------
+		static map<size_t, size_t> &b64_encoder() {
+			static map<size_t, size_t> mm;
+			if (!mm) {
+				for (idx i = 0; i < 26; i++) mm[i]          = idx('A') + idx(i);
+				for (idx i = 0; i < 26; i++) mm[26 + i]     = idx('a') + idx(i);
+				for (idx i = 0; i < 10; i++) mm[26 * 2 + i] = idx('0') + idx(i);
+				mm[26 * 2 + 10 + 0] = idx('+');
+				mm[26 * 2 + 10 + 1] = idx('/');
+			}
 			return mm;
 		}
 
 
 		/// base64 validation/value map
-		static map<idx, idx> b64_decoder() {
-			auto m = map<idx, idx>();
+		static map<idx, idx> &b64_decoder() {
+			static map<idx, idx> m;
+			if (!m) {
+				for (idx i = 0; i < 26; i++) m['A' + i] = i;
+				for (idx i = 0; i < 26; i++) m['a' + i] = 26 + i;
+				for (idx i = 0; i < 10; i++) m['0' + i] = 26 * 2 + i;
 
-			for (idx i = 0; i < 26; i++) m['A' + i] = i;
-			for (idx i = 0; i < 26; i++) m['a' + i] = 26 + i;
-			for (idx i = 0; i < 10; i++) m['0' + i] = 26 * 2 + i;
-
-			m['+'] = 26 * 2 + 10 + 0;
-			m['/'] = 26 * 2 + 10 + 1;
+				m['+'] = 26 * 2 + 10 + 0;
+				m['/'] = 26 * 2 + 10 + 1;
+			}
 			return m;
 		}
 
-		static sh<uint8_t> encode(cchar_t* data, idx len) {
-			auto        m = b64_encoder();
-			idx     p_len = ((len + 2) / 3) * 4;
-			auto  encoded = sh<uint8_t>::manage(p_len + 1);
-			uint8_t*    e = encoded.pointer<uint8_t>();
-			idx         b = 0;
+		static sp<uint8_t> encode(cchar_t* data, idx len) {
+			auto&         m = b64_encoder();
+			idx       p_len = ((len + 2) / 3) * 4;
+			sp<uint8_t> res = Memory::valloc(Id<uint8_t>(), null, p_len + 1, 0);
+			uint8_t*      e = res.pointer<uint8_t>();
+			idx           b = 0;
 			for (idx i = 0; i < len; i += 3) {
 				*(e++) = uint8_t(m[data[i] >> 2]);
 				if (i + 1 <= len) *(e++) = uint8_t(m[((data[i]     << 4) & 0x3f) | data[i + 1] >> 4]);
@@ -3204,15 +3458,14 @@ export {
 			for (idx i = b; i < p_len; i++)
 				*(e++) = '=';
 			*e = 0;
-			return encoded;
+			return res;
 		}
 
-		static sh<uint8_t> decode(cchar_t* b64, idx b64_len, idx* alloc_sz) {
+		static sp<uint8_t> decode(cchar_t* b64, idx b64_len, idx* alloc_sz) {
 			assert(b64_len % 4 == 0);
-			/// --------------------------------------
-			auto          m = base64::b64_decoder();
+			auto&		  m = base64::b64_decoder();
 			*alloc_sz       = b64_len / 4 * 3;
-			sh<uint8_t> out = sh<uint8_t>::manage(*alloc_sz + 1);
+			sp<uint8_t> out = Memory::valloc(Id<uint8_t>(), null, *alloc_sz + 1, 0);
 			uint8_t*      o = out.pointer<uint8_t>();
 			idx           n = 0;
 			idx           e = 0;
@@ -3241,12 +3494,11 @@ export {
 	};
 
 	// scope of var is about contain and rendition of data in such a way that is javascript-var-like.  it need not alter the data it just holds it
-	// assigning suc
 	struct var:dx {
 		str     s; // attach!
 
 		var(nullptr_t n = null) { }
-		var(Type *t) : dx(Memory::manage(t, 1)) { }
+		var(Type *t) : dx(Memory::valloc(t, null, 1, 0)) { }
 
 		var(const var &ref) : dx(ref)   { }
 
@@ -3498,24 +3750,23 @@ export {
 //export module model;
 //export {
 
+	// its older code but it should check out.
+
 	// sqlite adapter worked great but it is to be subducted for a bit.
 	typedef Map          SMap;
 	typedef Array        Table; // after port, too quaint. moving on.
 	
-	struct Schema:Map {
-		Schema(str remote):Map({{"schema",remote},{"resolves", var()}}) { }
+	struct Resolver:Map {
+		Resolver(str remote):Map({
+			{"schema", remote}, {"resolves", var()}
+		}) { }
 	};
 
 	/// vars present high level control for data binding usage
 	typedef map<dx,var>  ModelMap;
 
-	// give the demos!
-	int abc() {
-		var test = var(0);
-		var   mm = var(Type::Map);
-		return 0;
-	}
-
+	/// was Schema; not fitting the bill name-wise; its a remote resolver, holder.
+	/// Resolver is good but would need more interface-wise (todo)
 	struct Remote {
 		int64_t value;
 		str     remote;
@@ -3526,17 +3777,17 @@ export {
 
 		operator int64_t() { return value; }
 		operator     var() {
-			return remote ? var(Schema(remote)) : var(value);
+			return remote ? var(Resolver(remote)) : var(value);
 		}
 	};
 
 	struct node;
-	struct Raw {
+	struct Record {
 		std::vector<std::string> fields;
 		std::vector<std::string> values;
 	};
 
-	typedef std::vector<Raw>                        Results;
+	typedef std::vector<Record>                     Results;
 	typedef std::unordered_map<std::string, var>    Idents;
 	typedef std::unordered_map<std::string, Idents> ModelIdents;
 
@@ -3570,52 +3821,33 @@ export {
 //export module unit;
 //export {
 
-	/// M type.
-	/// structs, or member structs are simply reference bound types.
-	/// some safety of declaration could be known at compile-time too
-	template <typename C>
-	struct M:dx {
-		M() {
-		}
+	struct Alpha:dx {
+		enum MType {
+			Intern,
+			Extern
+		};
 
-		virtual dx declare() {
-			int test = 0;
-			test++;
-		}
+		str& a;
+		str& b;
 
-		template <typename T>
-		static T& member(cchar_t *name) {
-			// this set up the the member name and ordering, you could even get
-			static auto stub = []() -> void {
-				int test = 0;
-				test++;
-			};
-			stub();
-		}
+		/// dont need static here because this is only called once
+		/// the members are bound to the type
+		static Schema *members() {
+			return Schema::define({
+				Schema::Row("a", str("abc"), Intern),
+				Schema::Row("b", str("123"), Extern)
+			});
+		};
+
+		/// default values
+		Alpha(null_t n = null) : dx(members, f),
+			a(def<str>("a")),
+			b(def<str>("b")) { }
+		
+		Alpha(initial<Field> f) : dx(members, f),
+			a(ref<str>("a")),
+			b(ref<str>("b")) { }
 	};
-
-	struct Testy: M<Testy> {
-		str& a = member<str>("");
-		str& b = member<str>(""); // you can construct such a thing with this.  i know it. its just a matter of order and count is all.
-		// its simple but its exciting simple.
-
-		dx declare() {
-			// i like this because we can put it in a functor static
-			return null;
-		}
-	};
-
-	/*
-	// define a good one, but dont over-polish.
-	struct Test :M<Test> {
-		// yeah none... i dunno how to debug either LOL.
-		Test(var &args) : members({
-			{ "member",   int64_t(1) },
-			{ "member2",      str(1.02) },
-			{  }
-		})
-	};*/
-
 
 	template <typename T>
 	const T nan() { return std::numeric_limits<T>::quiet_NaN(); };
@@ -3632,10 +3864,10 @@ export {
 		///
 		static std::unordered_map<str, int> u_flags;
 
-		str             type   = null;
-		real            value  = nan<real>();
-		int64_t         millis = 0;
-		FlagsOf<Attrib> flags  = null; /// FlagsOf makes flags out of enums, just so you dont define with bit pattern but keep to enum
+		str           type   = null;
+		real          value  = nan<real>();
+		int64_t       millis = 0;
+		Alloc::Flags  flags  = null; /// Flags makes flags out of enums, just so you dont define with bit pattern but keep to enum
     
 		///
 		void init() {
@@ -3766,9 +3998,8 @@ export {
 ///}
 
 
-// must, must must now decide on Component API Member struct.
-// reduce parts that can be reduced no functionality to add.
-// go team.
+
+
 // ------------------------
 //export module member;
 //export {
@@ -3791,7 +4022,7 @@ struct Member {
 
 	lambda<void(Member*, Member*)> copy_fn;
 
-	var& nil() { return default_of<var>(); }
+	var& nil() { return def<var>(); }
 
 	var*     serialized = null;
 	Type    *type       =  Type::Undefined;
@@ -3805,9 +4036,9 @@ struct Member {
 
 	virtual ~Member() { }
 
-	virtual void*            ptr() { return null; }
-	virtual dx& shared_value() { return default_of<dx>(); }
-	virtual bool      state_bool() {
+	virtual void*        ptr() { return null; }
+	virtual dx& shared_value() { return def<dx>(); }
+	virtual bool  state_bool() {
 		assert(false);
 		return bool(false);
 	}
@@ -3838,115 +4069,13 @@ struct Member {
 	virtual void style_value_set(void* ptr, StTrans*) { }
 };
 //}
-
-//export import meta; // Component uses a collection of metas, default is just 'members'; they will have a different namespace in context
-//export {
-	// interface to Member struct for a given [T]ype
 	/*
-	template <typename T>
-	struct M:Member {
-		typedef T value_type;
-    
-		///
-		std::shared_ptr<T> value; /// Member gives us types, order, serialization and the shared_ptr gives us memory management
-		bool sync  = false;
-    
-		///
-		void operator=(T v) {
-			*value = v;
-			sync   = false;
-		}
-    
-		/// no need to reserialize when possible
-		operator var &() {
-			if (!sync) {
-				var &r = *serialized;
-				r      = var(*value.get());
-				sync   = true;
-			}
-			return *serialized;
-		}
-    
-		/// construct from var
-		M(var &v) {
-			exit(0);
-			value      = std::shared_ptr<T>(new T(v)); // this is a T *, dont get it
-			serialized = v.ptr();  // this definitely cant happen
-			sync       = true;
-		}
-    
-		/// get reference to value memory (note this is not how we would assign Member from another Member)
-		operator T &() {
-			assert(value);
-			return *value.get();
-		}
-    
-		///
-		T &operator()() {
-			assert(value);
-			return *value.get();
-		}
-
-		///
-		template <typename R, typename A>
-		R operator()(A a) { return (*(lambda<R(A)> *)value)(a); }
-
-		///
-		template <typename R, typename A, typename B>
-		R operator()(A a, B b) { return (*(lambda<R(A,B)> *)value)(a, b); }
-    
-		///
-		M<T> &operator=(const M<T> &ref) {
-			if (this != &ref) { /// not bound at this point
-				value = ref.value;
-				//assert(serialized && ref.serialized);
-				//*serialized = *ref.serialized; /// not technically needed yet, only when the var is requested
-				sync = false;
-			}
-			return *this;
-		}
-
-		/// will likely need specialization of a specific type named VRef or Ref, just var:Ref, thats all
-		M<T> &operator=(var &ref) {
-			if (this  != &ref) {
-				*value = T(ref);
-				//*serialized = *ref; /// not technically needed yet, only when the var is requested
-				sync = false;
-			}
-			return *this;
-		}
-		///
-		M() { value = null; }
-	   ~M() { }
-	};
-
 	template <typename F>
 	struct Lambda:M<lambda<F>> {
 		typedef typename lambda<F>::rtype rtype;
 		static  const    size_t arg_count = lambda<F>::args;
-		rtype            last_result; // Lamba is a cached result using member services; likely need controls on when its invalidated in context
-	};
-
-	important to migrate to new lambda that returns a shared result
-	*/
-
-	/// remains to be se
-	#define struct_shim(C)\
-	bool operator==(C &b) { return Meta::operator==(b); }\
-	C():Meta() { bind_base(false); }\
-	C(var &ref)  { t = ref.t; c = ref.c; m = ref.m; a = ref.a; bind_base(true); }\
-	inline C &operator=(var ref) {\
-		if (this != &ref) { t = ref.t; c = ref.c; m = ref.m; a = ref.a; }\
-		if (!bound)       { bind_base(true); } else { assert(false); }\
-		return *this;\
-	}\
-	C(const C &ref):C() {\
-		ctype = ref.ctype;\
-		t = ref.t; c = ref.c; m = ref.m; a = ref.a;\
-		bind_base(false);\
-		for (idx i = 0; i < members.sz(); i++)\
-			members[i]->copy_fn(members[i], ((::array<Member *> &)ref.members)[i]);\
-	}
+		rtype            last_result;
+	};*/
 
 //}
 // ---------------
@@ -3980,8 +4109,7 @@ struct Member {
 			return null;
 		}
 
-		/// symbols suck lol
-		/// depending how Symbol * param, this is an assertion failure on a resolve of symbol to int
+		///
 		int resolve(std::string s, Symbol **ptr = null) {
 			for (auto &sym: T::symbols)
 				if (sym.symbol == s) {
@@ -4074,6 +4202,8 @@ INITIALIZER(initialize) {
 	*(Ident*)&Type::Any		    = Type::bootstrap<Any>		  (decls[20]); Type::primitives[p++] = (Type*)Type::Any;
 	*(Ident*)&Type::Meta	    = Type::bootstrap<Meta>		  (decls[21]); Type::primitives[p++] = (Type*)Type::Meta;
 
+	// now we convert node (lots of code removed; we have made nodal the mod[a]l
+
 	assert(p == p_count);
 	 
 	vec2f aa = vec2f { r32(1), r32(2) } + vec2f { r32(2), r32(3) };
@@ -4085,8 +4215,8 @@ INITIALIZER(initialize) {
 
 	Map m = {};
 
-	m["hi"] = str("LOL");
+	m[str{"hi"}] = str("LOL");
 
-	printf("str = %s\n", str(m["hi"]).data());
+	printf("str = %s\n", str(m[str{ "hi" }]).data());
 
 }

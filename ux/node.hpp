@@ -170,17 +170,12 @@ struct Element {
 
 typedef std::function<Element(void)> FnRender;
 
-/// purpose-built for multi-domain use component model.
-/// your business logic encapsulated in isolated design,
-/// a sort of lexical type lookup (closest in scope)
-/// for type-strict context usage-case.
 struct node {
     enum Flags {
         Focused      = 1,
         Captured     = 2,
         StateUpdate  = 4,
-        StyleAnimate = 8,
-        
+        StyleAnimate = 8
     };
     
     ///
@@ -531,8 +526,8 @@ struct node {
     }
     
     vec2 offset() {
-        node *n = parent;
-        vec2  o = { 0, 0 };
+        node  *n = parent;
+        vec2   o = { 0, 0 };
         while (n) {
             rectd &rect = n->paths.rect;
             o  += rect.xy();
