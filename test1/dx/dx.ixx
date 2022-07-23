@@ -212,8 +212,22 @@ export {
 	real					PI   = 3.141592653589793238462643383279502884L;
 
 	/// Type-Conduit use-case; so we can express ourselves in Schema
-	struct Higgs   { };
-	struct Conduit { Higgs* boson; };
+	struct Higgs { };
+	
+	template <typename T>
+	Higgs* higgs(T& v);
+
+	struct Conduit {
+		Higgs* boson;
+		///
+		Conduit(nullptr_t n = null) : boson(null)     { }
+		Conduit(int v)				: boson(higgs(v)) { }
+	};
+
+	template <typename T>
+	Higgs* higgs(T& v) {
+		return null;
+	}
 
 	union Primitive {
 		i8	    v_i8;
@@ -229,6 +243,16 @@ export {
 		idx     v_idx;
 		Conduit v_dx;
 	};
+
+	/// useful for null instance in ref context,
+	/// and other uses where refs are returned errors;
+	/// huge asterick though and must not write to
+	/// this memory, unless to make it even more nullified
+	template <typename T>
+	T& def() {
+		static T d_value;
+		return   d_value;
+	}
 
 	/// the rest of the int types are i or u for signed or unsigned, with their bit count.
 	/// -------------------------------------------------
@@ -320,8 +344,8 @@ export {
 		bool       operator&&(Flags<T>& f) const { return contain(f); }
 	};
 
-	void grab(Memory* m);
-	void drop(Memory* m);
+	Memory *grab(Memory* m);
+	Memory *drop(Memory* m);
 
 	/// you express these with int(var, int, str); U unwraps inside the parenthesis
 	template <typename T, typename... U>
@@ -336,11 +360,6 @@ export {
 
 	struct dx;
 	struct Type;
-
-	template <typename T> T& def() {
-		static T d_value;
-		return   d_value; /// useful for null instance in ref context, and other uses where refs are returned errors; huge asterick though and must not write to this memory, unless to make it even more nullified
-	}
 
 	struct Alloc {
 		enum AllocType { None, Arb, Manage };
@@ -815,7 +834,19 @@ export {
 	template <typename T> inline void memclear(T& d, size_t c = 1, int v = 0) { memset(&d, v, c * sizeof(T)); }
 	template <typename T> inline void memcopy (T* d, T*     s,  size_t c = 1) { memcpy( d, s, c * sizeof(T)); }
 
-	typedef pair<char*, Primitive> Att;
+	struct Att {
+		Type*     type;
+		char*     key;
+		Primitive value;
+
+		template <typename E>
+		Att(E value) : key(null) {
+			type        = Id<E>();
+			value.v_idx = idx(value);
+		}
+
+		Att() : type(null), key(null), value(0) { }
+	};
 	
 	/// no mx should be needed in this
 	/// this beauty could be called valloc, and it could be used by Memory
@@ -828,6 +859,8 @@ export {
 			idx alloc;
 			T*  items;
 		} *data;
+		///
+		stack(nullptr_t n = null) : data(null) { }
 		///
 		stack(initial<T> a) {
 			idx index = 0;
@@ -843,12 +876,13 @@ export {
 				data->items[index++] = i;
 		}
 		///
-		stack()					   : data(null)     { };
-		stack(T *items, idx count) : data(new Data  { .refs = 1, .items=items, .count=count, .alloc=count }) { }
+		stack(idx count)		   : data(new Data  { .refs=1, .items=new T[count], .count=count, .alloc=count }) { }
+		stack(T *items, idx count) : data(new Data  { .refs=1, .items=items,        .count=count, .alloc=count }) { }
 		stack(stack &ref)		   : data(ref.data) { if (data)   ++data->refs; }
 	   ~stack()  {
 		   if (data && --data->refs == 0) {
-		       delete[] data->items; delete data;
+		       delete[] data->items;
+			   delete   data;
 		   }
 		}
 	    ///
@@ -872,10 +906,9 @@ export {
 				expand();
 			data->items[data->count++] = v;
 		}
-		void pop()      {
-			assert(data && data->count);
-			data->count--;
-		}
+		///
+		void  pop()       { assert(data && data->count); data->count--; }
+		idx count() const { return data ? data->count : 0; }
 		///
 		T &operator[](idx i) { return data->items[i]; }
 		T &operator=(const stack &ref) {
@@ -889,53 +922,66 @@ export {
 	};
 
 	typedef stack<Att> Attrs;
-
+	
 	/// dx structures use Schema in groups.
 	struct Schema {
+
 		/// -----------------------------------------------
-		struct Row {			    ///
-			size_t		 id;       /// for symbolic values of id you refer to the const char* typecast
-			size_t		 group;	  /// an integer dimension to the Field
-			Conduit      def;    /// default value stored in another dimension
-			stack<CPair> meta;	/// meta properties
+		struct Row {			   ///
+			size_t		 id;      /// for symbolic values of id you refer to the const char* typecast
+			Conduit      def;    /// default value stored in another universe
+			Attrs		 meta;	/// meta properties
 							   ///
-			Row(cchar_t *name, Conduit d, size_t g, stack<CPair> m) {
+			Row(cchar_t *name, Conduit d, Attrs m) {
 				id     = size_t(name);
-				group  = g;
 				def	   = d;
 				meta   = m;
 			}
 		};
 
-		Schema(Row* table,    idx count, stack<CPair> meta = { })
-			: table(table), count(count),        meta(meta)  { }
+		/// -----------------------------------------------
+		struct Enum:Row { Enum(cchar_t* name, Conduit d = null) : Row(name, d, null) { } };
 
-		Row*         table;
-		idx          count;
-		stack<CPair> meta;
+		Schema(stack<Row> table, Attrs  meta = null)
+			: table(table),     meta(meta) { }
+
+		Schema(Schema &ref)
+			: table(ref.table), meta(ref.meta) { }
+
+		stack<Row>   table;
+		Attrs        meta;
+
+		/// -----------------------------------------------
+		Schema &operator=(const Schema &ref) {
+			if (this  != &ref) {
+				table =   ref.table;
+				meta  =   ref.meta;
+			}
+			return *this;
+		}
 
 		/// -----------------------------------------------
 		Row* lookup(size_t id, idx ci = 0) {
-			for (idx i = ci; i < count; i++) if (table[i].id == id) return &table[i];
-			for (idx i = 0;  i < ci;    i++) if (table[i].id == id) return &table[i];
+			for (idx i = ci; i < table.count(); i++) if (table[i].id == id) return &table[i];
+			for (idx i = 0;  i < ci; i++) if (table[i].id == id) return &table[i];
 			assert(false);
 			return null;
 		}
 		/// -----------------------------------------------
-		static Schema* define(initial<Row> &rows) {
-			size_t sz = rows.size();
-			size_t  i = 0;
-			Schema *o = new Schema { new Row[sz], idx(sz) };
+		static Schema* define(initial<Row> rows) {
+			size_t  sz = rows.size();
+			size_t   i = 0;
+			auto table = stack<Row>(sz);
 			for (auto &r:rows) {
-				Row* w        = &o->table[i++];
-				     w->def   = grab((Memory *)r.def.boson);
-				     w->id    = r.id;
-				     w->group = r.group;
+				Row* w            = &table[i++];
+				     w->def.boson = (Higgs *)grab((Memory *)r.def.boson);
+				     w->id        = r.id;
+					 w->meta      = r.meta;
 			}
-			return o;
+			return new Schema(table);
 		}
 		/// -----------------------------------------------
-	   ~Schema() { delete[] table; }
+	   ~Schema() { }
 	};
 
 	typedef Schema* (*FnMembers)();
@@ -1315,6 +1361,13 @@ export {
 		dx( int64_t  v) : mem(Memory::single(v)) { }
 		dx(uint64_t  v) : mem(Memory::single(v)) { }
 
+		template <typename T>
+		static Schema* members(FnMembers fschema) {
+			Type*  type = Id<T>();
+			if   (!type->schema) type->schema = fschema();
+			return type->schema;
+		}
+
 		// internal/external or member or m, mref, ref
 		// must use lookup
 		template <typename T>
@@ -1359,24 +1412,14 @@ export {
 		/// mem = Memory { type:T, flags:Object, count:members.size()
 		/// call it Meta, MX, Fields, Object; thats a Memory layout not a type; its type is the class being used
 		/// 
-		dx(FnMembers members, initial<Field> &fields) {  /// field should only be used in FnMember ? .. no both.
-			Type* t = type();
-			
-			/// init functor only called once
-			if (!t->schema)
-				 t->schema = members();					 /// Memory* of type:T (from Fn, count of total props (Props abstract)
-			
-			Schema* schema = t->schema;				     /// Schema
+		dx(Schema *schema) { }
+
+		dx(Schema *schema, initial<Field> &fields) {
 			idx      index = 0;
-			
-			/// ideal memory structure for dx class use-case?  to me it seems like you referenec Obj type for names and defaults, and iterate through
-			/// we need to count the total object size; but of course you cannot get it from sizeof(T) correct?
-			/// 
-			/// 
 
 			/// iterate through fields given by user (referenced from higher level constructor)
 			for (Field f: fields) {
-				assert(index < schema->count);
+				assert(index < schema->table.count());
 				Schema::Row *member = schema->lookup(f.id, index); /// optimize with a sequence state, these should be given in the same order as they are defined
 				/// ---------------------------- ///
 				assert(member);					 /// member must exist
@@ -3750,8 +3793,6 @@ export {
 //export module model;
 //export {
 
-	// its older code but it should check out.
-
 	// sqlite adapter worked great but it is to be subducted for a bit.
 	typedef Map          SMap;
 	typedef Array        Table; // after port, too quaint. moving on.
@@ -3832,19 +3873,22 @@ export {
 
 		/// dont need static here because this is only called once
 		/// the members are bound to the type
-		static Schema *members() {
+		static Schema *m() {
+
+			// Row(cchar_t *name, Conduit d, size_t g, Attrs m) {
 			return Schema::define({
-				Schema::Row("a", str("abc"), Intern),
-				Schema::Row("b", str("123"), Extern)
+				Schema::Row("a", str("abc"), {{Intern}}), // meta flag.. definitely.
+				Schema::Row("b", str("123"), {{Extern}})
 			});
 		};
 
 		/// default values
-		Alpha(null_t n = null) : dx(members, f),
-			a(def<str>("a")),
-			b(def<str>("b")) { }
+		Alpha(null_t n = null) : dx(members<Alpha>(m)),
+			a(def<str>()),
+			b(def<str>()) { }
 		
-		Alpha(initial<Field> f) : dx(members, f),
+		/// values from newly allocated Memory; initialized with fields
+		Alpha(initial<Field> f) : dx(members<Alpha>(m), f),
 			a(ref<str>("a")),
 			b(ref<str>("b")) { }
 	};
@@ -3998,8 +4042,10 @@ export {
 ///}
 
 
-
-
+//
+// definitely not used.
+//
+ 
 // ------------------------
 //export module member;
 //export {
@@ -4008,15 +4054,15 @@ struct Member {
 	typedef lambda< var(Member&)>			MFnGet;
 	typedef lambda<bool(Member&)>			MFnBool;
 	typedef lambda<void(Member&)>			MFnVoid;
-	typedef lambda<void(Member&, dx&)>	MFnShared;
+	typedef lambda<void(Member&, dx&)>		MFnShared;
 	typedef lambda<void(Member&, void*  )>	MFnArb;
 
 	struct StTrans;
 
 	enum MType {
 		Undefined,
-		Intern, // your inner workings
-		Extern, // your interface
+		Intern,				  // your inner workings
+		Extern,				  // your interface
 		Configurable = Intern // having a configurable bit is important in many cases
 	};
 
@@ -4081,6 +4127,60 @@ struct Member {
 // ---------------
 //export import ex;
 //export {
+
+	
+
+	// new enums, its a dx type. and as always not sure if im enum entry or enum class.  this is not a wrapper
+	// struct EName:ex<EName> {
+	// 
+	template <typename E>
+	struct ex:dx {
+		/// i most like the idea of defining enum in schema; the default can be used as an override on the auto count.
+		/// using existing methodology, and it is the same reflection facility.  here we also use the dx type as well.
+		/// dx can be all things, to all people and orbiting robits.
+		static Schema* define() {
+			return Schema::define({
+				Schema::Enum("enum1", 0), // no arg, OR null = auto-increment
+				Schema::Enum("enum2", 1),
+				Schema::Enum("enum3", 2)
+			});
+		}
+		
+		operator bool() { return mem; }
+
+		operator   dx() {
+			for (auto &sym: T::symbols)
+				if (sym.value == kind)
+					return sym.symbol;
+			assert(false);
+			return null;
+		}
+
+		str    symbol() {
+			for (auto &sym: E::symbols)
+				if (sym.value == kind)
+					return sym.symbol;
+			return null;
+		}
+
+		///
+		int resolve(std::string s, Symbol **ptr = null) {
+			for (auto &sym: T::symbols)
+				if (sym.symbol == s) {
+					if (ptr)
+						*ptr = &sym;
+					return sym.value;
+				}
+			if (ptr)
+			   *ptr = null;
+			///
+			assert(!ptr || T::symbols.size());
+			return T::symbols[0].value;
+		}
+		ex(var &v) { kind = resolve(v); }
+	}
+
+	ex<EnumType> e;
 
 	struct EnumData {
 		Type        type;
@@ -4147,6 +4247,7 @@ INITIALIZER(initialize) {
 	static bool init = false;
 	assert(!init);
 
+	/// i dont see thie point of this
 	static Type::Decl decls[] =
 	{
 		{ 0,  "undefined" },
@@ -4161,16 +4262,16 @@ INITIALIZER(initialize) {
 		{ 9,  "f32"		  },
 		{ 10, "f64"       },
 		{ 11, "Bool"      },
-		{ 12, "Str"       },
-		{ 13, "Map"       },
-		{ 14, "Array"     },
-		{ 15, "Ref"       },
-		{ 16, "Arb"       },
-		{ 17, "Node"      },
-		{ 18, "Lambda"    },
-		{ 19, "Member"    },
-		{ 20, "Any"       },
-		{ 21, "Meta"      }
+		{ 12, "Str"       }, 
+		{ 13, "Map"       }, //
+		{ 14, "Array"     }, //
+		{ 15, "Ref"       }, //
+		{ 16, "Arb"       }, //
+		{ 17, "Node"      }, //
+		{ 18, "Lambda"    }, //
+		{ 19, "Member"    }, //
+		{ 20, "Any"       }, //
+		{ 21, "Meta"      }  //
 	};
 	
 	/// initialize type primitives
