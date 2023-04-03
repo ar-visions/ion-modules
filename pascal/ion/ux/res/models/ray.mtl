@@ -1,0 +1,52 @@
+# Blender MTL File: 'Ray-3-LOD1.blend'
+# Material Count: 5
+
+newmtl Engine_Ray-Paint.png_
+Ns 7.843137
+Ka 0.000000 0.000000 0.000000
+Kd 0.000000 0.210886 0.512000
+Ks 0.500000 0.500000 0.500000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Ray-Paint.png
+
+newmtl Flat_2_Ray-Paint.png_
+Ns 1.960784
+Ka 0.000000 0.000000 0.000000
+Kd 0.512000 0.512000 0.512000
+Ks 0.500000 0.500000 0.500000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Ray-Paint.png
+
+newmtl Flat_Ray-Paint.png_Ra
+Ns 90.196078
+Ka 0.000000 0.000000 0.000000
+Kd 0.049010 0.046087 0.047381
+Ks 0.233333 0.233333 0.233333
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Ray-Paint.png
+
+newmtl Paint_Ray-Paint.png_R
+Ns 13.725490
+Ka 0.000000 0.000000 0.000000
+Kd 0.018877 0.051093 0.133333
+Ks 1.000000 1.000000 1.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Ray-Paint.png
+
+newmtl Window_Ray-Paint.png_
+Ns 90.196078
+Ka 0.000000 0.000000 0.000000
+Kd 0.435869 0.529628 0.109590
+Ks 0.500000 0.500000 0.500000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd Ray-Paint.png

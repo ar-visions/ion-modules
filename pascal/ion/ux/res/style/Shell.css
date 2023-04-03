@@ -1,0 +1,57 @@
+
+Shell {
+    region:       0l 0t 0r 0b;
+    fill-color:   #0000;
+}
+
+Mars {
+    region:       0l 0t 0r 0b;
+    fill-color:   #f001;
+}
+
+Object {
+    region:       0l 0t 0r 0b;
+}
+
+/* making this hold the entire screen for now */
+Group {
+    fill-color:   #111;
+    region:       0l 0t 0r 0b;
+    radius:       0;
+    clip:         true;
+    image-align:  middle middle;
+}
+
+
+Button {
+    fill-color:   #0f02;
+    image:        "images/menu.png";
+    image-region:  5l 5t 5r 5b;
+    text-color:   #fff5;
+    text-label:   "This is a label 22z...";
+    region:       0l 0t 0r 80h;
+    image-align:  left top;
+    opacity:      1.0;
+}
+
+Button.hi  {
+    region:       0l 80t 0r 80h;
+    fill-color:   #f002;
+}
+
+/* id not working with hover */
+Button:hover  {
+    fill-color:   #000;
+}
+
+Button.hi {
+    fill-color: #00f2;
+    text-color: #fff5;
+}
+
+Button:active {
+    fill-color:   #aaf;
+}
+
+
+

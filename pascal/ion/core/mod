@@ -1,0 +1,4 @@
+
+# core needs to build mx first and doesnt
+
+set(cpp 23)

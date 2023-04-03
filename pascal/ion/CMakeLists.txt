@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.5)
+include(../ion/ci/main.cmake)
+get_name("project.json" name)
+project(${name})
+main()

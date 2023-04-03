@@ -1,0 +1,2 @@
+dep(ion.core)
+set(cpp 23)

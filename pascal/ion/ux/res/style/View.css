@@ -1,0 +1,40 @@
+Button {
+    radius:       0;
+    fill-color:   #348;
+    image:        "menu.png";
+    image-region:  5l 5t 5r 5b, 200ms ease-in;
+    text-color:   #222;
+    text-label:   "This is a label 22z...";
+    region:       0l 0t 0r 80h;
+    image-align:  left top, 900ms ease;
+    opacity:      0.1;
+}
+
+Car {
+    region:       0l 80y 0r 0b;
+    fill-color:   #222;
+}
+
+Group {
+    fill-color:   #f00;
+    region:       0l 0t 0r 0b;
+    radius:       32;
+    clip:         true;
+    image:        "cinderella.png";
+    image-align:  middle middle;
+}
+
+Group:hover {
+    fill-color:   #f0f, 200ms linear;
+}
+
+Button:hover {
+    image-region: 15p, 200ms ease-in;
+    fill-color:   #faa, 200ms linear;
+    image-align:  left top, 200ms ease;
+}
+
+Button:active {
+    fill-color:   #aaf;
+}
+

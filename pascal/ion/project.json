@@ -1,0 +1,31 @@
+{
+    "name":   "ion",
+    "version":"dev",
+    "import": [
+        {
+            "name":     "glfw",
+            "version":  "3.3.8",
+            "commit":   "7482de6",
+            "url":      "https://github.com/glfw/glfw",
+            "includes": ["./include"],
+            "libs":     ["./build"]
+        },
+        {
+            "name":     "wolf",
+            "version":  "5.5.4",
+            "commit":   "e0e590f126bd7d947ce3dfbea5ea1405bb646374",
+            "url":      "https://github.com/wolfSSL/wolfssl",
+            "includes": ["./include"],
+            "libs":     ["./build"]
+        },
+        {
+            "name":     "vkvg",
+            "version":  "0.2.2",
+            "commit":   "84cf72ddbeb6a38175ec04a1afc948373518086b",
+            "url":      "https://github.com/jpbruyere/vkvg.git",
+            "includes": ["."],
+            "libs":     ["./build"],
+            "diff":     "vkvg.diff"
+        }
+    ]
+}
