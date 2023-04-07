@@ -1,7 +1,1 @@
-set(cpp 23)
 dep(ion.core)
-
-
-# CMakeFiles/ion-core.dir/extern/ion/core/core.ixx.o
-
-# /Users/kalen/src/llvm-project/build/bin/clang++ -DARCH=x64 -DARCH_ARM64 -DEXTERN=link -DLINK=static -DSDK=native -DUNICODE -D_UNICODE -I/usr/local/include -I/Users/kalen/builds/orbiter/extern/ion/core -I/Users/kalen/builds/orbiter/extern/ion -I/Users/kalen/builds/orbiter -g -std=gnu++2b -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -fPIC -fmodules -Wfatal-errors -x c++-module -MD -MT CMakeFiles/ion-core.dir/extern/ion/core/core.ixx.o -MF CMakeFiles/ion-core.dir/extern/ion/core/core.ixx.o.d -o CMakeFiles/ion-core.dir/extern/ion/core/core.ixx.o -c /Users/kalen/builds/orbiter/extern/ion/core/core.ixx

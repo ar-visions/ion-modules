@@ -3,7 +3,7 @@ module;
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <vkvg/vkvg.h>
+#include <vkvg.h>
 #include <array>
 #include <set>
 #include <stack>

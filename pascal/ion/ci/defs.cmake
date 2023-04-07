@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.26)
 enable_language(CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -131,17 +131,23 @@ macro(set_defs)
         set(MSVC "1")
     endif()
 
+    set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API "2182bf5c-ef0d-489a-91da-49dbc3090d2a")
     string(TOUPPER ${ARCH}              UARCH)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    set(CMAKE_CXX_STANDARD_REQUIRED     ON)
+    set(CMAKE_CXX_EXTENSIONS           OFF)
+
+    # default to C++ extensions being off.
+    # clang's modules support have trouble with extensions right now.
+    # ------------------------------------
     set(CMAKE_C_STANDARD                11)
-   #set(CMAKE_CXX_STANDARD              17)
-   #set(CMAKE_CXX_STANDARD              23)
-    # for every .cpp without an .ixx, its 17
+    set(CMAKE_CXX_STANDARD              20)
+    include(ci/cxx20.cmake)
 
     if(NOT MSVC)
 
         #set(CMAKE_CXX_FLAGS -fmodules)
-        add_compile_options(-fmodules --precompile)
+        #add_compile_options(-fmodules --precompile) -- this is just a non starter because it has to be different for differnet sources
         if(x64 AND native)
             add_compile_options(-mavx2)
         endif()

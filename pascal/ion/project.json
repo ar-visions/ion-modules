@@ -23,7 +23,7 @@
             "version":  "0.2.2",
             "commit":   "84cf72ddbeb6a38175ec04a1afc948373518086b",
             "url":      "https://github.com/jpbruyere/vkvg.git",
-            "includes": ["."],
+            "includes": ["./include","./vkh/include"],
             "libs":     ["./build"],
             "diff":     "vkvg.diff"
         }

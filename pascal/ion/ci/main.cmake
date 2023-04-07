@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.26)
 
 include(../ion/ci/json.cmake)
 include(../ion/ci/defs.cmake)
@@ -43,7 +43,7 @@ function(main)
         elseif(n_entry)
             list(APPEND imports ${n_entry})
             set(import.${n_entry}          ${n_entry} CACHE INTERNAL "")
-            set(import.${n_entry}.extern   ${CMAKE_BINARY_DIR}/extern/${n_entry} CACHE INTERNAL "")
+            
             set(import.${n_entry}.peer     false CACHE INTERNAL "")
             set(import.${n_entry}.version  ${import_index_${i}.version} CACHE INTERNAL "")
             set(import.${n_entry}.url      ${import_index_${i}.url} CACHE INTERNAL "")
@@ -51,14 +51,19 @@ function(main)
             set(import.${n_entry}.includes "" CACHE INTERNAL "")
             set(import.${n_entry}.libs     "" CACHE INTERNAL "")
 
+            set(import.${n_entry}.extern   ${CMAKE_BINARY_DIR}/extern/${n_entry}-${import_index_${i}.version} CACHE INTERNAL "")
+
             # add include paths
             set(ii 0)
             while(true)
+                
+                message(STATUS "checking import.${n_entry}.includes += ${import_index_${i}.includes_${ii}}")
+
                 set(include ${import_index_${i}.includes_${ii}} CACHE INTERNAL "")
                 if(NOT include)
                     break()
                 endif()
-                list(APPEND ${n_entry}.includes ${include})
+                list(APPEND import.${n_entry}.includes ${import.${n_entry}.extern}/${include})
                 math(EXPR ii "${ii} + 1")
             endwhile()
 
@@ -69,7 +74,7 @@ function(main)
                 if(NOT lib)
                     break()
                 endif()
-                list(APPEND ${n_entry}.libs ${lib})
+                list(APPEND import.${n_entry}.libs ${import.${n_entry}.extern}/${lib})
                 math(EXPR ii "${ii} + 1")
             endwhile()
         else()

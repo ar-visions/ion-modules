@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.26)
 
 if (DEFINED ModuleGuard)
     return()
@@ -67,15 +67,15 @@ macro(var_prepare r_path)
     set(_headers        "")
     set(_apps_src       "")
     set(_tests_src      "")
-    set(cpp             23)
+    set(cpp             20)
     set(p "${module_path}")
 
     # compile these as c++-module (.ixx extension) only on not WIN32
     if(NOT WIN32)
         file(GLOB _src_0 "${p}/*.ixx")
-        foreach(isrc ${_src_0})
-            set_source_files_properties(${isrc} PROPERTIES LANGUAGE CXX COMPILE_FLAGS "-x c++-module")
-        endforeach()
+        #foreach(isrc ${_src_0})
+        #    set_source_files_properties(${isrc} PROPERTIES LANGUAGE CXX COMPILE_FLAGS "-x c++-module")
+        #endforeach()
     endif()
 
     # build the index.ixx first, naturally.  it doesnt need to be some odd source crawling thing but almost certainly needs to be in future (silver)
@@ -113,7 +113,7 @@ macro(var_prepare r_path)
 
     # compile for 23 by default, not experimenting with intra-module differing languages.  its possible, though.
     # a rule can compile 17 if there is a stub .cpp without a .ixx; too restricting it seems, though.
-    set(cpp 23)
+    set(cpp 20)
     set(dynamic false)
 
     # list of app targets
@@ -310,6 +310,7 @@ macro(process_dep d)
                 set(extern_path "${CMAKE_SOURCE_DIR}/${module}")
             endif()
         endif()
+
         set(pkg_path     "${extern_path}/project.json")
         set(libs         "")
         set(includes     "")
@@ -324,6 +325,7 @@ macro(process_dep d)
             # imported, .diff applied, generated, built (CMAKE_PATH_PREFIX appends and carries on but i think it needs to be in reverse lookup?)
             set(target ${project}-${module})
             foreach (import ${imports})
+                message(STATUS "import ${import} == ${project}")
                 if ("${import}" STREQUAL "${project}")
                     set(libs ${import.${import}.libs})
                     set(includes ${import.${import}.includes})
@@ -339,6 +341,8 @@ macro(process_dep d)
             target_include_directories(${t_name} PUBLIC ${includes})
             #message(STATUS "includes = ${includes}")
         endif()
+
+        message(STATUS "includes for ${module} = ${includes}")
         
     else()
         if(NOT WIN32)
@@ -347,7 +351,7 @@ macro(process_dep d)
         # ---------------------------
         if(PACKAGE_FOUND)
             message(STATUS "pkg_check_modules QUIET -> (target): ${t_name} -> ${d}")
-            target_link_libraries(${t_name}             ${PACKAGE_LINK_LIBRARIES})
+            target_link_libraries(${t_name}      PUBLIC ${PACKAGE_LINK_LIBRARIES})
             target_include_directories(${t_name} PUBLIC ${PACKAGE_INCLUDE_DIRS})
             target_compile_options(${t_name}     PUBLIC ${PACKAGE_CFLAGS_OTHER})
         else()
@@ -357,30 +361,30 @@ macro(process_dep d)
             if(${d}_FOUND)
                 if(TARGET ${d}::${d})
                     message(STATUS "find_package CONFIG -> (target): ${t_name} -> ${d}::${d}")
-                    target_link_libraries(${t_name} ${d}::${d})
+                    target_link_libraries(${t_name} PUBLIC ${d}::${d})
                 elseif(TARGET ${d})
                     message(STATUS "find_package CONFIG -> (target): ${t_name} -> ${d}")
-                    target_link_libraries(${t_name} ${d})
+                    target_link_libraries(${t_name} PUBLIC ${d})
                 endif()
                 #
             elseif(TARGET ${d})
                 message(STATUS "find_package: (target): ${t_name} -> ${d}")
-                target_link_libraries(${t_name} ${d})
+                target_link_libraries(${t_name} PUBLIC ${d})
             else()
                 find_package(${d} QUIET)
                 if(${d}_FOUND)
                     message(STATUS "find_package: (target): ${t_name} -> ${d}")
                     if(TARGET ${d}::${d})
-                        target_link_libraries(${t_name} ${d}::${d})
+                        target_link_libraries(${t_name} PUBLIC ${d}::${d})
                     elseif(TARGET ${d})
-                        target_link_libraries(${t_name} ${d})
+                        target_link_libraries(${t_name} PUBLIC ${d})
                     endif()
                 elseif(TARGET ${d})
                     message(STATUS "target_link_libraries (target): ${t_name} -> ${d}")
-                    target_link_libraries(${t_name} ${d})
+                    target_link_libraries(${t_name} PUBLIC ${d})
                 else()
                     message(STATUS "target_link_libraries: (system) ${t_name} -> ${d}")
-                    target_link_libraries(${t_name} ${d})
+                    target_link_libraries(${t_name} PUBLIC ${d})
                 endif()
                 #
             endif()
@@ -402,15 +406,29 @@ macro(create_module_targets)
     # ------------------------
     if(full_src)
         if (dynamic)
-            # if forcing dynamic:
-            message(STATUS "a1")
-            add_library(${t_name} SHARED ${full_src} ${h_list})
+            add_library(${t_name} ${h_list})
+            target_sources(${t_name}
+                PUBLIC
+                    FILE_SET cxx_modules TYPE CXX_MODULES FILES
+                    ${full_src}
+            )
         elseif(static OR external_repo)
-            message(STATUS "a2")
-            add_library(${t_name} STATIC ${full_src} ${h_list})
+            add_library(${t_name} STATIC)
+
+            message(STATUS "full_src: ${full_src}")
+            target_sources(${t_name}
+                PUBLIC
+                    FILE_SET cxx_modules TYPE CXX_MODULES
+                    FILES ${full_src} 
+
+                INTERFACE
+                    FILE_SET headers TYPE HEADERS
+                    BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/${mod}"
+                    FILES ${h_list}
+            )
+
         else()
-            message(STATUS "a3")
-            add_library(${t_name} SHARED ${full_src} ${h_list})
+            message(FATAL_ERROR "!dynamic && !static")
         endif()
         
         if (WIN32)
@@ -483,7 +501,7 @@ macro(create_module_targets)
 
         # link app to its own module
         # ------------------------
-        target_link_libraries(${t_app} ${t_name})
+        target_link_libraries(${t_app} PUBLIC ${t_name})
 
         # format upper-case name for app name
         # ------------------------
@@ -517,7 +535,7 @@ macro(create_module_targets)
         target_include_directories(${test_target} PUBLIC ${p}/apps)
         module_includes(${test_target} ${r_path} ${mod})
         set_compilation(${test_target} ${mod})
-        target_link_libraries(${test_target} ${t_name})
+        target_link_libraries(${test_target} PUBLIC ${t_name})
         # ------------------------
         if(NOT TARGET test-${t_name})
             add_custom_target(test-${t_name})
