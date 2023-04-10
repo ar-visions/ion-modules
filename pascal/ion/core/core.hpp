@@ -19,6 +19,13 @@
 #include <algorithm>
 #include <iterator>
 #include <assert.h>
+#include <new>
+
+template <typename DC>
+static void inplace(DC *ptr, DC &data) {
+        (ptr) -> ~DC();
+    new (ptr)     DC(data);
+}
 
 #ifdef _MSC_VER
 #ifndef NDEBUG
@@ -205,8 +212,7 @@ static void breakp() {
     inline C(mx            o) : C(  mx_conv<C>(o)) { }\
     inline C(null_t =   null) : C(mx::alloc<C>( )) { }\
     inline C(m_type    tdata) : C(mx::alloc<C>( )) {\
-            (&m_access) -> ~DC();\
-        new (&m_access)     DC(tdata);\
+        inplace<DC>(&m_access, tdata);\
     }
 
 #define ctr_args(C, B, T, A) \

@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name":          "demo",
+            "type":          "cppdbg",
+            "request":       "launch",
+            "program":       "/Users/kalen/Dropbox/src/ion-modules/pascal/ion/build/demo",
+            "args":          [],
+            "stopAtEntry":   false,
+            "cwd":           "/Users/kalen/Dropbox/src/ion-modules/pascal/ion/core/res",
+            "environment":   [],
+            "externalConsole": false,
+            "MIMode":        "lldb"
+        }
+        {
+            "name":          "test",
+            "type":          "cppdbg",
+            "request":       "launch",
+            "program":       "/Users/kalen/Dropbox/src/ion-modules/pascal/ion/build/test",
+            "args":          [],
+            "stopAtEntry":   false,
+            "cwd":           "/Users/kalen/Dropbox/src/ion-modules/pascal/ion/core/res",
+            "environment":   [],
+            "externalConsole": false,
+            "MIMode":        "lldb"
+        }
+    ]
+}

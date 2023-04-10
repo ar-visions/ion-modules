@@ -1,5 +1,14 @@
 module;
 
+#include <new>
+
+template <typename T>
+void inplace(T *ptr) {
+        (ptr) -> ~T();
+    new (ptr)     T();
+}
+
+
 #define  MINIMP3_ONLY_MP3
 #define  MINIMP3_ONLY_SIMD
 //#define  MINIMP3_FLOAT_OUTPUT
@@ -21,11 +30,16 @@ struct iaudio {
 
 export {
 
+struct abc_data {
+    int test;
+};
+
+
 struct audio:mx {
 protected:
     inline static bool      init;
     inline static mp3dec_t  dec;
-    struct iaudio &p;
+    iaudio &p;
 
 public:
     ctr(audio, mx, iaudio, p);

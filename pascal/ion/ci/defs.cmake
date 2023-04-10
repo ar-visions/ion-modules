@@ -142,10 +142,8 @@ macro(set_defs)
     # ------------------------------------
     set(CMAKE_C_STANDARD                11)
     set(CMAKE_CXX_STANDARD              20)
-    include(ci/cxx20.cmake)
 
     if(NOT MSVC)
-
         #set(CMAKE_CXX_FLAGS -fmodules)
         #add_compile_options(-fmodules --precompile) -- this is just a non starter because it has to be different for differnet sources
         if(x64 AND native)

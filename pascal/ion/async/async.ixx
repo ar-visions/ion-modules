@@ -9,7 +9,7 @@ export {
 
 ///
 struct customer:mx {
-    customer(FnFuture fn = null) : mx(alloc(&fn))    { }
+    customer(FnFuture fn = FnFuture(null)) : mx(alloc(&fn))    { }
     customer(const customer  &c) : mx(c.mem->grab()) { }
 };
 

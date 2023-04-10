@@ -34,15 +34,14 @@ macro(module_includes t r_path mod)
 endmacro()
 
 macro(set_compilation t mod)
-    target_compile_options    (${t} PRIVATE ${CMAKE_CXX_FLAGS} -Wfatal-errors ${cflags})
+    target_compile_options(${t} PRIVATE ${CMAKE_CXX_FLAGS} ${cflags})
+    if(Clang)
+        target_compile_options(${t} PRIVATE -Wfatal-errors)
+    endif()
     target_link_options       (${t} PRIVATE ${lflags})
     target_compile_definitions(${t} PRIVATE ARCH_${UARCH})
     target_compile_definitions(${t} PRIVATE  UNICODE)
     target_compile_definitions(${t} PRIVATE _UNICODE)
-    foreach(role ${r_list})
-        string(TOUPPER ${role} s)
-        target_compile_definitions(${t} PRIVATE ROLE_${s})
-    endforeach()
 endmacro()
 
 macro(app_source app)
@@ -59,7 +58,7 @@ macro(var_prepare r_path)
     set(arch            "")
     set(cflags          "")
     set(lflags          "")
-    set(roles           "")
+    #set(roles "")
     set(dep             "")
     set(src             "")
     set(_includes       "")
@@ -145,21 +144,7 @@ macro(var_prepare r_path)
 endmacro()
 
 macro(var_finish)
-    # 
-    foreach(role ${r_list})
-        list(FIND roles ${role} role_found)
-        if(NOT roles OR (role_found GREATER -1))
-            break()
-        endif()
-    endforeach()
 
-    # if roles listed, and selected build role not listed
-    # ------------------------
-    if(roles AND role_found EQUAL -1)
-        set(br TRUE)
-        return()
-    endif()
-    
     # ------------------------
     list(APPEND m_list ${mod})
     list(FIND arch ${ARCH} arch_found)
@@ -290,39 +275,44 @@ function(load_project location remote)
     
 endfunction()
 
-# process single dependency
-# ------------------------
+## process single dependency
+## ------------------------
 macro(process_dep d)
-    # find 'dot', this indicates a module is referenced (peer modules should be referenced by project)
-    # ------------------------
+    ## find 'dot', this indicates a module is referenced (peer modules should be referenced by project)
+    ## ------------------------
     string(FIND ${d} "." index)
 
-    # project.module supported when the project is imported by peer extension or git relationship
-    # ------------------------
+    ## project.module supported when the project is imported by peer extension or git relationship
+    ## ------------------------
     if(index GREATER 0)
-        # must exist in extern:
+        ## must exist in extern:
         string(SUBSTRING  ${d} 0 ${index} project)
-        math(EXPR index  "${index}+1")
+        math(EXPR index   "${index}+1")
         string(SUBSTRING  ${d} ${index} -1 module)
         set(extern_path   ${CMAKE_BINARY_DIR}/extern/${project})
+        set(pkg_path      "")
+        ##
         if(NOT EXISTS ${extern_path})
             if(${project_name} STREQUAL ${project})
-                set(extern_path "${CMAKE_SOURCE_DIR}/${module}")
+                # must assert that this project is a 'peer' directory in its project.json; set a bool for that
+                set(extern_path "${CMAKE_SOURCE_DIR}/../${project}/${module}")
+                set(pkg_path    "${CMAKE_SOURCE_DIR}/../${project}/project.json")
             endif()
         endif()
-
-        set(pkg_path     "${extern_path}/project.json")
-        set(libs         "")
-        set(includes     "")
-        
+        ##
+        set(libs        "")
+        set(includes    "")
+        message(STATUS  "[ looking up ${pkg_path} ... (project = ${project}) does it exist ]")
         ## if module source
         if(EXISTS ${pkg_path})
-            # from peer relationship (symlinked and considered an extension of the active version) 
+            ## from peer relationship (symlinked and considered an extension of the active version) 
             set(target           ${project}-${module})
             list(APPEND includes ${extern_path}) # no libs required
+            target_link_libraries(${t_name} PRIVATE ${target})
             add_dependencies(${t_name} ${target})
+            message(STATUS "${t_name} depends on ${target}")
         else()
-            # imported, .diff applied, generated, built (CMAKE_PATH_PREFIX appends and carries on but i think it needs to be in reverse lookup?)
+            ## imported, .diff applied, generated, built (CMAKE_PATH_PREFIX appends and carries on but i think it needs to be in reverse lookup?)
             set(target ${project}-${module})
             foreach (import ${imports})
                 message(STATUS "import ${import} == ${project}")
@@ -483,6 +473,8 @@ macro(create_module_targets)
         else()
             add_executable(${t_app} ${app_path} ${${t_app}_src}) # must be a setting per app, so store in map or something win32(+app)
         endif()
+
+
         # add pre-compiled headers
         # ------------------------
         #target_precompile_headers(${t_app} PUBLIC ${_headers})
@@ -499,10 +491,6 @@ macro(create_module_targets)
         # ------------------------
         set_compilation(${t_app} ${mod})
 
-        # link app to its own module
-        # ------------------------
-        target_link_libraries(${t_app} PUBLIC ${t_name})
-
         # format upper-case name for app name
         # ------------------------
         string(TOUPPER ${t_app} u)
@@ -511,11 +499,9 @@ macro(create_module_targets)
         # define global name-here -> APP_NAME_HERE
         # ------------------------
         target_compile_definitions(${t_app} PRIVATE APP_${u})
-        add_dependencies(${t_app} ${t_name})
-        foreach(role ${r_list})
-            add_dependencies(${role} ${t_app})
-        endforeach()
 
+        target_link_libraries(${t_app} PRIVATE ${t_name})
+        add_dependencies(${t_app} ${t_name})
     endforeach()
 
     # test products
@@ -548,12 +534,6 @@ macro(create_module_targets)
         # add this test to the test-proj-mod target group
         # ------------------------
         add_dependencies(test-${t_name} ${test_target})
-
-        # add roles in module to these targets (likely singular is preferred)
-        # ------------------------
-        foreach(role ${r_list})
-            add_dependencies(${test_target} ${role})
-        endforeach()
 
     endforeach()
 

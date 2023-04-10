@@ -15,7 +15,8 @@ template <typename T>
 struct color:vec<T, 4> {
     using  base = vec<T,4>;
     using  data = c4 <T>;
-    struct data &m;
+
+    data &m;
     
     ctr(color, base, data, m);
 
@@ -117,7 +118,7 @@ struct color:vec<T, 4> {
         res[0]  = '#';
         ///
         for (size_t i = 0, len = sizeof(arr) - (arr[3] == 255); i < len; i++)
-            sprintf_s(&res[1 + i * 2], 16, "%02x", arr[i]); /// secure.
+            sprintf(&res[1 + i * 2], "%02x", arr[i]); /// secure.
         ///
         return (symbol)res;
     }

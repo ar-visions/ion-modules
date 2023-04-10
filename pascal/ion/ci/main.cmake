@@ -4,6 +4,7 @@ include(../ion/ci/json.cmake)
 include(../ion/ci/defs.cmake)
 include(../ion/ci/module.cmake)
 include(../ion/ci/package.cmake)
+include(../ion/ci/cxx20.cmake)
 
 function(main)
     set_defs()
@@ -56,9 +57,7 @@ function(main)
             # add include paths
             set(ii 0)
             while(true)
-                
-                message(STATUS "checking import.${n_entry}.includes += ${import_index_${i}.includes_${ii}}")
-
+                #message(STATUS "checking import.${n_entry}.includes += ${import_index_${i}.includes_${ii}}")
                 set(include ${import_index_${i}.includes_${ii}} CACHE INTERNAL "")
                 if(NOT include)
                     break()

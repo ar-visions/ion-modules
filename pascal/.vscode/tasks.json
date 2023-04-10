@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"windows": {
+		"options": {
+		  "shell": {
+			"executable": "cmd.exe",
+			"args": [ "/d", "/c", "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat\"", "&" ]
+		  } 
+		}
+	},
+	"tasks": [
+		{
+			"label": 	"cmake",
+			"type": 	"shell",
+			"command": 	"cmake .. -G Ninja -DCMAKE_CXX_COMPILER=/Users/kalen/Dropbox/src/llvm-project/build/bin/clang++",
+			"group":        {"kind": "build", "isDefault": false},
+			"options":      {"cwd": "ion/build"},
+			"presentation": {"reveal": "always", "panel": "shared", "clear": true},
+			"problemMatcher": []
+		},
+		{
+			"label": 	"ninja-demo",
+			"type": 	"shell",
+			"command": 	"ninja demo",
+			"group":        {"kind": "build", "isDefault": true},
+			"options":      {"cwd": "ion/build"},
+			"presentation": {"reveal": "always", "panel": "shared", "clear": true},
+			"problemMatcher": [],
+		},
+		{
+			"label": 	"ninja-test",
+			"type": 	"shell",
+			"command": 	"ninja test",
+			"group":        {"kind": "build", "isDefault": true},
+			"options":      {"cwd": "ion/build"},
+			"presentation": {"reveal": "always", "panel": "shared", "clear": true},
+			"problemMatcher": [],
+		}
+	]
+}

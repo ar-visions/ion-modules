@@ -1164,9 +1164,9 @@ i64 integer_value(memory *mem) {
 struct str;
 
 template <typename T>
-constexpr T &defaults() {
-    static T def;
-    return def;//typeof(T)->defaults->ref<T>();
+T &defaults() {
+    static T def_instance;
+    return   def_instance; //typeof(T)->defaults->ref<T>();
 }
 
 template <typename T> T* mdata(memory *mem, size_t index) { return mem->data<T>(index); }
@@ -3876,7 +3876,8 @@ lambda_table *lambda_table::set_lambdas(type_t ty) {
             T *dst = mdata<T>(dst_origin, from, ctx);
             T *src = mdata<T>(src_origin, from, ctx);
             for (num i = from; i < num(to); i++, dst++, src++)
-                new (dst) T(*(T*)src);
+                inplace<T>(dst, *(T*)src);
+                //new (dst) T(*(T*)src);
         };
     }
     

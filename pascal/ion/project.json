@@ -15,7 +15,7 @@
             "version":  "5.5.4",
             "commit":   "e0e590f126bd7d947ce3dfbea5ea1405bb646374",
             "url":      "https://github.com/wolfSSL/wolfssl",
-            "includes": ["./include"],
+            "includes": ["./"],
             "libs":     ["./build"]
         },
         {
