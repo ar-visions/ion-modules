@@ -1,1 +1,2 @@
-dep(ion.core ion.async ion.image ion.audio wolf.wolfssl)
+dep(ion.core ion.async wolf.wolfssl)
+cpp(17)

@@ -1,1 +1,7 @@
-dep(ion.core ion.net ion.image ion.audio vulkan-1 glfw.glfw3 vkvg.vkvg vkvg.vkh vkvg.glutess)
+dep(ion.core glfw.glfw3 ion.net ion.image ion.audio vkvg.vkvg vkvg.vkh vkvg.glutess)
+if(APPLE)
+    dep(moltenvk.MoltenVK AppKit CoreGraphics CoreFoundation Cocoa IOKit)
+else()
+    dep(vulkan-1)
+endif()
+cpp(17)

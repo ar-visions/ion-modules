@@ -1,30 +1,31 @@
-#include <core/core.hpp>
-#include <map>
-///
-import ux;
+#include <ux/ux.hpp>
 
 /// initializer list of field
 struct view:node {
     struct props {
         int sample;
     } &m;
+    
     ///
     ctr_args(view, node, props, m);
+    
     ///
     doubly<prop> meta() {
         return {
             prop { m, "sample", m.sample }
         };
     }
+    
     ///
     void mounting() {
         console.log("mounting");
     }
+
     /// if no render is defined, the content is used for embedding children from content (if its there)
     /// if there is a render the content can be used within it
-    //Element render() {
-    //    return button {{ "label", "hi" }};
-    //}
+    ///Element render() {
+    ///    return button {{ "label", "hi" }};
+    ///}
 };
 
 struct abc:mx {
@@ -44,6 +45,7 @@ struct abc:mx {
 };
 
 int main(int argc, cstr argv[]) {
+    int i2;
     return app([](app &ctx) -> Element {
         return view {
             { "id",     "main"  }, /// id should be a name of component if not there

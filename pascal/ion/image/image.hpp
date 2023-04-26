@@ -1,15 +1,5 @@
-module;
-#include <core/core.hpp>
-
-#define _CRT_SECURE_NO_WARNINGS
-#include "stb-image-read.h"
-#include "stb-image-write.h"
-
-export module image;
-import core;
-import vector;
-
-export {
+#pragma once
+#include <math/math.hpp>
 
 template <typename T>
 struct color:vec<T, 4> {
@@ -85,7 +75,7 @@ struct color:vec<T, 4> {
 
     template <typename B>
     operator v4<B>() const {
-        if constexpr (is_same<T, B>())
+        if constexpr (identical<T, B>())
             return v4<B>(m);
         else {
             if constexpr (sizeof(B) == 1 && sizeof(T) > 1) {
@@ -117,8 +107,10 @@ struct color:vec<T, 4> {
         ///
         res[0]  = '#';
         ///
-        for (size_t i = 0, len = sizeof(arr) - (arr[3] == 255); i < len; i++)
-            sprintf(&res[1 + i * 2], "%02x", arr[i]); /// secure.
+        for (size_t i = 0, len = sizeof(arr) - (arr[3] == 255); i < len; i++) {
+            size_t index = 1 + i * 2;
+            snprintf(&res[index], sizeof(res) - index, "%02x", arr[i]); /// secure.
+        }
         ///
         return (symbol)res;
     }
@@ -166,35 +158,3 @@ struct image:array<rgba::data> {
         return elements[index];
     }
 };
-
-/// load an image into 32bit rgba format
-image::image(path p) : array() {
-    int w = 0, h = 0, c = 0;
-    /// if path exists and we can read read an image, set the size
-    rgba::data *data = null;
-    if (p.exists() && (data = (rgba::data *)stbi_load(p.cs(), &w, &h, &c, 4))) {
-        mem->count  = h * w;
-        mem->shape  = new size { h, w };
-        mem->origin = data; /// you can set whatever you want here; its freed at end of life-cycle for memory
-        elements    = data;
-    }
-}
-
-/// load an image into 32bit rgba format
-image::image(size sz, rgba::data *px, int scanline) : array() {
-    mem->shape  = new size(sz);
-    mem->origin = px;
-    elements    = px;
-    assert(scanline == 0 || scanline == sz[1]);
-}
-
-/// save image, just png out but it could look at extensions too
-bool image::save(path p) const {
-    assert(mem->shape && mem->shape->dims() == 2);
-    int w = int(width()), 
-        h = int(height());
-    return stbi_write_png(p.cs(), w, h, 4, elements, w * 4);
-}
-
-
-}

@@ -4,7 +4,8 @@ include(../ion/ci/json.cmake)
 include(../ion/ci/defs.cmake)
 include(../ion/ci/module.cmake)
 include(../ion/ci/package.cmake)
-include(../ion/ci/cxx20.cmake)
+## clang++ 
+## include(../ion/ci/cxx20.cmake)
 
 function(main)
     set_defs()
@@ -15,7 +16,7 @@ function(main)
     set(ENV{CMAKE_BUILD_TYPE}   ${CMAKE_BUILD_TYPE})
     set(ENV{JSON_IMPORT_INDEX} "${CMAKE_BINARY_DIR}/import.json")
 
-    # requires ion framework at peer directory level, to prepare
+    # requires ion framework at peer directory level
     execute_process(
         COMMAND python3 "${CMAKE_SOURCE_DIR}/../ion/ci/prepare.py"
         RESULT_VARIABLE import_result)
@@ -92,4 +93,32 @@ function(main)
 
     # load primary
     load_project(${CMAKE_CURRENT_SOURCE_DIR} "")
+
+    # function to print library paths for a given target
+    #function(print_library_paths target_name)
+    #    get_target_property(link_libraries ${target_name} LINK_LIBRARIES)
+    #    message(STATUS "Library paths for target ${target_name}:")
+    #
+    #    foreach(lib ${link_libraries})
+    #        if(TARGET ${lib})
+    #        get_target_property(lib_type ${lib} TYPE)
+    #        if(${lib_type} STREQUAL "INTERFACE_LIBRARY")
+    #            get_target_property(lib_dirs ${lib} INTERFACE_LINK_DIRECTORIES)
+    #        else()
+    #            get_target_property(lib_dirs ${lib} LINK_DIRECTORIES)
+    #        endif()
+    #        if(lib_dirs)
+    #            foreach(dir ${lib_dirs})
+    #            message(STATUS "  -L ${dir}")
+    #            endforeach()
+    #        endif()
+    #        endif()
+    #    endforeach()
+    #    message(STATUS "")
+    #endfunction()
+    #get_property(all_targets DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BUILDSYSTEM_TARGETS)
+    #foreach(target ${all_targets})
+    #    print_library_paths(${target})
+    #endforeach()
+
 endfunction()

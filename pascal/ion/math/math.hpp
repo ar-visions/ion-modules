@@ -1,10 +1,5 @@
-module;
-
+#pragma once
 #include <core/core.hpp>
-export module vector;
-import core;
-
-export {
 
 template <typename T>
 struct vector2:mx {
@@ -28,12 +23,12 @@ struct vector2:mx {
     inline vector2 operator*  (T       v) const { return data * v;         }
     inline vector2 operator/  (T       v) const { return data / v;         }
 
-    inline vector2 &operator+=(vector2 v)       { data += v; return *this; }
-    inline vector2 &operator-=(vector2 v)       { data -= v; return *this; }
-    inline vector2 &operator*=(vector2 v)       { data *= v; return *this; }
-    inline vector2 &operator/=(vector2 v)       { data /= v; return *this; }
-    inline vector2 &operator*=(T       v)       { data *= v; return *this; }
-    inline vector2 &operator/=(T       v)       { data /= v; return *this; }
+    inline vector2 &operator+=(vector2 v) { data += v; return *this; }
+    inline vector2 &operator-=(vector2 v) { data -= v; return *this; }
+    inline vector2 &operator*=(vector2 v) { data *= v; return *this; }
+    inline vector2 &operator/=(vector2 v) { data /= v; return *this; }
+    inline vector2 &operator*=(T       v) { data *= v; return *this; }
+    inline vector2 &operator/=(T       v) { data /= v; return *this; }
 
     inline bool operator >= (v2 &v) const { return data >= v; }
     inline bool operator <= (v2 &v) const { return data <= v; }
@@ -459,5 +454,3 @@ using r4r   =      r4 <real>;
 using r4i   =      r4 <i32>;
 using r4d   =      r4 <r64>;
 using r4f   =      r4 <r32>;
-
-}

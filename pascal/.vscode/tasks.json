@@ -21,7 +21,7 @@
 		{
 			"label": 	"ninja-demo",
 			"type": 	"shell",
-			"command": 	"ninja demo",
+			"command": 	"ninja demo -j1",
 			"group":        {"kind": "build", "isDefault": true},
 			"options":      {"cwd": "ion/build"},
 			"presentation": {"reveal": "always", "panel": "shared", "clear": true},
@@ -30,7 +30,7 @@
 		{
 			"label": 	"ninja-test",
 			"type": 	"shell",
-			"command": 	"ninja test",
+			"command": 	"ninja test -j1",
 			"group":        {"kind": "build", "isDefault": true},
 			"options":      {"cwd": "ion/build"},
 			"presentation": {"reveal": "always", "panel": "shared", "clear": true},

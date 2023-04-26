@@ -3,12 +3,21 @@
     "version":"dev",
     "import": [
         {
+            "name":     "moltenvk",
+            "version":  "1.2.3",
+            "commit":   "db8512a64f2c703e31ff7038b2859034062aa00f",
+            "url":      "https://github.com/KhronosGroup/MoltenVK",
+            "includes": ["./MoltenVK/include"],
+            "libs":     ["./MoltenVK/dylib/macOS"],
+            "diff":     "moltenvk.diff"
+        },
+        {
             "name":     "glfw",
             "version":  "3.3.8",
             "commit":   "7482de6",
             "url":      "https://github.com/glfw/glfw",
             "includes": ["./include"],
-            "libs":     ["./build"]
+            "libs":     ["./build/src"]
         },
         {
             "name":     "wolf",
@@ -24,7 +33,8 @@
             "commit":   "84cf72ddbeb6a38175ec04a1afc948373518086b",
             "url":      "https://github.com/jpbruyere/vkvg.git",
             "includes": ["./include","./vkh/include"],
-            "libs":     ["./build"],
+            "libs":     ["./build","./build/vkh","./build/external/glutess"],
+            "cmake":    ["-DVKVG_USE_GLUTESS=true"],
             "diff":     "vkvg.diff"
         }
     ]

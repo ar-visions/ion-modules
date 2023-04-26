@@ -48,6 +48,13 @@ macro(set_defs)
     set_default(LINK      "static")
     set_default(PREFIX    "/usr/local")
     set_default(SDK       "native")
+
+    
+    if(CMAKE_BUILD_TYPE MATCHES Debug)
+        set(DEBUG TRUE)
+    else()
+        set(DEBUG FALSE)
+    endif()
     
     if(NOT SDK STREQUAL "native")
         if(NOT DEFINED ENV{STAGING_DIR})
@@ -131,9 +138,8 @@ macro(set_defs)
         set(MSVC "1")
     endif()
 
-    set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API "2182bf5c-ef0d-489a-91da-49dbc3090d2a")
     string(TOUPPER ${ARCH}              UARCH)
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+   #set(CMAKE_POSITION_INDEPENDENT_CODE ON)
     set(CMAKE_CXX_STANDARD_REQUIRED     ON)
     set(CMAKE_CXX_EXTENSIONS           OFF)
 
@@ -141,7 +147,7 @@ macro(set_defs)
     # clang's modules support have trouble with extensions right now.
     # ------------------------------------
     set(CMAKE_C_STANDARD                11)
-    set(CMAKE_CXX_STANDARD              20)
+    set(CMAKE_CXX_STANDARD              17)
 
     if(NOT MSVC)
         #set(CMAKE_CXX_FLAGS -fmodules)

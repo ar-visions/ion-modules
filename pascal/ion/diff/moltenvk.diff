@@ -1,0 +1,19 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 00000000..218e80ba
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1,13 @@
++cmake_minimum_required(VERSION 3.26)
++project(moltenvk)
++
++set(TARGET_OS "macos")
++
++execute_process(
++    COMMAND sh "${CMAKE_SOURCE_DIR}/fetchDependencies" "--${TARGET_OS}"
++    RESULT_VARIABLE sh_res)
++
++execute_process(
++    COMMAND make "${TARGET_OS}"
++    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
++    RESULT_VARIABLE make_res)

@@ -26,14 +26,16 @@ def check(a):
 def      parse(f): return f['name'] + '-' + f['version'], f['name'], f['version'], f['url'], f['commit'], f.get('diff')
 def    git(*args): return subprocess.run(['git']   + list(args), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 def  cmake(*args): return subprocess.run(['cmake'] + list(args), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-def   build(type): return cmake('--build', 'build-' + type.lower())
-def     gen(type, prefix_path): return cmake(
-             '-S',  '.',
-             '-B', f'build-{type.lower()}', 
-            f'-DCMAKE_PREFIX_PATH="{prefix_path}"'
-             '-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON',
-            f'-DCMAKE_BUILD_TYPE={type[0].upper() + type[1:].lower()}'
-        )
+def   build(type): return cmake('--build', 'build')
+def     gen(type, prefix_path, extra=None):
+    args = ['-S', '.',
+            '-B', 'build', 
+           f'-DCMAKE_PREFIX_PATH="{prefix_path}"'
+            '-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON',
+           f'-DCMAKE_BUILD_TYPE={type[0].upper() + type[1:].lower()}']
+    if extra:
+        args.extend(extra)
+    return cmake(*args)
 
 os.chdir(build_dir)
 if not os.path.exists('extern'): os.mkdir('extern');
@@ -60,6 +62,7 @@ def prepare_project(src_dir):
         import_list  = project_json['import']
 
         # import the peers first, which have their own index (fetch first!)
+        # it should build while checking out
         for fields in import_list:
             everything.append(fields)
             if isinstance(fields, str):
@@ -74,9 +77,9 @@ def prepare_project(src_dir):
         for fields in import_list:
             if not isinstance(fields, str):
                 remote_path = prepare_git(src_dir, fields)
-                gen(cfg, prefix_path)
+                gen(cfg, prefix_path, fields.get('cmake'))
                 build(cfg)
-                remote_build_path = f'{remote_path}/build-{cfg.lower()}'
+                remote_build_path = f'{remote_path}/build'
                 if prefix_path:
                     prefix_path  += f'{prefix_path}:{remote_build_path}'
                 else:
