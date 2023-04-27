@@ -4,6 +4,7 @@ import sys;
 import subprocess
 import re
 import json
+import platform
 
 src_dir   = os.environ.get('CMAKE_SOURCE_DIR')
 build_dir = os.environ.get('CMAKE_BINARY_DIR')

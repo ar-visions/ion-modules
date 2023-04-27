@@ -11,7 +11,8 @@
             "cwd":           "/Users/kalen/Dropbox/src/ion-modules/pascal/ion/core/res",
             "environment":   [],
             "externalConsole": false,
-            "MIMode":        "lldb"
+            "MIMode":        "lldb",
+            "preLaunchTask": "ninja-demo"
         }
         {
             "name":          "test",
@@ -23,7 +24,8 @@
             "cwd":           "/Users/kalen/Dropbox/src/ion-modules/pascal/ion/core/res",
             "environment":   [],
             "externalConsole": false,
-            "MIMode":        "lldb"
+            "MIMode":        "lldb",
+            "preLaunchTask": "ninja-test"
         }
     ]
 }

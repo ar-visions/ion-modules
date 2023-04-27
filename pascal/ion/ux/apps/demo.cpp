@@ -45,7 +45,9 @@ struct abc:mx {
 };
 
 int main(int argc, cstr argv[]) {
-    int i2;
+    symbol abc = "abc";
+    console.log("symbol: {0}", { abc });
+
     return app([](app &ctx) -> Element {
         return view {
             { "id",     "main"  }, /// id should be a name of component if not there

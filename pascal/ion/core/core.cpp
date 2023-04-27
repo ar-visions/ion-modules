@@ -168,17 +168,44 @@ memory *memory::raw_alloc(type_t type, size_t sz, size_t count, size_t res) {
 
 memory::memory() : refs(1) { }
 
+//memory(size_t refs, u64 attrs, type_t type, size_t count, size_t reserve, doubly<attachment> *atts, size_t id, void *origin) :
+ //       refs(refs), attrs(attrs), type(type), count(count), reserve(reserve), atts(atts), id(id), origin(origin)  { }
+
+
+static memory m_null = { 1, u64(0), typeof(mx), 0, 0, null, 0, null };
+
 /// now we start allocating the total_size (or type->base_sz if not schema-bound (mx classes accept schema.  they say, icanfly.. imapilot))
 memory *memory::alloc(type_t type, size_t type_sz, size_t count, size_t reserve, raw_t src_origin, bool call_ctr) {
+    static int abc = 0; abc++;
+    // build times can be tracked with metrics
+    if (abc == 42) { // type_sz should not be sizeof(MX) it needs to remain typesize()
+        int test = 0;
+        test++;
+    }
+    /// must specify a type_sz if there is a copy operation
+    assert(!src_origin || type_sz);
+
+    /// requirement: array of mx is just array of memory*; no null tokens either i dont see the point of that fluff
     /// go man go.
     if (type_sz == 0)
         type_sz = type->schema ? type->schema->total_bytes : type->base_sz;
     
     memory  *mem  = null;
+
+    /// singletons are fun as 1:1 class-instanced data
     bool singleton = type->traits & traits::singleton;
     if  (singleton && type->singleton) return type->singleton->grab();
 
-    mem = raw_alloc(type, type_sz, count, reserve);
+    /// memory::alloc with a type of mx has no data-type payload
+    /// when doing default allocation of mx, this mx type arg is passed and routes to m_null
+    /// there isnt much of a point to allocate multiple stateless objects however there could be attrib differences
+    /// as a simple solution it seems best to tokenize rather than return null
+    if (!type_sz) {
+        mem = &m_null;
+        mem->refs++; /// token or not, use its refs.  otherwise you need to check that during life-cycle
+    } else {
+        mem = raw_alloc(type, type_sz, count, reserve);
+    }
 
     /// if allocating a schema-based object (mx being first user of this)
     if (type->schema) {

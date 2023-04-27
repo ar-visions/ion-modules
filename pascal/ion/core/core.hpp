@@ -1634,9 +1634,7 @@ struct mx {
     static memory *alloc(CL *src = null, size_t count = 1, size_t reserve = 0, bool call_ctr = true) {
         static type_t type    = typeof(CL);
         static size_t type_sz = typesize(CL); // instance size vs data size needs to be common place
-        return memory::alloc(
-            type, (type->traits & traits::mx) ? sizeof(CL) : type_sz,
-            count, reserve, raw_t(src), call_ctr);
+        return memory::alloc(type, type_sz, count, reserve, raw_t(src), call_ctr);
     }
 
     inline attachment *find_attachment(symbol id) {
@@ -3971,11 +3969,10 @@ pair<K,V> *hmap<K, V>::shared_lookup(K input) {
     return p;
 }
 
-template <typename _TT>
+template <typename T>
 idata *ident::for_type() {
     static auto parse_fn = [](std::string cn) -> cstr {
-        return util::copy(cn.c_str());
-        std::string      st = is_win() ? "<"  : "_TT =";
+        std::string      st = is_win() ? "<"  : "T =";
         std::string      en = is_win() ? ">(" : "]";
         num		         p  = cn.find(st) + st.length();
         num              ln = cn.find(en, p) - p;
@@ -3990,45 +3987,45 @@ idata *ident::for_type() {
     static idata *type;
     if (!type) {
         /// minimal processing on 'opaque'; certain std design-time calls blow up the vulkan types
-        if constexpr (type_complete<_TT> && is_opaque<_TT>()) {
+        if constexpr (type_complete<T> && is_opaque<T>()) {
             memory         *mem = raw_alloc(null, sizeof(idata));
             type                = (idata*)mem_origin(mem);
             type->src           = type;
             type->name          = parse_fn(__PRETTY_FUNCTION__);
-            type->base_sz       = sizeof(_TT);
-            type->lambdas       = lambda_table::set_lambdas<_TT>(type);
+            type->base_sz       = sizeof(T);
+            type->lambdas       = lambda_table::set_lambdas<T>(type);
         } else {
-            bool is_mx = ::is_mx<_TT>();
+            bool is_mx = ::is_mx<T>();
             ///
-                 if constexpr (std::is_const    <_TT>::value) return ident::for_type<std::remove_const_t    <_TT>>();
-            else if constexpr (std::is_reference<_TT>::value) return ident::for_type<std::remove_reference_t<_TT>>();
-            else if constexpr (std::is_pointer  <_TT>::value) return ident::for_type<std::remove_pointer_t  <_TT>>();
+                 if constexpr (std::is_const    <T>::value) return ident::for_type<std::remove_const_t    <T>>();
+            else if constexpr (std::is_reference<T>::value) return ident::for_type<std::remove_reference_t<T>>();
+            else if constexpr (std::is_pointer  <T>::value) return ident::for_type<std::remove_pointer_t  <T>>();
             else if (!type) {
                 cstr curious0 = parse_fn(__PRETTY_FUNCTION__);
                 memory *mem  = raw_alloc(null, sizeof(idata));
                 type         = (idata*)mem_origin(mem);
                 //cstr curious7 = parse_fn(__PRETTY_FUNCTION__);
                 type->name    = parse_fn(__PRETTY_FUNCTION__);
-                type->base_sz = sizeof(_TT);
-                type->traits  = (is_primitive<_TT> () ? traits::primitive : 0) |
-                                (is_integral <_TT> () ? traits::integral  : 0) |
-                                (is_realistic<_TT> () ? traits::realistic : 0) |
+                type->base_sz = sizeof(T);
+                type->traits  = (is_primitive<T> () ? traits::primitive : 0) |
+                                (is_integral <T> () ? traits::integral  : 0) |
+                                (is_realistic<T> () ? traits::realistic : 0) |
                                 (is_mx                ? traits::mx        : 0) |
-                                (is_singleton<_TT> () ? traits::singleton : 0);
-                type->lambdas  = lambda_table::set_lambdas<_TT>(type);
+                                (is_singleton<T> () ? traits::singleton : 0);
+                type->lambdas  = lambda_table::set_lambdas<T>(type);
                 //type->defaults = memory::alloc(type);
                 /// including mx in vector because schema could be used by other bases
-                /// would be nice to implement in mx::read_schema<_TT>(type, (_TT*)null)
-                if constexpr (inherits<::mx, _TT>()) {
+                /// would be nice to implement in mx::read_schema<T>(type, (T*)null)
+                if constexpr (inherits<::mx, T>()) {
                     type->schema = (alloc_schema*)calloc(1, sizeof(alloc_schema) * 16);
                     alloc_schema &schema = *type->schema;
                     
-                    schema.count = schema_info(&schema, 0, (_TT*)null, type);
+                    schema.count = schema_info(&schema, 0, (T*)null, type);
                     schema.composition = (context_bind*)calloc(schema.count, sizeof(context_bind) * 16);
 
                     /// get schema type definitions (schema_info reads them in from top to bottom mx but writes from back to front)
                     /// passing type avoid infinite-recursion
-                    schema_info(&schema, 0, (_TT*)null, type);
+                    schema_info(&schema, 0, (T*)null, type);
                     size_t offset = 0;
                     for (size_t i = 0; i < schema.count; i++) {
                         context_bind &bind = schema.composition[i];
