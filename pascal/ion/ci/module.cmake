@@ -66,6 +66,7 @@ macro(var_prepare r_path)
     set(lflags          "")
     #set(roles "")
     set(dep             "")
+    set(lib_paths       "")
     set(src             "")
     set(_includes       "")
     set(_src            "")
@@ -286,6 +287,7 @@ endfunction()
 # select cmake package, target name, or framework
 # can likely deprecate the target name case
 function(select_library t_name d)
+    message(STATUS "---------> select library: ${d}")
     find_package(${d} CONFIG QUIET)
     if(${d}_FOUND)
         if(TARGET ${d}::${d})
@@ -299,6 +301,7 @@ function(select_library t_name d)
     elseif(TARGET ${d})
         message(STATUS "(target) ${t_name} -> ${d}")
         target_link_libraries(${t_name} PRIVATE ${d})
+        set(${d}_DIR "system" CACHE INTERNAL "") # quiet up cmake
     else()
         find_package(${d} QUIET)
         if(${d}_FOUND)
@@ -316,7 +319,9 @@ function(select_library t_name d)
             else()
                 message(STATUS "(system) ${t_name} -> ${d}")
                 target_link_libraries(${t_name} PRIVATE ${d})
+                set(${d}_FW "system" CACHE INTERNAL "") # quiet up cmake
             endif()
+            set(${d}_DIR "system" CACHE INTERNAL "") # quiet up cmake
         endif()
         #
     endif()
@@ -513,11 +518,18 @@ macro(create_module_targets)
         set_target_properties(${t_name} PROPERTIES EXCLUDE_FROM_ALL TRUE)
     endif()
 
+    # support library paths
+    foreach(p ${lib_paths})
+        target_link_directories(${t_name} PUBLIC ${p})
+    endforeach()
+
     if(dep)
         foreach(d ${dep})
             process_dep(${d} ${t_name})
         endforeach()
     endif()
+
+
 
     foreach(app ${apps})
         set(app_path "${p}/apps/${app}")
@@ -569,38 +581,10 @@ endmacro()
 function(load_module r_path project_name mod)
     # create a target name for this module (t_name = project-module)
     set(t_name "${project_name}-${mod}")
-    
-    # all modules make targets, so thats our lazy load indicator
     if(NOT TARGET ${t_name})
         var_prepare(${r_path})
         include(${module_file})
         var_finish()
-
-        # the mod file may need to run twice; that is, if it relies on vars coming from a CMake package it references in dep()
-        set(retrial FALSE)
-
-        # package management-based priming read
-        # proceed as if we would process this in module target creation, for the d's of CMake package
-        foreach(d ${dep})
-            find_package(${d} QUIET)
-            if (${d}_FOUND)
-                set(retrial TRUE)
-            else()
-                find_package(${d} CONFIG QUIET)
-                if (${d}_FOUND)
-                    set(retrial TRUE)
-                endif()
-            endif()
-        endforeach()
-
-        # i-see-you-are-using-package-loaders, lets-try-that-again
-        if(retrial)
-            var_prepare(${r_path})
-            include(${module_file})
-            var_finish()
-        endif()
-
-        # create targets now that we have our vars properly set..
         create_module_targets()
     endif()
 endfunction()

@@ -195,6 +195,10 @@ macro(dep)
     listy(dep "" ${ARGN})
 endmacro()
 
+macro(lib_paths)
+    listy(lib_paths "" ${ARGN})
+endmacro()
+
 macro(arch)
     listy(arch "" ${ARGN})
 endmacro()
