@@ -7,8 +7,78 @@ include(../ion/ci/package.cmake)
 ## clang++ 
 ## include(../ion/ci/cxx20.cmake)
 
+function(unzip ZIP_FILE_PATH OUTPUT_DIR)
+    if (UNIX)
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E tar xzf ${ZIP_FILE_PATH}
+            WORKING_DIRECTORY ${OUTPUT_DIR}
+            RESULT_VARIABLE unzip_result)
+    elseif (WIN32)
+        execute_process(
+            COMMAND powershell -nologo -noprofile -command "& {Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('${ZIP_FILE_PATH}', '${OUTPUT_DIR}');}"
+            RESULT_VARIABLE unzip_result)
+    endif()
+    if (NOT unzip_result EQUAL 0)
+        message(FATAL_ERROR "Failed to unzip the file.")
+    endif()
+endfunction()
+
+macro(assert COND DESC)
+    if(NOT ${COND})
+        message(FATAL_ERROR "assertion failure: " ${DESC})
+    endif()
+endmacro()
+
+macro(assert_exists FILE DESC)
+    if(NOT EXISTS ${FILE})
+        message(FATAL_ERROR "file not found: " ${DESC})
+    endif()
+endmacro()
+
+# bootstrap python.  it takes 3 seconds to install the proper python for any system and avoid dx bloat
+# environment is the build dir. its all we need
+# they need to start distributing binaries in tar.gz form without the installer and registry cruft.  doing this manually because
+# invoking python installer even in silent with targeted dir will corrupt the registry
+# this method is suitable until proper binaries can be packaged
+# one could build python from source but that would be a bit much
+macro(bootstrap_python)
+    set_if(EXT WIN32 ".EXE" "")
+    if(WIN32)
+        set(SLA "\\")
+    else()
+        set(SLA "/")
+    endif()
+    set_if(SEP WIN32 "\;" ":")
+
+    set(PYTHON_VERSION "3.9.13")
+    set(RES_DIR        ${CMAKE_CURRENT_BINARY_DIR}/io/res)
+    set(PYTHON_PACKAGE ${RES_DIR}/python-${PYTHON_VERSION}-${OS}.zip)
+    set(PYTHON_PATH    ${CMAKE_BINARY_DIR}/python-${PYTHON_VERSION})
+    set(PYTHON         ${PYTHON_PATH}/python${EXT})
+    set(PIP            ${PYTHON_PATH}/Scripts/pip${EXT})
+
+    set(ENV{PATH} "${PYTHON_PATH}\;${PYTHON_PATH}\\Scripts\;$ENV{PATH}")
+
+    if(NOT EXISTS ${PYTHON})
+        if(NOT EXISTS io)
+            execute_process(COMMAND git clone "https://github.com/ar-visions/ar-visions.github.io" io)
+        endif()
+        unzip(${PYTHON_PACKAGE} ${CMAKE_BINARY_DIR})
+        assert_exists(${PIP} "pip")
+        foreach(pkg ${ARGV})
+            message(STATUS "installing pip package: ${pkg} (${PIP})")
+            message(STATUS "ENV: " $ENV{PATH})
+            execute_process(COMMAND ${PIP} install ${pkg} RESULT_VARIABLE pkg_res)
+            message(STATUS "result: ${pkg_res}")
+        endforeach()
+        assert_exists(${PYTHON} "python not found")
+    endif()
+
+endmacro()
+
 function(main)
     set_defs()
+
     ## extend cmake to do a bit more importing and building if it has not been done yet
     ## do it in the configuration made by the user and in the output directory of the user
     set(ENV{CMAKE_SOURCE_DIR}   ${CMAKE_SOURCE_DIR})
@@ -16,9 +86,12 @@ function(main)
     set(ENV{CMAKE_BUILD_TYPE}   ${CMAKE_BUILD_TYPE})
     set(ENV{JSON_IMPORT_INDEX} "${CMAKE_BINARY_DIR}/import.json")
 
-    # requires ion framework at peer directory level
+    # bootstrap python with pip packages
+    bootstrap_python(requests)
+
+    # now that we have prepared python.. we can run prepare.py
     execute_process(
-        COMMAND python3 "${CMAKE_SOURCE_DIR}/../ion/ci/prepare.py"
+        COMMAND ${PYTHON} "${CMAKE_SOURCE_DIR}/../ion/ci/prepare.py"
         RESULT_VARIABLE import_result)
 
     if (NOT (import_result EQUAL "0"))
