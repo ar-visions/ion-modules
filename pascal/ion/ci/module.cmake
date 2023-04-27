@@ -161,7 +161,7 @@ macro(var_finish)
     list(FIND arch ${ARCH} arch_found)
     if(arch AND arch_found EQUAL -1)
         set(br TRUE)
-        return() # return falsey state
+        return()
     endif()
 
     # ------------------------
@@ -210,11 +210,8 @@ macro(var_finish)
         if(!found)
             message(FATAL "couldnt find include path for symbol: ${n}")
         endif()
-
     endforeach()
-
 endmacro()
-
 
 function(get_name location name)
     file(READ ${location} package_contents)
@@ -377,7 +374,6 @@ macro(process_dep d t_name)
                 message(FATAL_ERROR "external module not found")
             endif()
         endif()
-
     else()
         if(NOT WIN32)
             pkg_check_modules(PACKAGE QUIET ${d})
@@ -391,8 +387,6 @@ macro(process_dep d t_name)
             select_library(${t_name} ${d})
         endif()
     endif()
-
-    
 endmacro()
 
 macro(address_sanitizer t_name)

@@ -76,6 +76,18 @@ def prepare_project(src_dir):
         prefix_path = ''
         for fields in import_list:
             if not isinstance(fields, str):
+                platforms = fields.get('platforms')
+                if platforms:
+                    p = platform.system()
+                    keep = False
+                    if p == 'Darwin'  and 'mac'   in platforms:
+                        keep = True
+                    if p == 'Windows' and 'win'   in platforms:
+                        keep = True
+                    if p == 'Linux'   and 'linux' in platforms:
+                        keep = True
+                    if not keep:
+                        continue
                 remote_path = prepare_git(src_dir, fields)
                 gen(cfg, prefix_path, fields.get('cmake'))
                 build(cfg)

@@ -9,7 +9,8 @@
             "url":      "https://github.com/KhronosGroup/MoltenVK",
             "includes": ["./MoltenVK/include"],
             "libs":     ["./MoltenVK/dylib/macOS"],
-            "diff":     "moltenvk.diff"
+            "diff":     "moltenvk.diff",
+            "platforms":["mac"]
         },
         {
             "name":     "glfw",

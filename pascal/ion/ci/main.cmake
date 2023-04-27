@@ -74,7 +74,17 @@ function(main)
                 if(NOT lib)
                     break()
                 endif()
-                list(APPEND import.${n_entry}.libs ${import.${n_entry}.extern}/${lib})
+
+                # msvc has one additional dir which is switched on standard CMAKE_BUILD_TYPE
+                # env var passed to prepare.py, passed onto external cmake projects
+                set(extra "")
+                if(MSVC)
+                    set(extra "/Release")
+                    if(DEBUG)
+                        set(extra "/Debug")
+                    endif()
+                endif()
+                list(APPEND import.${n_entry}.libs ${import.${n_entry}.extern}/${lib}${extra})
                 math(EXPR ii "${ii} + 1")
             endwhile()
         else()
