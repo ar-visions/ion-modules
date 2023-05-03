@@ -2,8 +2,6 @@
 
 logger console;
 
-
-
 ///
 int str::index_of(MatchType ct, symbol mp) const {
     int index = 0;
@@ -81,30 +79,6 @@ i64 millis() {
     );
 }
 
-void memory::drop() {
-    if (--refs <= 0 && !constant) { /// <= because ptr does a defer on the actual construction of the container class
-        /// call destructor on memory payload, if defined
-        if (type->lambdas->dtr)
-            type->lambdas->dtr(type, origin, 0, count);
-        if (origin != (this + 1)) {
-            //free(origin);
-            origin = null;
-        }
-        // delete attachment lambda after calling it
-        if (atts) {
-            for (attachment &att: *atts)
-                att.release();
-            delete atts;
-            atts = null;
-        }
-        if (shape) {
-            delete shape;
-            shape = null;
-        }
-        //free(this);
-    }
-}
-
 /// attach arbs to memory (uses a pointer)
 attachment *memory::attach(::symbol id, void *data, lambda<void()> release) {
     if (!atts)
@@ -168,11 +142,34 @@ memory *memory::raw_alloc(type_t type, size_t sz, size_t count, size_t res) {
 
 memory::memory() : refs(1) { }
 
-//memory(size_t refs, u64 attrs, type_t type, size_t count, size_t reserve, doubly<attachment> *atts, size_t id, void *origin) :
- //       refs(refs), attrs(attrs), type(type), count(count), reserve(reserve), atts(atts), id(id), origin(origin)  { }
 
-
+/// starting at 1, it should remain active.  shall not be freed as a result
 static memory m_null = { 1, u64(0), typeof(mx), 0, 0, null, 0, null };
+
+void memory::drop() {
+    if (--refs <= 0 && !constant) { /// <= because ptr does a defer on the actual construction of the container class
+        assert(this != &m_null);
+        /// call destructor on memory payload, if defined
+        if (type->lambdas->dtr)
+            type->lambdas->dtr(type, origin, 0, count);
+        if (origin != (this + 1)) {
+            //free(origin);
+            origin = null;
+        }
+        // delete attachment lambda after calling it
+        if (atts) {
+            for (attachment &att: *atts)
+                att.release();
+            delete atts;
+            atts = null;
+        }
+        if (shape) {
+            delete shape;
+            shape = null;
+        }
+        //free(this);
+    }
+}
 
 /// now we start allocating the total_size (or type->base_sz if not schema-bound (mx classes accept schema.  they say, icanfly.. imapilot))
 memory *memory::alloc(type_t type, size_t type_sz, size_t count, size_t reserve, raw_t src_origin, bool call_ctr) {
@@ -185,8 +182,8 @@ memory *memory::alloc(type_t type, size_t type_sz, size_t count, size_t reserve,
     /// must specify a type_sz if there is a copy operation
     assert(!src_origin || type_sz);
 
-    /// requirement: array of mx is just array of memory*; no null tokens either i dont see the point of that fluff
-    /// go man go.
+    /// requirement: array of mx is just array of memory*
+    /// mx = memory* size
     if (type_sz == 0)
         type_sz = type->schema ? type->schema->total_bytes : type->base_sz;
     
@@ -208,7 +205,7 @@ memory *memory::alloc(type_t type, size_t type_sz, size_t count, size_t reserve,
     }
 
     /// if allocating a schema-based object (mx being first user of this)
-    if (type->schema) {
+    if (type->schema && type->schema->total_bytes) {
         assert(type_sz == type->schema->total_bytes);
         ///
         if (call_ctr) {
@@ -281,3 +278,20 @@ void *mem_origin(memory *mem) {
 memory *cstring(cstr cs, size_t len, size_t reserve, bool is_constant) {
     return memory::stringify(cs, len, 0, is_constant, typeof(char), 0);
 }
+
+
+void shared::drop() {
+    if (mem)
+        mem->drop();
+}
+
+memory *shared::grab() {
+    return mem ? mem->grab() : null;
+}
+
+shared::~shared() {
+    if (mem)
+        mem->drop();
+}
+
+shared::shared(const shared &ref) : ident(((shared &)ref).grab()) { }

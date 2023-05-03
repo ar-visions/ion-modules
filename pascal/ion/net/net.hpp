@@ -1,8 +1,5 @@
 #pragma once
 
-#include <core/core.hpp>
-#include <async/async.hpp>
-
 enums(method, undefined, 
    "undefined, response, get, post, put, delete",
     undefined, response, get, post, put, del);

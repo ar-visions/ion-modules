@@ -10,18 +10,9 @@
 	},
 	"tasks": [
 		{
-			"label": 	"cmake",
-			"type": 	"shell",
-			"command": 	"cmake .. -G Ninja -DCMAKE_CXX_COMPILER=/Users/kalen/Dropbox/src/llvm-project/build/bin/clang++",
-			"group":        {"kind": "build", "isDefault": false},
-			"options":      {"cwd": "ion/build"},
-			"presentation": {"reveal": "always", "panel": "shared", "clear": true},
-			"problemMatcher": []
-		},
-		{
 			"label": 	"ninja-demo",
 			"type": 	"shell",
-			"command": 	"ninja demo -j10",
+			"command": 	"ninja demo -j10 -v",
 			"group":        {"kind": "build", "isDefault": true},
 			"options":      {"cwd": "ion/build"},
 			"presentation": {"reveal": "always", "panel": "shared", "clear": true},

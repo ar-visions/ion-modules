@@ -2,6 +2,8 @@
 #include "stb-image-read.h"
 #include "stb-image-write.h"
 
+#include <core/core.hpp>
+#include <math/math.hpp>
 #include <image/image.hpp>
 
 /// load an image into 32bit rgba format

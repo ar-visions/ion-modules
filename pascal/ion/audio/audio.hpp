@@ -1,5 +1,4 @@
 #pragma once
-#include <core/core.hpp>
 
 #ifndef MINIMP3_IMPLEMENTATION
 struct mp3dec_ex_t;

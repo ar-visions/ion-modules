@@ -6,9 +6,9 @@ import re
 import json
 import platform
 import hashlib
-import requests
-
-print(f"File downloaded and saved to {local_file_path}")
+#import requests
+import shutil
+import zipfile
 
 src_dir   = os.environ.get('CMAKE_SOURCE_DIR')
 build_dir = os.environ.get('CMAKE_BINARY_DIR')
@@ -53,26 +53,38 @@ os.chdir(build_dir)
 if not os.path.exists('extern'): os.mkdir('extern');
 
 # prepare an { object } of external repo
-# this is not done for peers
-def prepare_build(src_dir, fields):
+def prepare_build(this_src_dir, fields):
     vname, name, version, res, sha256, url, commit, diff = parse(fields);
     
+    dst = f'{build_dir}/extern/{vname}'
+
     ## if there is resource, download it and verify sha256 (required field)
     if res:
-        # cmake handles this before prepare is launched
-        res_repo = f'{build_dir}/{io_repo}/res/{res}'
-        digest = sha256_file(res_repo)
-        assert(digest == sha256)
-        return res_repo, False
+        res_zip = f'{build_dir}/io/res/{res}'
+        digest = sha256_file(res_zip)
+        if digest != sha256:
+            print(f'sha256 checksum failure in project {name}')
+            print(f'checksum for {res}: {digest}')
+        with zipfile.ZipFile(res_zip, 'r') as z:
+            z.extractall(dst)
     else:
-        os.chdir(build_dir + '/extern')
-        if not os.path.exists(vname): git('clone', '--recursive', url, vname)
+        os.chdir(f'{build_dir}/extern')
+        if not os.path.exists(vname):
+            print(f'checking out {vname}...')
+            git('clone', '--recursive', url, vname)
+        print(f'building {vname}...')
         os.chdir(vname)
-        git('fetch')
+        git('fetch') # this will get the commit identifiers sometimes not received yet
         if diff: git('reset', '--hard')
         git('checkout', commit)
-        if diff: git('apply', f'{src_dir}/diff/{diff}')
-        return f'{build_dir}/extern/{vname}', True
+        if diff: git('apply', f'{this_src_dir}/diff/{diff}')
+        
+    # overlay files; not quite as good as diff but its easier to manipulate
+    overlay = f'{this_src_dir}/overlays/{name}'
+    if os.path.exists(overlay):
+        shutil.copytree(overlay, dst, dirs_exist_ok=True)
+    
+    return dst, not res
     
 everything = []
 
@@ -91,11 +103,12 @@ def prepare_project(src_dir):
                 sym_peer = f'{build_dir}/extern/{fields}'
                 if not os.path.exists(sym_peer): os.symlink(rel_peer, sym_peer, True)
                 assert(os.path.islink(sym_peer))
-                prepare_project(rel_peer)
+                prepare_project(rel_peer) # recurse into project, pulling its things too
 
         # now prep gen and build
         prefix_path = ''
         for fields in import_list:
+            name = fields['name']
             if not isinstance(fields, str):
                 platforms = fields.get('platforms')
                 if platforms:
@@ -108,6 +121,7 @@ def prepare_project(src_dir):
                     if p == 'Linux'   and 'linux' in platforms:
                         keep = True
                     if not keep:
+                        print(f'skipping {name} for this platform...')
                         continue
                 remote_path, is_git = prepare_build(src_dir, fields)
 
@@ -120,9 +134,9 @@ def prepare_project(src_dir):
                 remote_build_path = f'{remote_path}/build'
                 if os.path.isdir(remote_build_path):
                     if prefix_path:
-                        prefix_path  += f'{prefix_path}:{remote_build_path}'
+                        prefix_path += f'{prefix_path}:{remote_build_path}'
                     else:
-                        prefix_path   = remote_build_path
+                        prefix_path  = remote_build_path
 
 # prepare project recursively
 prepare_project(src_dir)

@@ -1,11 +1,4 @@
 #pragma once
-#include <core/core.hpp>
-
-
-#include <array>
-#include <set>
-#include <stack>
-#include <queue>
 
 #include <core/core.hpp>
 #include <math/math.hpp>
@@ -314,42 +307,38 @@ namespace graphics {
         bool      operator!() { return !operator bool(); }
         shape::data *handle() { return &m; }
     };
-    
-    /// graphics::border is an indication that this has information on color
-    struct border:mx {
-        struct data {
-            real sz, tl, tr, bl, br;
-            rgba color;
-            inline bool operator==(const data &b) const { return b.tl == tl && b.tr == tr && b.bl == bl && b.br == br; }
-            inline bool operator!=(const data &b) const { return !operator==(b); }
-        } &m;
+
+    struct border_data {
+        real size, tl, tr, bl, br;
+        rgba color;
+        inline bool operator==(const border_data &b) const { return b.tl == tl && b.tr == tr && b.bl == bl && b.br == br; }
+        inline bool operator!=(const border_data &b) const { return !operator==(b); }
+
+        /// members are always null from the memory::allocation
+        border_data() { }
         ///
-        ctr(border, mx, data, m);
-        ///
-        border(str raw) : border() {
+        border_data(str raw) : border_data() {
             str        trimmed = raw.trim();
             size_t     tlen    = trimmed.len();
             array<str> values  = raw.split();
             size_t     ncomps  = values.len();
-            
+            ///
             if (tlen > 0) {
-                m.sz = values[0].real_value<real>();
+                size = values[0].real_value<real>();
                 if (ncomps == 5) {
-                    m.tl = values[1].real_value<real>();
-                    m.tr = values[2].real_value<real>();
-                    m.br = values[3].real_value<real>();
-                    m.bl = values[4].real_value<real>();
+                    tl = values[1].real_value<real>();
+                    tr = values[2].real_value<real>();
+                    br = values[3].real_value<real>();
+                    bl = values[4].real_value<real>();
                 } else if (tlen > 0 && ncomps == 2)
-                    m.tl = m.tr = m.bl = m.br = values[1].real_value<real>();
+                    tl = tr = bl = br = values[1].real_value<real>();
                 else
                     console.fault("border requires 1 (size) or 2 (size, roundness) or 5 (size, tl tr br bl) values");
             }
         }
-
-        inline real & size() { return m.sz; }
-        inline rgba &color() { return m.color; }
     };
-
+    /// graphics::border is an indication that this has information on color
+    using border = sp<border_data>;
 };
 
 enums(nil, none, "none", none);
@@ -559,21 +548,6 @@ namespace user {
         } &m;
         ctr(key, mx, data, m);
     };
-
-    struct cursor:mx {
-        struct data {
-            vec2 pos;
-            states<mouse> buttons;
-        } &m;
-        ctr(cursor, mx, data, m);
-    };
-
-    struct resize:mx {
-        struct data {
-            size sz;
-        } &m;
-        ctr(resize, mx, data, m);
-    };
 };
 
 struct event:mx {
@@ -581,9 +555,11 @@ struct event:mx {
     struct edata {
         user::chr     chr;
         user::key     key;
-        user::cursor  cursor;
-        user::resize  resize;
-        states<mouse> buttons;
+        vec2          cursor;
+        states<mouse>    buttons;
+        states<keyboard> modifiers;
+        size          resize;
+        mouse::etype  button_id;
         bool          prevent_default;
         bool          stop_propagation;
     } &evd;
@@ -592,15 +568,15 @@ struct event:mx {
     ctr(event, mx, edata, evd);
     
     ///
-    inline void prevent_default()   {         evd.prevent_default = true;  }
-    inline bool is_default()        { return !evd.prevent_default;         }
-    inline bool should_propagate()  { return !evd.stop_propagation;        }
+    inline void prevent_default()   {         evd.prevent_default = true; }
+    inline bool is_default()        { return !evd.prevent_default; }
+    inline bool should_propagate()  { return !evd.stop_propagation; }
     inline bool stop_propagation()  { return  evd.stop_propagation = true; }
-    inline vec2 cursor_pos()        { return  evd.cursor->pos;            }
-    inline bool mouse_down(mouse m) { return  evd.cursor->buttons[m];     }
-    inline bool mouse_up  (mouse m) { return !evd.cursor->buttons[m];     }
-    inline num  unicode   ()        { return  evd.key->unicode;           }
-    inline num  scan_code ()        { return  evd.key->scan_code;         }
+    inline vec2 cursor_pos()        { return  evd.cursor; }
+    inline bool mouse_down(mouse m) { return  evd.buttons[m]; }
+    inline bool mouse_up  (mouse m) { return !evd.buttons[m]; }
+    inline num  unicode   ()        { return  evd.key->unicode; }
+    inline num  scan_code ()        { return  evd.key->scan_code; }
     inline bool key_down  (num u)   { return  evd.key->unicode   == u && !evd.key->up; }
     inline bool key_up    (num u)   { return  evd.key->unicode   == u &&  evd.key->up; }
     inline bool scan_down (num s)   { return  evd.key->scan_code == s && !evd.key->up; }
@@ -842,6 +818,7 @@ struct window:mx {
     void hide();
     void start();
   ::size size();
+    void repaint();
     operator bool();
 };
 
@@ -897,7 +874,7 @@ struct VertexData:mx {
     struct VertexInternal *m;
     ptr_decl(VertexData, mx, VertexInternal, m);
 
-    VertexData(Device *device, Buffer buffer, std::function<void(void*)> fn_attribs);
+    VertexData(Device *device, Buffer buffer, lambda<void(void*)> fn_attribs);
     ///
     size_t       size();
        operator bool ();
@@ -987,7 +964,7 @@ struct GPU:mx {
 
 struct Device;
 
-using  UniformFn = std::function<void(void *)> ;
+using  UniformFn = lambda<void(void *)> ;
 
 struct UniformMemory;
 
@@ -1029,7 +1006,7 @@ struct MVP {
 };
 
 struct vkState;
-using VkStateFn = std::function<void(vkState *)>;
+using VkStateFn = lambda<void(vkState *)>;
 
 struct PipelineMemory;
 
@@ -1185,7 +1162,7 @@ struct Model:Pipes {
     
     ///
     struct Shape {
-        using ModelFn = std::function<Polys(void)>;
+        using ModelFn = lambda<Polys(void)>;
         ModelFn fn;
     };
     
@@ -1278,7 +1255,7 @@ struct cbase:mx {
         defs, push, pop);
     
     struct cdata {
-        size               sz;    /// size in integer units; certainly not part of the stack lol.
+        size               size; /// size in integer units; certainly not part of the stack lol.
         type_t             pixel_t;
         doubly<draw_state> stack; /// ds = states.last()
         draw_state*        state; /// todo: update w push and pop
@@ -1297,7 +1274,7 @@ struct cbase:mx {
     }
 
     public:
-  ::size &size() { return m.sz; }
+  ::size &size() { return m.size; }
 
     virtual void    outline(graphics::shape) { }
     virtual void       fill(graphics::shape) { }
@@ -1359,7 +1336,7 @@ struct cbase:mx {
     void         *data();
 
     /// boolean operator
-    inline operator bool() { return bool(m.sz); }
+    inline operator bool() { return bool(m.size); }
 };
 
 struct gfx_memory;
@@ -1524,18 +1501,18 @@ struct node:Element {
             canvas.image(image.img, image.shape, image.align, {0,0}, {0,0});
         
         /// if there is text (its not alpha 0, and there is text)
-        if (std.content && std.content.type() == typeof(cstr)) {
+        if (std.content && std.content.type() == typeof(char) ||
+                           std.content.type() == typeof(str)) {
             canvas.color(text.color);
-            // (str text, graphics::rect area, region reg, alignment align, vec2 offset, bool ellip)
-            // padding?
-            // str text, graphics::rect rect, alignment align, vec2 offset, bool ellip
-            canvas.text(str(std.content.grab()), text.shape.rect(), text.align, {0.0, 0.0}, true);
+            canvas.text(
+                std.content.grab(), text.shape.rect(),
+                text.align, {0.0, 0.0}, true);
         }
 
         /// if there is an effective border to draw
-        if (outline.color && outline.border.size() > 0.0) {
-            canvas.color(outline.border.color());
-            canvas.outline_sz(outline.border.size());
+        if (outline.color && outline.border->size > 0.0) {
+            canvas.color(outline.border->color);
+            canvas.outline_sz(outline.border->size);
             canvas.outline(outline.shape); /// this needs to work with vshape, or border
         }
     }
@@ -1921,6 +1898,7 @@ struct button:node {
     struct props {
         behavior behavior;
     } &m;
+    
     ///
     ctr_args(button, node, props, m);
 };

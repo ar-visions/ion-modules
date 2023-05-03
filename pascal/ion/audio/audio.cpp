@@ -5,6 +5,7 @@
 
 #include "minimp3_ex.h"
 
+#include <core/core.hpp>
 #include <audio/audio.hpp>
 
 audio::audio(path res, bool force_mono, int pos, size_t sz) : audio() {

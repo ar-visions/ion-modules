@@ -1,3 +1,4 @@
+#include <core/core.hpp>
 #include <async/async.hpp>
 
 async::async() { }

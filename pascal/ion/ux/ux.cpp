@@ -1,14 +1,22 @@
+//#include <core/core.hpp>
+//#include <math/math.hpp>
+//#include <async/async.hpp>
+//#include <image/image.hpp>
 #include <ux/ux.hpp>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vkvg.h>
+#ifdef __APPLE__
+#include <vulkan/vulkan_metal.h>
+#endif
 #include <array>
 #include <set>
 #include <stack>
 #include <queue>
 #include <vkh.h>
 #include <vulkan/vulkan.h>
+
 
 template <> struct is_opaque<VkImageView>       : true_type { };
 template <> struct is_opaque<VkPhysicalDevice>  : true_type { };
@@ -59,17 +67,17 @@ void Vertex::attribs(VAttribs attr, void *res) {
 struct VertexInternal {
     Device         *device = null;
     Buffer          buffer;
-    std::function<void(void*)> fn_attribs;
+    lambda<void(void*)> fn_attribs;
     
     //VkWriteDescriptorSet operator()(VkDescriptorSet &ds) {
     //    return { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, ds, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, buffer };
     //}
     VertexInternal() { }
-    VertexInternal(Device *device, Buffer buffer, std::function<void(void*)> fn_attribs) :
+    VertexInternal(Device *device, Buffer buffer, lambda<void(void*)> fn_attribs) :
         device(device), buffer(buffer), fn_attribs(fn_attribs) { }
 };
 
-VertexData::VertexData(Device *device, Buffer buf, std::function<void(void*)> fn_attribs) : 
+VertexData::VertexData(Device *device, Buffer buf, lambda<void(void*)> fn_attribs) : 
     VertexData(new VertexInternal { device, buf, fn_attribs }) { }
 
 size_t VertexData::size()          { return m->buffer.count() / m->buffer.type_size();     }
@@ -142,10 +150,9 @@ struct window_data {
     Texture         *tx_skia;
     vec2             dpi_scale = { 1, 1 };
     bool             repaint;
-    states<mouse>    buttons;
-    states<keyboard> modifiers;
-    vec2             cursor;
+    event            ev;
     lambda<void()>   fn_resize;
+    bool             pristine;
 
     struct dispatchers {
         dispatch on_resize;
@@ -175,13 +182,14 @@ struct window_data {
         );
     }
 
-    void cursor_event(user::cursor::data cursor) {
+    /// app composer needs to bind to these
+    void cursor_event(vec2 cursor) {
         events.on_cursor(
             event(event::edata { .cursor = cursor })
         );
     }
 
-    void resize_event(user::resize::data resize) {
+    void resize_event(size resize) {
         events.on_resize(
             event(event::edata { .resize = resize })
         );
@@ -198,6 +206,12 @@ struct window_data {
 };
 
 ptr_impl(window, mx, window_data, w);
+
+/// remove void even in lambda
+/// [](args) is fine.  even (args) is fine
+void window::repaint() {
+
+}
 
 ::size window::size() { return w->sz; }
 
@@ -694,7 +708,10 @@ TextureMemory::TextureMemory(Device *device, size sz, VkImage vk_image, VkImageV
 
 void window::loop(lambda<void()> fn) {
     while (!glfwWindowShouldClose(w->glfw)) {
-        fn();
+        if(!w->pristine) {
+            fn();
+            w->pristine = true;
+        }
         glfwPollEvents();
     }
 }
@@ -737,7 +754,7 @@ void terminal::draw_state_change(draw_state &ds, cbase::state_change type) {
 }
 
 terminal::terminal(::size sz) : terminal()  {
-    m.sz      = sz;
+    m.size    = sz;
     m.pixel_t = typeof(char);  
     size_t n_chars = sz.area();
     t.glyphs = array<glyph>(sz);
@@ -776,7 +793,7 @@ void terminal::set_char(int x, int y, glyph gl) {
 // gets the effective character, including bordering
 str terminal::get_char(int x, int y) {
     cbase::draw_state &ds = *t.ds;
-    ::size        &sz = m.sz;
+    ::size        &sz = m.size;
     size_t       ix = math::clamp<size_t>(x, 0, sz[1] - 1);
     size_t       iy = math::clamp<size_t>(y, 0, sz[0] - 1);
     str       blank = " ";
@@ -820,7 +837,7 @@ str terminal::get_char(int x, int y) {
 
 void terminal::text(str s, graphics::shape vrect, alignment::data &align, vec2 voffset, bool ellip) {
     r4<real>    rect   =  vrect.bounds();
-    ::size       &sz      =  cbase::size();
+    ::size       &sz   =  cbase::size();
     v2<real>   &offset =  voffset;
     draw_state &ds     = *t.ds;
     int         len    =  int(s.len());
@@ -1405,7 +1422,7 @@ VkShaderModule Device::module(Path path, Assets &assets, ShadeModule type) {
             defs += remap[type];
         
         /// path was /usr/local/bin/ ; it should just be in path, and to support native windows
-        str     command = fmt   {"glslc {1} {0} -o {0}.spv", { key, defs }};
+        Path command = fmt {"glslc {1} {0} -o {0}.spv", { key, defs }};
         async { command }.sync();
         
         ///
@@ -2228,7 +2245,10 @@ Internal &Internal::bootstrap() {
     symbol*      glfwExtensions     = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
     array<symbol> extensions { &glfwExtensions[0], glfwExtensionCount, glfwExtensionCount + 1 };
+
     extensions += VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    if constexpr (is_apple())
+        extensions += VK_EXT_METAL_SURFACE_EXTENSION_NAME;
 
     for (symbol sym: extensions) {
         console.log("symbol: {0}", { sym });
@@ -2252,24 +2272,34 @@ Internal &Internal::bootstrap() {
         .applicationVersion  = VK_MAKE_API_VERSION(0, 1, 0, 0),
         .pEngineName         = "ion",
         .engineVersion       = VK_MAKE_API_VERSION(0, 1, 0, 0),
-        .apiVersion          = VK_MAKE_API_VERSION(0, 1, 0, 0)
+        .apiVersion          = VK_API_VERSION_1_2
     };
 
     VkInstanceCreateInfo create_info = {
         .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext                   = &debug,
         .pApplicationInfo        = &app_info,
-        .enabledLayerCount       = 1,
+        .flags                   = VkInstanceCreateFlags(VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR),
+        .enabledLayerCount       = is_debug() ? 1 : 0,
         .ppEnabledLayerNames     = &validation_layer,
-        .enabledExtensionCount   = static_cast<uint32_t>(extensions.len()),
+        .enabledExtensionCount   = u32(extensions.len()),
         .ppEnabledExtensionNames = extensions.data()
     };
 
-    // create the vk instance
+    // create the vk instance (MoltenVK does not support validation layer)
+    // M2 mac mini reports incompatible driver
     VkResult vk_result = vkCreateInstance(&create_info, null, &vk);
+
+    /// if layer not present, attempt to load without
+    if (is_debug() && vk_result == VK_ERROR_LAYER_NOT_PRESENT) {
+        console.log("warning: validation layer unavailable (VK_ERROR_LAYER_NOT_PRESENT)");
+        create_info.enabledLayerCount = 0;
+        vk_result = vkCreateInstance(&create_info, null, &vk);
+    }
+    /// test for success
     console.test(vk_result == VK_SUCCESS, "vk instance failure");
 
-    // create the debug messenger
+    /// create the debug messenger
     VkResult dbg_result = CreateDebugUtilsMessengerEXT(vk, &debug, null, &dmsg);
     console.test(dbg_result == VK_SUCCESS, "vk debug messenger failure");
     return *this;
@@ -2309,15 +2339,15 @@ void glfw_key(GLFWwindow *h, int unicode, int scan_code, int action, int mods) {
     window win = window::handle(h);
 
     /// update modifiers on window
-    win.w->modifiers[keyboard::shift] = (mods & GLFW_MOD_SHIFT) != 0;
-    win.w->modifiers[keyboard::alt]   = (mods & GLFW_MOD_ALT  ) != 0;
-    win.w->modifiers[keyboard::meta]  = (mods & GLFW_MOD_SUPER) != 0;
+    win.w->ev->modifiers[keyboard::shift] = (mods & GLFW_MOD_SHIFT) != 0;
+    win.w->ev->modifiers[keyboard::alt]   = (mods & GLFW_MOD_ALT  ) != 0;
+    win.w->ev->modifiers[keyboard::meta]  = (mods & GLFW_MOD_SUPER) != 0;
 
     win.w->key_event(
         user::key::data {
             .unicode   = unicode,
             .scan_code = scan_code,
-            .modifiers = win.w->modifiers,
+            .modifiers = win.w->ev->modifiers,
             .repeat    = action == GLFW_REPEAT,
             .up        = action == GLFW_RELEASE
         }
@@ -2329,29 +2359,25 @@ void glfw_char(GLFWwindow *h, u32 unicode) { window::handle(h).w->char_event(uni
 void glfw_button(GLFWwindow *h, int button, int action, int mods) {
     window win = window::handle(h);
     switch (button) {
-        case 0: win.w->buttons[ mouse::left  ] = action == GLFW_PRESS; break;
-        case 1: win.w->buttons[ mouse::right ] = action == GLFW_PRESS; break;
-        case 2: win.w->buttons[ mouse::middle] = action == GLFW_PRESS; break;
+        case 0: win.w->ev->buttons[ mouse::left  ] = action == GLFW_PRESS; break;
+        case 1: win.w->ev->buttons[ mouse::right ] = action == GLFW_PRESS; break;
+        case 2: win.w->ev->buttons[ mouse::middle] = action == GLFW_PRESS; break;
     }
-    win.w->button_event(win.w->buttons);
+    win.w->button_event(win.w->ev->buttons);
 }
 
 void glfw_cursor (GLFWwindow *h, double x, double y) {
     window win = window::handle(h);
-    win.w->cursor = vec2 { x, y };
-    win.w->buttons[mouse::inactive] = !glfwGetWindowAttrib(h, GLFW_HOVERED);
-    ///
-    win.w->cursor_event({
-        .pos         = vec2 { x, y },
-        .buttons     = win.w->buttons
-    });
+    win.w->ev->cursor = vec2 { x, y };
+    win.w->ev->buttons[mouse::inactive] = !glfwGetWindowAttrib(h, GLFW_HOVERED);
+    win.w->cursor_event(win.w->ev->cursor);
 }
 
 void glfw_resize (GLFWwindow *handle, i32 w, i32 h) {
     window win = window::handle(handle);
     win.w->fn_resize();
     win.w->sz = size { h, w };
-    win.w->resize_event({ .sz = win.w->sz });
+    win.w->resize_event(win.w->sz);
 }
 
 bool GPU::operator()(Capability caps) {
@@ -2463,12 +2489,12 @@ ptr_impl(gfx, cbase, gfx_memory, g);
 gfx::gfx(::window &win) : gfx(memory::wrap<gfx_memory>(new gfx_memory { })) {
     vk_interface vk; /// verify vulkan instanced prior
     g->win = &win;    /// should just set window without pointer
-    m.sz   = win.w->sz;
-    assert(m.sz[1] > 0 && m.sz[0] > 0);
+    m.size = win.w->sz;
+    assert(m.size[1] > 0 && m.size[0] > 0);
 
     /// erases old main texture, returns the newly sized.
     /// this is 'texture-main' of sorts accessible from canvas context2D
-    g->tx = win.texture(m.sz); 
+    g->tx = win.texture(m.size); 
 
     VkInstance vk_inst = vk.instance();
     Device *device = win.device();
@@ -2793,16 +2819,34 @@ int app::run() {
     auto        vbo = VertexBuffer<Vertex>  { &dev, vertices, vattr };
     auto        ibo = IndexBuffer<uint16_t> { &dev, indices  };
     auto        uni = UniformBuffer<MVP>    { &dev, [&](void *mvp) {
-        *(MVP*)mvp = MVP {
-                .model = m44f::ident(), //m44f::identity(),
-                .view  = m44f::ident(), //m44f::identity(),
-                .proj  = m44f::ortho({ -0.5f, 0.5f }, { -0.5f, 0.5f }, { 0.5f, -0.5f })
+        *(MVP*)mvp  = MVP {
+             .model = m44f::ident(), //m44f::identity(),
+             .view  = m44f::ident(), //m44f::identity(),
+             .proj  = m44f::ortho({ -0.5f, 0.5f }, { -0.5f, 0.5f }, { 0.5f, -0.5f })
         };
     }}; /// assets dont seem to quite store Asset::Color and its texture ref
     auto         pl = Pipeline<Vertex> {
         &dev, uni, vbo, ibo, textures,
         { 0.0, 0.0, 0.0, 0.0 }, std::string("main") /// transparent canvas overlay; are we clear? crystal.
     };
+
+    listener &on_key = win.w->events.on_key.listen(
+        [&](event e) {
+            win.w->pristine = false;
+            win.w->ev->key  = e->key; /// dont need to store button_id, thats just for handlers. window is stateless
+        });
+    
+    listener &on_button = win.w->events.on_button.listen(
+        [&](event e) {
+            win.w->pristine    = false;
+            win.w->ev->buttons = e->buttons;
+        });
+
+    listener &on_cursor = win->events.on_cursor.listen(
+        [&](event e) {
+            win.w->pristine   = false;
+            win.w->ev->cursor = e->cursor;
+        });
 
     ///
     win.show();
@@ -2833,6 +2877,10 @@ int app::run() {
         
         //glfwWaitEventsTimeout(1.0);
     });
+
+    /// automatic when it falls out of scope
+    on_cursor.cancel();
+
     glfwTerminate();
     return 0;
 }

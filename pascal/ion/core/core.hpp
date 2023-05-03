@@ -1,5 +1,15 @@
 #pragma once
-#include <core/core.hpp>
+
+/// pch info here:
+/// --------------------------
+#pragma warning(disable:4005) /// skia
+#pragma warning(disable:4566) /// escape sequences in canvas
+#pragma warning(disable:5050) ///
+#pragma warning(disable:4244) /// skia-header warnings
+#pragma warning(disable:5244) /// odd bug
+#pragma warning(disable:4291) /// 'no exceptions'
+#pragma warning(disable:4996) /// strncpy warning
+#pragma warning(disable:4267) /// size_t to int warnings (minimp3)
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -9,6 +19,8 @@
 #include <sched.h>
 #endif
 
+/// wall of shame
+#include <functional>
 #include <atomic>
 #include <filesystem>
 #include <condition_variable>
@@ -27,17 +39,15 @@
 #include <unordered_map>
 #include <algorithm>
 #include <iterator>
-#include <assert.h>
 #include <new>
+#include <array>
+#include <set>
+#include <stack>
+#include <queue>
+#include <utility>
+#include <type_traits>
 
-#pragma warning(disable:4005) /// skia
-#pragma warning(disable:4566) /// escape sequences in canvas
-#pragma warning(disable:5050) ///
-#pragma warning(disable:4244) /// skia-header warnings
-#pragma warning(disable:5244) /// odd bug
-#pragma warning(disable:4291) /// 'no exceptions'
-#pragma warning(disable:4996) /// strncpy warning
-#pragma warning(disable:4267) /// size_t to int warnings (minimp3)
+#include <assert.h>
 
 struct idata;
 struct mx;
@@ -459,7 +469,10 @@ struct traits {
 ///
 template <typename T> using initial = std::initializer_list<T>;
 template <typename T> using func    = std::function<T>;
-template <typename T> using lambda  = std::function<T>;
+
+
+//template <typename T> using lambda  = std::function<T>;
+
 template <typename K, typename V> using umap = std::unordered_map<K,V>;
 namespace fs  = std::filesystem;
 
@@ -1132,45 +1145,42 @@ struct math {
 };
 
 struct lambda_table;
+struct memory;
 
+/// mx-mock-type
 struct ident {
-    struct memory *mem;
+    memory *mem;
 
     template <typename T>
     static idata* for_type();
 
     template <typename T>
     static size_t type_size(); /// does not strip the pointer; sz is for its non pointer base sz (will call it that)
+    
+    ident(memory* mem) : mem(mem) { }
 };
 
-struct any {
-    type_t  type;
-    raw_t   data;
-    
-    any() : type(null), data(null) { }
+/// usable shared type (lambda based on this)
+struct shared:ident {
+    shared() : ident(null) { }
 
-    operator    bool() { return type != null; }
-    bool   operator!() { return type == null; }
+    void drop();
+    struct memory *grab();
 
     template <typename T>
-    any(T *d) : type(typeof(T)), data(raw_t(d)) { }
+    shared(T *ptr);
 
-    template <typename T>
-    operator T *() {
-        assert(typeof(T) == data);
-        return (T *)data;
-    }
+     shared(const shared &ref);
+    ~shared();
 
-    any(const any& b) {
-        type = b.type;
-        data = b.data;
-    }
+    //template <typename T>
+    //T *operator= (T *ptr);
     
-    void   operator=(const any& b) {
-        type = (type_t)b.type;
-        data = (raw_t )b.data;
-    }
+    template <typename T>
+    T *get();
 };
+
+using any = shared;
 
 memory *mem_symbol(::symbol cs, type_t ty = typeof(char), i64 id = 0);
 
@@ -1261,6 +1271,48 @@ struct context_bind {
 
 memory* raw_alloc(type_t ty, size_t sz);
 
+template <typename T>
+class lambda;
+
+template <typename R, typename... Args>
+class lambda<R(Args...)> : public shared {
+    struct callable_base {
+        virtual ~callable_base() = default;
+        virtual R invoke(Args... args) const = 0;
+    };
+
+    template <typename F>
+    class callable_impl : public callable_base {
+    private:
+        F functor;
+    public:
+        explicit callable_impl(F&& functor) : functor(std::forward<F>(functor)) { }
+
+        R invoke(Args... args) const override {
+            return functor(std::forward<Args>(args)...);
+        }
+    };
+
+public:
+    lambda()                 : shared() { }
+    lambda(std::nullptr_t n) : shared() { }
+
+    template <typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, lambda>>>
+    lambda(F&& f) : shared(new callable_impl<std::decay_t<F>>(std::decay_t<F>(f))) { }
+
+    /// invoke subclassed allocation 
+    /// (a decay'd F which gets the individual identity out of lambda and makes it prototype-based)
+    R operator()(Args... args) const;
+
+    operator bool() const { return mem; }
+};
+
+template <typename T>
+struct is_lambda : std::false_type {};
+
+template <typename R, typename... Args>
+struct is_lambda<lambda<R(Args...)>> : std::true_type {};
+
 struct lambda_table {
     lambda<   void(type_t,void*,size_t,size_t)>       construct; /// construct over vector
     lambda<   void(type_t,void*,size_t,size_t)>       dtr;       /// destruct over vector
@@ -1328,6 +1380,8 @@ size_t schema_info(alloc_schema *schema, int depth, T *p, idata *ctx_type) {
     } else
         return depth;
 }
+
+#if 1
 
 template <typename T>
 u64 hash_value(T &key) {
@@ -1485,6 +1539,14 @@ public:
         return mem;
     }
 
+    static memory *wrap_raw(raw_t ptr, type_t ty) {
+        memory *mem  = raw_alloc(ty, ty->base_sz, 0, 0);
+        mem->origin  = ptr;
+        mem->count   = 1;
+        mem->reserve = 1;
+        return mem;
+    }
+
     /// should be able to reference other args if its before
     static memory *alloc(type_t type,
                          size_t type_sz   = 0, /// can be reduced away i think
@@ -1574,7 +1636,7 @@ inline T &assign_tr(T &a, const T &b, bool call_dtr) {
 memory *cstring(cstr cs, size_t len = memory::auto_len, size_t reserve = 0, bool sym = false);
 
 
-using fn_t = std::function<void()>;
+using fn_t = lambda<void()>;
 
 struct rand {
     struct seq {
@@ -1661,10 +1723,12 @@ struct mx {
 
     inline ~mx() { if (mem) mem->drop(); }
 
+    /// interop with shared; needs just base type functionality for lambda
     inline mx(memory *mem = null) : mem(mem) { }
     inline mx(symbol ccs, type_t type = typeof(char)) : mx(mem_symbol(ccs, type)) { }
     inline mx(  cstr  cs, type_t type = typeof(char)) : mx(memory::stringify(cs, memory::auto_len, 0, false, type)) { }
-    inline mx(const mx &b) : mx(b.mem ? b.mem->grab() : null) { }
+    inline mx(const shared &sh) : mem(sh.mem ? sh.mem->grab() : (memory*)null) { }
+    inline mx(const mx     & b) :  mx( b.mem ?  b.mem->grab() : null) { }
 
     //template <typename T>
     //mx(T& ref, bool cp1) : mx(memory::alloc(typeof(T), 1, 0, cp1 ? &ref : (T*)null), ctx) { }
@@ -1986,7 +2050,8 @@ public:
     array &operator=   (const array b) { return (array &)assign_mx(*this, b); }
 
     array(initial<T> args) : array(size(args.size()), size(args.size())) {
-        num i = 0;
+        num i = 0; /// typesize must be sizeof mx if its an mx type
+        T* e = elements;
         for (auto &v:args) new (&elements[i++]) T(v); /// copy construct, we allocated memory raw in reserve
     }
 
@@ -2093,10 +2158,10 @@ public:
             new (&elements[i]) T(d[i]);
     }
 
-    array(size al, size sz = size(0), std::function<T(size_t)> fn = std::function<T(size_t)>(nullptr)) : 
+    array(size al, size sz = size(0), lambda<T(size_t)> fn = lambda<T(size_t)>(nullptr)) : 
             array(alloc<T>((T*)null, sz, al, !fn)) { /// call-ctr = false
         if (al.count != 1)
-            mem->shape = new size(al);
+            mem->shape = new size(al); /// only allocate a shape in the shaped cases; a 0 count is not valid atm.
         if (fn)
             for (size_t i = 0; i < size_t(sz); i++)
                 new (&elements[i]) T { fn(i) };
@@ -3209,7 +3274,7 @@ struct logger {
         if (!cond) {
             str st = templ.count() ? templ.to_string() : null;
             _print(st, ar, { });
-            breakp();
+            exit(1);
         }
         #endif
     }
@@ -3971,6 +4036,7 @@ pair<K,V> *hmap<K, V>::shared_lookup(K input) {
 
 template <typename T>
 idata *ident::for_type() {
+    ///
     static auto parse_fn = [](std::string cn) -> cstr {
         std::string      st = is_win() ? "<"  : "T =";
         std::string      en = is_win() ? ">(" : "]";
@@ -3978,16 +4044,22 @@ idata *ident::for_type() {
         num              ln = cn.find(en, p) - p;
         std::string      nm = cn.substr(p, ln);
         auto             sp = nm.find(' ');
-        printf("nm = %s\n", nm.c_str());
-        printf("sp = %d\n", int(sp));
         std::string   namco = (sp != std::string::npos) ? nm.substr(sp + 1) : nm;
-        printf("namco = %s\n", namco.c_str());
         return util::copy(namco.c_str());
     };
+    ///
     static idata *type;
+
     if (!type) {
-        /// minimal processing on 'opaque'; certain std design-time calls blow up the vulkan types
-        if constexpr (type_complete<T> && is_opaque<T>()) {
+        ///
+        if constexpr (type_complete<T> && is_lambda<T>()) {
+            memory         *mem = raw_alloc(null, sizeof(idata));
+            type                = (idata*)mem_origin(mem);
+            type->src           = type;
+            type->name          = parse_fn(__PRETTY_FUNCTION__);
+            type->base_sz       = sizeof(T);
+        } else if constexpr (type_complete<T> && is_opaque<T>()) {
+            /// minimal processing on 'opaque'; certain std design-time calls blow up the vulkan types
             memory         *mem = raw_alloc(null, sizeof(idata));
             type                = (idata*)mem_origin(mem);
             type->src           = type;
@@ -4010,9 +4082,9 @@ idata *ident::for_type() {
                 type->traits  = (is_primitive<T> () ? traits::primitive : 0) |
                                 (is_integral <T> () ? traits::integral  : 0) |
                                 (is_realistic<T> () ? traits::realistic : 0) |
-                                (is_mx                ? traits::mx        : 0) |
+                                (is_mx              ? traits::mx        : 0) |
                                 (is_singleton<T> () ? traits::singleton : 0);
-                type->lambdas  = lambda_table::set_lambdas<T>(type);
+                type->lambdas = lambda_table::set_lambdas<T>(type);
                 //type->defaults = memory::alloc(type);
                 /// including mx in vector because schema could be used by other bases
                 /// would be nice to implement in mx::read_schema<T>(type, (T*)null)
@@ -4044,7 +4116,9 @@ idata *ident::for_type() {
 template <typename T>
 size_t ident::type_size() {
     static type_t type    = typeof(T);
-    static size_t type_sz = std::is_pointer<T>::value ? sizeof(T) : type->schema ? type->schema->total_bytes : type->base_sz;
+    static size_t type_sz = std::is_pointer<T>::value ? sizeof(T) : 
+        (type->schema && type->schema->total_bytes)
+            ? type->schema->total_bytes : type->base_sz;
     return type_sz;
 }
 
@@ -4099,7 +4173,7 @@ lambda_table *lambda_table::set_lambdas(type_t ty) {
     } else if constexpr (!identical<memory*, T>() && !is_primitive<T>() && is_convertible<memory*, T>()) {
         gen.assign_mx = [](void *inst, memory *mem) {
             T *sc = (T *)inst;
-            if (sc->mem != mem) {
+            if (((mx*)sc)->mem != mem) {
                 bool call_dtr = false;
                 if (mem) {
                     mem->refs++;
@@ -4178,7 +4252,6 @@ lambda_table *lambda_table::set_lambdas(type_t ty) {
             }
         }
     }
-    
 
     ///
     if constexpr (!is_opaque<T>()) {
@@ -4192,12 +4265,14 @@ lambda_table *lambda_table::set_lambdas(type_t ty) {
             };
         }
     }
+
     ///
     gen.construct = [](type_t ctx, void *origin, size_t from, size_t to) -> void {
         T *d = mdata<T>(origin, from, ctx);
         for (num i = from; i < num(to); i++, d++)
             inplace<T>(d, false);//new (d) T();
     };
+
     ///
     if constexpr (!is_singleton<T>() && std::is_destructible<T>()) {
         gen.dtr = [](type_t ctx, void *origin, size_t from, size_t to) -> void {
@@ -4316,5 +4391,39 @@ T path::read() const {
             console.fault("not implemented");
             return null;
         }
+    }
+}
+
+#endif
+
+/// needs a way to not create lambdas for lambdas and in recursive fashion.
+template <typename T>
+shared::shared(T *ptr) : ident(memory::wrap_raw(ptr, null)) { }
+
+/*
+template <typename T>
+T *shared::operator=(T *ptr) {
+    if (mem && mem->origin != raw_t(ptr) {
+        mem->drop();
+    }
+    if (ptr)
+        mem = memory::wrap_raw(ptr, typeof(T));
+    else
+        mem = null;
+    
+    return mem ? (T *)mem->origin : (T *)null;
+}
+*/
+
+template <typename T>
+T *shared::get() { return (T *)mem->origin; }
+
+template <typename R, typename... Args>
+R lambda<R(Args...)>::operator()(Args... args) const {
+    if (ident::mem) {
+        const callable_base *cb = (callable_base *)ident::mem->origin;
+        return cb->invoke(std::forward<Args>(args)...);
+    } else {
+        throw std::bad_function_call();
     }
 }

@@ -84,19 +84,24 @@ macro(var_prepare r_path)
         #endforeach()
     endif()
 
-    # build the index.ixx first, naturally.  it doesnt need to be some odd source crawling thing but almost certainly needs to be in future (silver)
+    # pch (alias: {mod}.hpp) and module cases
     if(EXISTS "${p}/${mod}.ixx" OR EXISTS "${p}/${mod}.cpp")
         file(GLOB        _src "${p}/*.ixx" "${p}/*.c*")
         list(REMOVE_ITEM _src "${p}/${mod}.ixx")
         list(REMOVE_ITEM _src "${p}/${mod}.cpp")
+        ##
         if(EXISTS "${p}/${mod}.cpp")
             list(INSERT _src 0 "${p}/${mod}.cpp")
         endif()
+        ##
         if(EXISTS "${p}/${mod}.ixx")
             list(INSERT _src 0 "${p}/${mod}.ixx")
         endif()
     else()
         file(GLOB _src "${p}/*.ixx" "${p}/*.c*")
+        if(EXISTS "${p}/${mod}.cpp")
+            list(REMOVE_ITEM _src "${p}/${mod}.cpp")
+        endif()
     endif()
 
     file(GLOB _headers           "${p}/*.h*")
@@ -529,8 +534,6 @@ macro(create_module_targets)
         endforeach()
     endif()
 
-
-
     foreach(app ${apps})
         set(app_path "${p}/apps/${app}")
         string(REGEX REPLACE "\\.[^.]*$" "" t_app ${app})
@@ -545,9 +548,11 @@ macro(create_module_targets)
         
         address_sanitizer(${t_app})
 
-        # add pre-compiled headers
+        # add pre-compiled header, the module include 
+        # (mod.cpp is required, but not explicitly added as source. 
+        #  this command takes care of that extra binding)
         # ------------------------
-        #target_precompile_headers(${t_app} PRIVATE ${_headers})
+        target_precompile_headers(${t_app} PRIVATE ${p}/${mod}.hpp)
         
         # add include dir of apps
         # ------------------------

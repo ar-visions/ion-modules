@@ -7,22 +7,6 @@ include(../ion/ci/package.cmake)
 ## clang++ 
 ## include(../ion/ci/cxx20.cmake)
 
-function(unzip ZIP_FILE_PATH OUTPUT_DIR)
-    if (UNIX)
-        execute_process(
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${ZIP_FILE_PATH}
-            WORKING_DIRECTORY ${OUTPUT_DIR}
-            RESULT_VARIABLE unzip_result)
-    elseif (WIN32)
-        execute_process(
-            COMMAND powershell -nologo -noprofile -command "& {Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('${ZIP_FILE_PATH}', '${OUTPUT_DIR}');}"
-            RESULT_VARIABLE unzip_result)
-    endif()
-    if (NOT unzip_result EQUAL 0)
-        message(FATAL_ERROR "Failed to unzip the file.")
-    endif()
-endfunction()
-
 macro(assert COND DESC)
     if(NOT ${COND})
         message(FATAL_ERROR "assertion failure: " ${DESC})
@@ -35,45 +19,67 @@ macro(assert_exists FILE DESC)
     endif()
 endmacro()
 
-# bootstrap python.  it takes 3 seconds to install the proper python for any system and avoid dx bloat
-# environment is the build dir. its all we need
-# they need to start distributing binaries in tar.gz form without the installer and registry cruft.  doing this manually because
-# invoking python installer even in silent with targeted dir will corrupt the registry
-# this method is suitable until proper binaries can be packaged
-# one could build python from source but that would be a bit much
+# install python from source on winblows
 macro(bootstrap_python)
     set_if(EXT WIN32 ".EXE" "")
-    if(WIN32)
-        set(SLA "\\")
+    set_if(SLA WIN32 "\\"   "/")
+    set_if(SEP WIN32 "\;"   ":")
+
+    find_program(PYTHON_EXECUTABLE python3)
+
+    if(PYTHON_EXECUTABLE)
+        set(PYTHON python3${EXT}) # python executable
+        set(PIP    pip${EXT})    # pip executable
     else()
-        set(SLA "/")
-    endif()
-    set_if(SEP WIN32 "\;" ":")
+        ## this feature is not finished
+        message(FATAL_ERROR "python required currently; feature to bootstrap from source requires wolfssl integration instead of openssl (which requires perl blah next -> wolfssl patch)")
 
-    set(PYTHON_VERSION "3.9.13")
-    set(RES_DIR        ${CMAKE_CURRENT_BINARY_DIR}/io/res)
-    set(PYTHON_PACKAGE ${RES_DIR}/python-${PYTHON_VERSION}-${OS}.zip)
-    set(PYTHON_PATH    ${CMAKE_BINARY_DIR}/python-${PYTHON_VERSION})
-    set(PYTHON         ${PYTHON_PATH}/python${EXT})
-    set(PIP            ${PYTHON_PATH}/Scripts/pip${EXT})
+        ## some variables
+        set(PYTHON_VERSION "3.8.5")
+        set(RES_DIR        ${CMAKE_CURRENT_BINARY_DIR}/io/res)           # local location of io resources
+        set(PYTHON_SRC     ${RES_DIR}/Python-${PYTHON_VERSION}.zip)      # local location of source
+        set(PYTHON_PATH    ${CMAKE_BINARY_DIR}/python-${PYTHON_VERSION}) # path once extracted to bin dir
+        set(PYTHON         ${PYTHON_PATH}/python${EXT})                  # python executable
+        set(PIP            ${PYTHON_PATH}/Scripts/pip${EXT})             # pip executable
 
-    set(ENV{PATH} "${PYTHON_PATH}\;${PYTHON_PATH}\\Scripts\;$ENV{PATH}")
+        ## terrible thing
+        set(ENV{PATH} "${PYTHON_PATH}${SEP}${PYTHON_PATH}${SLA}Scripts${SEP}$ENV{PATH}")
+        
+        ## make extern directory
+        execute_process(COMMAND cmake -E make_directory extern)
 
-    if(NOT EXISTS ${PYTHON})
-        if(NOT EXISTS io)
-            execute_process(COMMAND git clone "https://github.com/ar-visions/ar-visions.github.io" io)
+        ## if python binary does not exist:
+        if(NOT EXISTS ${PYTHON})
+
+            ## clone wolfssl for python (its changed around to use it)
+            if(NOT EXISTS extern/wolfssl)
+                execute_process(COMMAND git clone "https://github.com/wolfSSL/wolfssl.git" extern/wolfssl)
+                execute_process(COMMAND configure WORKING_DIRECTORY extern/wolfssl)
+            endif()
+
+            ## io resources
+            if(NOT EXISTS extern/io)
+                execute_process(COMMAND git clone "https://github.com/ar-visions/ar-visions.github.io" extern/io)
+            endif()
+
+            ## extract python source
+            file(ARCHIVE_EXTRACT INPUT ${PYTHON_SRC} DESTINATION ${CMAKE_BINARY_DIR})
+
+            ## verify pip exists, and thus extraction occurred 
+            assert_exists(${PIP} "pip")
+
+            ## python must exist to proceed
+            assert_exists(${PYTHON} "python not found")
         endif()
-        unzip(${PYTHON_PACKAGE} ${CMAKE_BINARY_DIR})
-        assert_exists(${PIP} "pip")
+
+        ## install pip packages on either built python, or system
         foreach(pkg ${ARGV})
             message(STATUS "installing pip package: ${pkg} (${PIP})")
             message(STATUS "ENV: " $ENV{PATH})
             execute_process(COMMAND ${PIP} install ${pkg} RESULT_VARIABLE pkg_res)
             message(STATUS "result: ${pkg_res}")
         endforeach()
-        assert_exists(${PYTHON} "python not found")
     endif()
-
 endmacro()
 
 function(main)
@@ -95,7 +101,7 @@ function(main)
         RESULT_VARIABLE import_result)
 
     if (NOT (import_result EQUAL "0"))
-        message(SEND_ERROR "could not import dependencies for project ${r_path} (code: ${import_result})")
+        message(FATAL_ERROR "could not import dependencies for project ${r_path} (code: ${import_result})")
     endif()
 
     file(READ $ENV{JSON_IMPORT_INDEX} import_contents)

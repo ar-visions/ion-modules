@@ -1,5 +1,4 @@
 #pragma once
-#include <math/math.hpp>
 
 template <typename T>
 struct color:vec<T, 4> {

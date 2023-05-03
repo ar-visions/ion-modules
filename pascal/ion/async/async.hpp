@@ -1,11 +1,8 @@
 #pragma once
 
-#include <core/core.hpp>
-#include <functional>
-
 ///
 struct customer:mx {
-    customer(std::function<void(mx)> fn = std::function<void(mx)>()) : mx(alloc(&fn)) { }
+    customer(lambda<void(mx)> fn = lambda<void(mx)>()) : mx(alloc(&fn)) { }
     customer(const customer  &c) : mx(c.mem->grab()) { }
 };
 

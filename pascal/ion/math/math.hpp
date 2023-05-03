@@ -1,4 +1,5 @@
 #pragma once
+
 #include <core/core.hpp>
 
 template <typename T>

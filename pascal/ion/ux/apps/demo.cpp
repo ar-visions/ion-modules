@@ -1,9 +1,13 @@
+#include <core/core.hpp>
+#include <math/math.hpp>
+#include <net/net.hpp>
+#include <async/async.hpp>
 #include <ux/ux.hpp>
 
-/// initializer list of field
 struct view:node {
     struct props {
         int sample;
+        callback handler;
     } &m;
     
     ///
@@ -12,7 +16,8 @@ struct view:node {
     ///
     doubly<prop> meta() {
         return {
-            prop { m, "sample", m.sample }
+            prop { m, "sample",  m.sample },
+            prop { m, "handler", m.handler}
         };
     }
     
@@ -23,39 +28,32 @@ struct view:node {
 
     /// if no render is defined, the content is used for embedding children from content (if its there)
     /// if there is a render the content can be used within it
-    ///Element render() {
-    ///    return button {{ "label", "hi" }};
-    ///}
-};
-
-struct abc:mx {
-    /// define data class, and access to
-    struct data {
-        int data1;
-        int data2;
-    } &m;
-
-    /// constructor boilerplate
-    ctr(abc, mx, data, m);
-
-    /// generic string out, called from type_t function table, invoked from mx::to_string()
-    str string() {
-        return fmt {"{0} {1}", { m.data1, m.data2 }};
+    Element render() {
+        return button {
+            { "content", fmt {"hello world: {0}", { m.sample }} },
+            { "on-click",
+                callback([&](event e) {
+                    console.log("on-click...");
+                    if (m.handler)
+                        m.handler(e);
+                })
+            }
+        };
     }
 };
 
+/// add callback functionality into the args; should be there but isnt.
 int main(int argc, cstr argv[]) {
-    symbol abc = "abc";
-    console.log("symbol: {0}", { abc });
-
     return app([](app &ctx) -> Element {
         return view {
             { "id",     "main"  }, /// id should be a name of component if not there
-            { "sample",  int(2) }
+            { "sample",  int(2) },
+            { "on-silly", callback([](event e) {
+                console.log("on-silly");
+            })}
         };
     });
 }
-
 
 
 

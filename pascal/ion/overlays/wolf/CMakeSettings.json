@@ -1,0 +1,49 @@
+{
+    "configurations": [
+      {
+        "name": "PythonCompatible",
+        "generator": "Ninja",
+        "cmakeCommandArgs": "",
+        "buildCommandArgs": "",
+        "ctestCommandArgs": "",
+        "variables": [
+          {
+            "name": "WOLFSSL_OPENSSLALL",
+            "value": "ON"
+          },
+          {
+            "name": "WOLFSSL_TLS13",
+            "value": "ON"
+          },
+          {
+            "name": "WOLFSSL_TLSX",
+            "value": "ON"
+          },
+          {
+            "name": "WOLFSSL_TLSV10",
+            "value": "ON"
+          },
+          {
+            "name": "WOLFSSL_POSTAUTH",
+            "value": "ON"
+          },
+          {
+            "name": "WOLFSSL_CERTEXT",
+            "value": "ON"
+          },
+          {
+            "name": "WOLFSSL_CERTGEN",
+            "value": "ON"
+          },
+          {
+            "name": "WOLFSSL_SCRYPT",
+            "value": "ON"
+          },
+          {
+            "name": "CFLAGS",
+            "value": "-DHAVE_EX_DATA;-DWOLFSSL_ERROR_CODE_OPENSSL;-DHAVE_SECRET_CALLBACK;-DWOLFSSL_PYTHON;-DWOLFSSL_ALT_NAMES;-DWOLFSSL_SIGNER_DER_CERT"
+          }
+        ]
+      }
+    ]
+  }
