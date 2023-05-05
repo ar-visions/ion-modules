@@ -99,7 +99,6 @@ def prepare_build(this_src_dir, fields):
             print(f'checking out {vname}...')
             git('clone', '--recursive', url, vname)
 
-        print(f'building {vname}...')
         os.chdir(vname)
         git('fetch') # this will get the commit identifiers sometimes not received yet
         if diff: git('reset', '--hard')
@@ -174,12 +173,16 @@ def prepare_project(src_dir):
                         if os.path.exists(ts):
                             _, m_latest = latest_file(remote_path, cm_build)
                             build_time = os.stat(ts).st_mtime
-                            if m_latest > build_time:
-                                perform_build = True
+                            perform_build = m_latest > build_time
+                            if perform_build:
+                                print(f'building {vname}... (updated)')
+                            else:
+                                print(f'skipping {vname}... (no-change)')
                         else:
                             perform_build = True
 
                     if perform_build:
+                        print(f'building {vname}...')
                         gen(cfg, cmake_script_root, prefix_path, cmake_args)
                         build(cfg)
                         with open(ts, 'w') as f:

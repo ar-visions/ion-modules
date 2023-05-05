@@ -84,5 +84,6 @@
         "*.hpp11": "cpp",
         "span": "cpp",
         "parentbad": "cpp"
-    }
+    },
+    "git.ignoreLimitWarning": true
 }
