@@ -1,8 +1,9 @@
 ## ion-modules README
-![ion UX and CI](https://github.com/ar-visions/ion)
-\
-![Hyper Space](https://github.com/ar-visions/hyperspace)
-\
-![Orbiter (DX agent)](https://github.com/ar-visions/orbiter)
+
+# maintaining this repo just temporarily just as signal.
+
+ion ux & ci repo: (https://github.com/ar-visions/ion)
+hyperspace: (https://github.com/ar-visions/hyperspace)
+orbiter: (https://github.com/ar-visions/orbiter)
 \
 ![alt text](ion-modules.jpg)
