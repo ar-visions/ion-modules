@@ -138,6 +138,16 @@ memory *memory::raw_alloc(type_t type, size_t sz, size_t count, size_t res) {
     mem->type       = type;
     mem->origin     = (void*)&mem[1];
     return mem;
+}
+
+memory *memory::wrap(raw_t m, type_t ty) {
+    memory*     mem = (memory*)calloc(1, sizeof(memory)); /// there was a 16 multiplier prior.  todo: add address sanitizer support with appropriate clang stuff
+    mem->count      = 1;
+    mem->reserve    = 1;
+    mem->refs       = 1;
+    mem->type       = ty;
+    mem->origin     = m;
+    return mem;
 }   
 
 memory::memory() : refs(1) { }

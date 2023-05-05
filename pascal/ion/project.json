@@ -13,6 +13,44 @@
             "platforms":["mac"]
         },
         {
+            "name":     "tensorflow",
+            "version":  "2.12.0",
+            "url":      "https://github.com/tensorflow/tensorflow",
+            "cmake":    { "path": "./tensorflow/lite", "args":[] },
+            "commit":   "0db597d",
+            "includes": ["./tensorflow/lite/include"],
+            "libs":     ["./_build"]
+        },
+        {
+            "name":     "gsl",
+            "version":  "2.7",
+            "url":      "https://github.com/ampl/gsl",
+            "commit":   "47862078af4a204c4220f028656a19ddd3922144",
+            "includes": ["./gsl"],
+            "libs":     ["./"],
+            "diff":     "gsl.diff"
+        },
+        {
+            "name":     "sqlite3",
+            "version":  "1.0.30",
+            "url":      "https://github.com/alex85k/sqlite3-cmake",
+            "commit":   "121e7d273436c5de88956f559b940b8d69cadfbe",
+            "includes": ["./include"],
+            "libs":     ["./"]
+        },
+        {
+            "name":     "opus",
+            "version":  "1.4",
+            "url":      "https://github.com/xiph/opus",
+            "commit":   "82ac57d",
+            "cmake": {
+                "args": ["-DOPUS_DISABLE_INTRINSICS=Yes"],
+                "path": "."
+            },
+            "includes": ["./include"],
+            "libs":     ["./"]
+        },
+        {
             "name":     "vulkansdk",
             "version":  "1.3.239.0",
             "res":      "https://github.com/ar-visions/ar-visions.github.io/blob/main/res/vulkan-sdk-1.3.239.0.zip?raw=true",
@@ -27,7 +65,7 @@
             "commit":   "7482de6",
             "url":      "https://github.com/glfw/glfw",
             "includes": ["./include"],
-            "libs":     ["./build/src"]
+            "libs":     ["./_build/src"]
         },
         {
             "name":     "wolf",
@@ -35,7 +73,7 @@
             "commit":   "e0e590f126bd7d947ce3dfbea5ea1405bb646374",
             "url":      "https://github.com/wolfSSL/wolfssl",
             "includes": ["./"],
-            "libs":     ["./build"]
+            "libs":     ["./_build"]
         },
         {
             "name":     "vkvg",
@@ -43,8 +81,8 @@
             "commit":   "84cf72ddbeb6a38175ec04a1afc948373518086b",
             "url":      "https://github.com/jpbruyere/vkvg.git",
             "includes": ["./include","./vkh/include"],
-            "libs":     ["./build","./build/vkh","./build/external/glutess"],
-            "cmake":    ["-DVKVG_USE_GLUTESS=true"],
+            "libs":     ["./_build","./_build/vkh","./_build/external/glutess"],
+            "cmake":    {"args": ["-DVKVG_USE_GLUTESS=true"]},
             "diff":     "vkvg.diff"
         }
     ]

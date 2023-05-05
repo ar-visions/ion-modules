@@ -44,13 +44,18 @@ struct view:node {
 
 /// add callback functionality into the args; should be there but isnt.
 int main(int argc, cstr argv[]) {
+
+
+
     return app([](app &ctx) -> Element {
         return view {
             { "id",     "main"  }, /// id should be a name of component if not there
             { "sample",  int(2) },
-            { "on-silly", callback([](event e) {
-                console.log("on-silly");
-            })}
+            { "on-silly",
+                callback([](event e) {
+                    console.log("on-silly");
+                })
+            }
         };
     });
 }

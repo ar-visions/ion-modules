@@ -312,14 +312,14 @@ struct mem_embed_token { };
 /// in the .cpp file
 #define ptr_impl(C, B, m_type, m_access) \
     C::C(memory* mem) : B(mem), m_access(mx::data<m_type>()) { }\
-    C::C(m_type* d) : B(memory::wrap(d)), m_access(mx::data<m_type>()) { }\
+    C::C(m_type* d) : B(memory::wrap(d, typeof(m_type))), m_access(mx::data<m_type>()) { }\
     C::C(mx      o) : C(o.mem->grab())  { }\
     C::C(null_t)    : C(mx::alloc<C>()) { }\
     C::operator m_type * () { return m_access; }\
     C &C::operator=(const C b) { return (C &)assign_mx(*this, b); }\
     m_type *C::operator=(const m_type *b) {\
         drop();\
-        mem = memory::wrap(b);\
+        mem = memory::wrap(raw_t(b), typeof(m_type));\
         m_access = (m_type*)mem->origin;\
         return m_access;\
     }
@@ -1269,6 +1269,7 @@ struct context_bind {
     size_t        offset;
 };
 
+memory *wrap_alloc(raw_t m, size_t sz);
 memory* raw_alloc(type_t ty, size_t sz);
 
 template <typename T>
@@ -1456,6 +1457,11 @@ public:
     memory(size_t refs, u64 attrs, type_t type, size_t count, size_t reserve, doubly<attachment> *atts, size_t id, void *origin) :
         refs(refs), attrs(attrs), type(type), count(count), reserve(reserve), atts(atts), id(id), origin(origin)  { }
 
+    static memory *wrap(raw_t m, type_t ty);
+
+    template <typename T>
+    static memory *wrap(T *m);
+
     /// T is required due to type_t not permutable by pointer attribute
     template <typename T>
     T *realloc(size_t to, bool fill_default) {
@@ -1529,23 +1535,6 @@ public:
 
     memory *copy(size_t reserve = 0);
     memory *grab();
-
-    template <typename T>
-    static memory *wrap(T *ptr) {
-        memory *mem  = raw_alloc(typeof(T), sizeof(T), 0, 0);
-        mem->origin  = raw_t(ptr);
-        mem->count   = 1;
-        mem->reserve = 1;
-        return mem;
-    }
-
-    static memory *wrap_raw(raw_t ptr, type_t ty) {
-        memory *mem  = raw_alloc(ty, ty->base_sz, 0, 0);
-        mem->origin  = ptr;
-        mem->count   = 1;
-        mem->reserve = 1;
-        return mem;
-    }
 
     /// should be able to reference other args if its before
     static memory *alloc(type_t type,
@@ -4396,9 +4385,20 @@ T path::read() const {
 
 #endif
 
-/// needs a way to not create lambdas for lambdas and in recursive fashion.
 template <typename T>
-shared::shared(T *ptr) : ident(memory::wrap_raw(ptr, null)) { }
+memory *memory::wrap(T *m) {
+    memory*     mem = (memory*)calloc(1, sizeof(memory)); /// there was a 16 multiplier prior.  todo: add address sanitizer support with appropriate clang stuff
+    mem->count      = 1;
+    mem->reserve    = 1;
+    mem->refs       = 1;
+    mem->type       = typeof(T);
+    mem->origin     = m;
+}
+
+/// needs a way to not create lambdas for lambdas and in recursive fashion.
+/// for now i am just bypassing memory type
+template <typename T>
+shared::shared(T *ptr) : ident(memory::wrap(raw_t(ptr), null)) { }
 
 /*
 template <typename T>

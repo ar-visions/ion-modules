@@ -2165,12 +2165,12 @@ size_t Buffer::count()     { return bmem->sz; }
 size_t Buffer::type_size() { return bmem->type_size; }
 
 UniformData::UniformData(Device *device, size_t struct_sz, UniformFn fn)
-    : mx(memory::wrap<UniformMemory>(
+    : mx(memory::wrap(
         new UniformMemory {
             .device    = device,
             .struct_sz = struct_sz,
             .fn        = fn
-        }
+        }, typeof(UniformMemory)
     )), umem(data<UniformMemory>()) { }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug(
@@ -2486,7 +2486,7 @@ struct gfx_memory {
 
 ptr_impl(gfx, cbase, gfx_memory, g);
 
-gfx::gfx(::window &win) : gfx(memory::wrap<gfx_memory>(new gfx_memory { })) {
+gfx::gfx(::window &win) : gfx(new gfx_memory { }) {
     vk_interface vk; /// verify vulkan instanced prior
     g->win = &win;    /// should just set window without pointer
     m.size = win.w->sz;

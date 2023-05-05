@@ -375,7 +375,8 @@ macro(process_dep d t_name)
                     # private for shared libs and public for pass-through to exe linking
                     set_if(exposure dynamic "PRIVATE" "PUBLIC")
                     target_link_libraries(${t_name} ${exposure} ${module}) 
-                    target_include_directories(${t_name} PRIVATE ${import.${import}.includes})
+                    # this was private and thats understandable, but apps that use this should also get it too
+                    target_include_directories(${t_name} PUBLIC ${import.${import}.includes})
                     set(found TRUE)
                     break()
                 endif()

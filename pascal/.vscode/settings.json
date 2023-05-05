@@ -82,6 +82,7 @@
         "shared_mutex": "cpp",
         "thread": "cpp",
         "*.hpp11": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "parentbad": "cpp"
     }
 }
